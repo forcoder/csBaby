@@ -23,6 +23,7 @@ import com.csbaby.kefu.presentation.navigation.AppNavigation
 import com.csbaby.kefu.presentation.theme.KefuTheme
 import com.csbaby.kefu.presentation.theme.ThemeMode
 import com.csbaby.kefu.data.local.PreferencesManager
+import com.csbaby.kefu.data.remote.UserAuthManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -33,6 +34,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var preferencesManager: PreferencesManager
+
+    @Inject
+    lateinit var userAuthManager: UserAuthManager
 
     private var pendingOverlayPermission = false
     private var pendingNotificationPermission = false
@@ -52,19 +56,38 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        setContent {
-            val userPreferences by preferencesManager.userPreferencesFlow.collectAsState(
-                initial = PreferencesManager.UserPreferences()
-            )
-            
-            val themeMode = ThemeMode.fromValue(userPreferences.themeMode)
-            
-            KefuTheme(themeMode = themeMode) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    AppNavigation()
+        // Check authentication status on startup
+        lifecycleScope.launch {
+            val (token, userId) = userAuthManager.ensureAuthenticated()
+            if (token != null && userId != null) {
+                // User is already logged in, navigate to main app
+                setContent {
+                    val userPreferences by preferencesManager.userPreferencesFlow.collectAsState(
+                        initial = PreferencesManager.UserPreferences()
+                    )
+
+                    val themeMode = ThemeMode.fromValue(userPreferences.themeMode)
+
+                    KefuTheme(themeMode = themeMode) {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.background
+                        ) {
+                            AppNavigation()
+                        }
+                    }
+                }
+            } else {
+                // User needs to login, use simplified content
+                setContent {
+                    KefuTheme {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.background
+                        ) {
+                            AppNavigation()
+                        }
+                    }
                 }
             }
         }

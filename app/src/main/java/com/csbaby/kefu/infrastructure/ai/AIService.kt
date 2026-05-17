@@ -2,7 +2,7 @@ package com.csbaby.kefu.infrastructure.ai
 
 import com.csbaby.kefu.data.remote.AIClient
 import com.csbaby.kefu.data.remote.CsbabyApiService
-import com.csbaby.kefu.data.remote.DeviceManager
+import com.csbaby.kefu.data.remote.UserAuthManager
 import com.csbaby.kefu.data.remote.dto.GenerateRequest
 import com.csbaby.kefu.data.remote.dto.GenerateResponse
 import com.csbaby.kefu.domain.model.AIModelConfig
@@ -24,7 +24,7 @@ class AIService @Inject constructor(
     private val aiClient: AIClient,
     private val aiModelRepository: AIModelRepository,
     private val apiService: CsbabyApiService,
-    private val deviceManager: DeviceManager
+    private val userAuthManager: UserAuthManager
 ) {
     
     // AI response cache - LRU with expiry
@@ -352,7 +352,7 @@ class AIService @Inject constructor(
         style: Map<String, Any> = emptyMap()
     ): Result<String> {
         return try {
-            deviceManager.ensureRegistered()
+            userAuthManager.ensureAuthenticated()
             val request = GenerateRequest(
                 message = message,
                 context = context,

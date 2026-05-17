@@ -7,7 +7,7 @@ import com.csbaby.kefu.data.remote.AIClient
 import com.csbaby.kefu.data.remote.AIClientImpl
 import com.csbaby.kefu.data.remote.AuthInterceptor
 import com.csbaby.kefu.data.remote.CsbabyApiService
-import com.csbaby.kefu.data.remote.DeviceManager
+import com.csbaby.kefu.data.remote.UserAuthManager
 import com.csbaby.kefu.infrastructure.error.ErrorHandler
 import dagger.Module
 import dagger.Provides
@@ -104,11 +104,11 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideDeviceManager(
+    fun provideUserAuthManager(
         apiService: CsbabyApiService,
         preferencesManager: PreferencesManager,
         authInterceptor: AuthInterceptor
-    ): DeviceManager {
-        return DeviceManager(apiService, preferencesManager, authInterceptor)
+    ): UserAuthManager {
+        return UserAuthManager(apiService, preferencesManager, authInterceptor)
     }
 }

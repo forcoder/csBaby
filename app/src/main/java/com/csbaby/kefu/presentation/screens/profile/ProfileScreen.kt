@@ -15,6 +15,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.csbaby.kefu.R
+import com.csbaby.kefu.data.remote.UserAuthManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -29,7 +30,8 @@ import com.csbaby.kefu.presentation.theme.ThemeMode
 @Composable
 fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel(),
-    onNavigateToBlacklist: () -> Unit = {}
+    onNavigateToBlacklist: () -> Unit = {},
+    userAuthManager: UserAuthManager = androidx.lifecycle.viewmodel.compose.viewModel { throw IllegalStateException("Should be injected") }
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -99,6 +101,58 @@ fun ProfileScreen(
             )
 
             Spacer(modifier = Modifier.height(24.dp))
+
+            // Logout button
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Button(
+                    onClick = {
+                        viewModel.launchLogoutDialog()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Icon(Icons.Default.Logout, contentDescription = "退出登录")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("退出登录")
+                }
+            }
+
+            if (uiState.showLogoutDialog) {
+                AlertDialog(
+                    onDismissRequest = { viewModel.hideLogoutDialog() },
+                    title = { Text("确认退出") },
+                    text = { Text("确定要退出登录吗？退出后需要重新登录才能使用。") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                viewModel.hideLogoutDialog()
+                                // Perform logout
+                                androidx.compose.runtime.LaunchedEffect(Unit) {
+                                    userAuthManager.logout()
+                                }
+                            }
+                        ) {
+                            Text("确定")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { viewModel.hideLogoutDialog() }
+                        ) {
+                            Text("取消")
+                        }
+                    }
+                )
+            }
         }
     }
 }

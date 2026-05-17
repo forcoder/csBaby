@@ -7,7 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.csbaby.kefu.data.local.KefuDatabase
 import com.csbaby.kefu.data.remote.CsbabyApiService
-import com.csbaby.kefu.data.remote.DeviceManager
+import com.csbaby.kefu.data.remote.UserAuthManager
 import com.csbaby.kefu.data.remote.dto.BackupDto
 import com.csbaby.kefu.data.remote.dto.BlacklistDto
 import com.csbaby.kefu.data.remote.dto.ModelConfigDto
@@ -52,7 +52,7 @@ class KnowledgeViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val knowledgeBaseManager: KnowledgeBaseManager,
     private val apiService: CsbabyApiService,
-    private val deviceManager: DeviceManager,
+    private val userAuthManager: UserAuthManager,
     private val kefuDatabase: KefuDatabase
 ) : ViewModel() {
 
@@ -218,7 +218,7 @@ class KnowledgeViewModel @Inject constructor(
     private fun autoSyncToCloud() {
         viewModelScope.launch {
             try {
-                deviceManager.ensureRegistered()
+                userAuthManager.ensureAuthenticated()
                 val rules = kefuDatabase.keywordRuleDao().getAllRulesList().map { entity ->
                     RuleDto(
                         id = entity.id.toInt(), deviceId = "", keyword = entity.keyword,

@@ -3,7 +3,7 @@ package com.csbaby.kefu.domain.repository
 import com.csbaby.kefu.data.local.dao.MessageBlacklistDao
 import com.csbaby.kefu.data.local.entity.MessageBlacklistEntity
 import com.csbaby.kefu.data.remote.CsbabyApiService
-import com.csbaby.kefu.data.remote.DeviceManager
+import com.csbaby.kefu.data.remote.UserAuthManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
@@ -14,7 +14,7 @@ import javax.inject.Singleton
 class MessageBlacklistRepository @Inject constructor(
     private val blacklistDao: MessageBlacklistDao,
     private val apiService: CsbabyApiService,
-    private val deviceManager: DeviceManager
+    private val userAuthManager: UserAuthManager
 ) {
     fun getAllEnabled(): Flow<List<MessageBlacklistEntity>> {
         return blacklistDao.getAllEnabledFlow()

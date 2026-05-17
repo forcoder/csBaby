@@ -4,7 +4,7 @@ import com.csbaby.kefu.data.local.EntityMapper.toDomain
 import com.csbaby.kefu.data.local.EntityMapper.toEntity
 import com.csbaby.kefu.data.local.dao.ReplyHistoryDao
 import com.csbaby.kefu.data.remote.CsbabyApiService
-import com.csbaby.kefu.data.remote.DeviceManager
+import com.csbaby.kefu.data.remote.UserAuthManager
 import com.csbaby.kefu.data.remote.dto.toDomain as dtoToDomain
 import com.csbaby.kefu.data.remote.dto.toDto as domainToDto
 import com.csbaby.kefu.domain.model.ReplyHistory
@@ -19,7 +19,7 @@ import javax.inject.Singleton
 class ReplyHistoryRepositoryImpl @Inject constructor(
     private val replyHistoryDao: ReplyHistoryDao,
     private val apiService: CsbabyApiService,
-    private val deviceManager: DeviceManager
+    private val userAuthManager: UserAuthManager
 ) : ReplyHistoryRepository {
 
     override fun getRecentReplies(limit: Int): Flow<List<ReplyHistory>> {
@@ -42,7 +42,7 @@ class ReplyHistoryRepositoryImpl @Inject constructor(
         val localId = replyHistoryDao.insertReply(reply.toEntity())
         // Also record on server (best-effort, don't fail if server is unreachable)
         try {
-            deviceManager.ensureRegistered()
+            userAuthManager.ensureAuthenticated()
             apiService.recordHistory(reply.domainToDto())
             Timber.d("History recorded on server")
         } catch (e: Exception) {
@@ -72,7 +72,7 @@ class ReplyHistoryRepositoryImpl @Inject constructor(
      */
     suspend fun syncFromServer(): Result<Int> {
         return try {
-            deviceManager.ensureRegistered()
+            userAuthManager.ensureAuthenticated()
             val localCount = replyHistoryDao.getTotalCount()
             val response = apiService.getHistory(limit = 100, offset = localCount)
             var count = 0

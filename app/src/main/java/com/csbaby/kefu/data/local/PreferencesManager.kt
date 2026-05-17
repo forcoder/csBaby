@@ -268,12 +268,6 @@ class PreferencesManager @Inject constructor(
         }
     }
 
-    suspend fun clearUserId() {
-        dataStore.edit { preferences ->
-            preferences.remove(PreferencesKeys.USER_ID)
-        }
-    }
-
     suspend fun clearAllAuthData() {
         dataStore.edit { preferences ->
             preferences.remove(PreferencesKeys.AUTH_TOKEN)

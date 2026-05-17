@@ -13,7 +13,7 @@ import com.csbaby.kefu.data.local.entity.AIModelConfigEntity
 import com.csbaby.kefu.data.model.*
 import com.csbaby.kefu.data.model.UpdateStatus
 import com.csbaby.kefu.data.remote.CsbabyApiService
-import com.csbaby.kefu.data.remote.DeviceManager
+import com.csbaby.kefu.data.remote.UserAuthManager
 import com.csbaby.kefu.data.remote.VersionListItem
 import com.csbaby.kefu.data.remote.dto.BackupDto
 import com.csbaby.kefu.data.remote.dto.BlacklistDto
@@ -79,7 +79,7 @@ class ProfileViewModel @Inject constructor(
     private val styleLearningEngine: StyleLearningEngine,
     private val otaManager: OtaManager,
     private val ossManager: AliyunOssManager,
-    private val deviceManager: DeviceManager,
+    private val userAuthManager: UserAuthManager,
     private val apiService: CsbabyApiService,
     private val kefuDatabase: KefuDatabase
 ) : ViewModel() {
@@ -421,7 +421,12 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isBackingUp = true, backupMessage = null) }
             try {
-                deviceManager.ensureRegistered()
+                // Check if user is authenticated before backing up
+                val (token, userId) = userAuthManager.ensureAuthenticated()
+                if (token == null || userId == null) {
+                    _uiState.update { it.copy(isBackingUp = false, backupMessage = "请先登录") }
+                    return@launch
+                }
 
                 // 1. Rules
                 val rules = kefuDatabase.keywordRuleDao().getAllRulesList().map { entity ->
@@ -477,7 +482,12 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isRestoring = true, backupMessage = null) }
             try {
-                deviceManager.ensureRegistered()
+                // Check if user is authenticated before restoring
+                val (token, userId) = userAuthManager.ensureAuthenticated()
+                if (token == null || userId == null) {
+                    _uiState.update { it.copy(isRestoring = false, backupMessage = "请先登录") }
+                    return@launch
+                }
                 val backupData = apiService.exportBackup()
 
                 // 1. Restore rules (override mode)
@@ -677,6 +687,22 @@ class ProfileViewModel @Inject constructor(
     fun cancelUpload() {
         _uiState.update { it.copy(isUploading = false, uploadProgress = 0f, uploadStatus = "上传已取消") }
         Timber.i("上传已取消")
+    }
+
+    // Logout functionality
+    private val _showLogoutDialog = MutableSharedFlow<Boolean>()
+    val showLogoutDialog: SharedFlow<Boolean> = _showLogoutDialog.asSharedFlow()
+
+    fun launchLogoutDialog() {
+        viewModelScope.launch {
+            _showLogoutDialog.emit(true)
+        }
+    }
+
+    fun hideLogoutDialog() {
+        viewModelScope.launch {
+            _showLogoutDialog.emit(false)
+        }
     }
 
     fun downloadOssUpdate(update: OtaUpdate) {

@@ -6,7 +6,7 @@ import com.csbaby.kefu.data.local.dao.KeywordRuleDao
 import com.csbaby.kefu.data.local.dao.ScenarioDao
 import com.csbaby.kefu.data.local.entity.RuleScenarioCrossRef
 import com.csbaby.kefu.data.remote.CsbabyApiService
-import com.csbaby.kefu.data.remote.DeviceManager
+import com.csbaby.kefu.data.remote.UserAuthManager
 import com.csbaby.kefu.data.remote.dto.toDomain as dtoToDomain
 import com.csbaby.kefu.data.remote.dto.toDto as domainToDto
 import com.csbaby.kefu.domain.model.KeywordRule
@@ -22,7 +22,7 @@ class KeywordRuleRepositoryImpl @Inject constructor(
     private val keywordRuleDao: KeywordRuleDao,
     private val scenarioDao: ScenarioDao,
     private val apiService: CsbabyApiService,
-    private val deviceManager: DeviceManager
+    private val userAuthManager: UserAuthManager
 ) : KeywordRuleRepository {
 
     override fun getAllRules(): Flow<List<KeywordRule>> {
@@ -71,7 +71,7 @@ class KeywordRuleRepositoryImpl @Inject constructor(
     override suspend fun insertRule(rule: KeywordRule): Long {
         // Remote-first: try API first
         return try {
-            deviceManager.ensureRegistered()
+            userAuthManager.ensureAuthenticated()
             val dto = rule.domainToDto()
             val response = apiService.createRule(dto)
             val serverId = response.id.toLong()
@@ -99,7 +99,7 @@ class KeywordRuleRepositoryImpl @Inject constructor(
 
     override suspend fun updateRule(rule: KeywordRule) {
         try {
-            deviceManager.ensureRegistered()
+            userAuthManager.ensureAuthenticated()
             apiService.updateRule(rule.id.toInt(), rule.domainToDto())
             Timber.d("Rule updated on server: id=${rule.id}")
         } catch (e: Exception) {
@@ -114,7 +114,7 @@ class KeywordRuleRepositoryImpl @Inject constructor(
 
     override suspend fun deleteRule(id: Long) {
         try {
-            deviceManager.ensureRegistered()
+            userAuthManager.ensureAuthenticated()
             apiService.deleteRule(id.toInt())
             Timber.d("Rule deleted on server: id=$id")
         } catch (e: Exception) {
@@ -151,7 +151,7 @@ class KeywordRuleRepositoryImpl @Inject constructor(
      */
     suspend fun syncFromServer(): Result<Int> {
         return try {
-            deviceManager.ensureRegistered()
+            userAuthManager.ensureAuthenticated()
             val remoteRules = apiService.getRules()
 
             // Build new entities first before touching local DB

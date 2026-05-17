@@ -4,7 +4,7 @@ import com.csbaby.kefu.data.local.EntityMapper.toDomain
 import com.csbaby.kefu.data.local.EntityMapper.toEntity
 import com.csbaby.kefu.data.local.dao.AIModelConfigDao
 import com.csbaby.kefu.data.remote.CsbabyApiService
-import com.csbaby.kefu.data.remote.DeviceManager
+import com.csbaby.kefu.data.remote.UserAuthManager
 import com.csbaby.kefu.data.remote.dto.toDomain as dtoToDomain
 import com.csbaby.kefu.data.remote.dto.toDto as domainToDto
 import com.csbaby.kefu.domain.model.AIModelConfig
@@ -19,7 +19,7 @@ import javax.inject.Singleton
 class AIModelRepositoryImpl @Inject constructor(
     private val aiModelConfigDao: AIModelConfigDao,
     private val apiService: CsbabyApiService,
-    private val deviceManager: DeviceManager
+    private val userAuthManager: UserAuthManager
 ) : AIModelRepository {
 
     override fun getAllModels(): Flow<List<AIModelConfig>> {
@@ -44,7 +44,7 @@ class AIModelRepositoryImpl @Inject constructor(
 
     override suspend fun insertModel(model: AIModelConfig): Long {
         return try {
-            deviceManager.ensureRegistered()
+            userAuthManager.ensureAuthenticated()
             val dto = model.domainToDto()
             val response = apiService.createModel(dto)
             val serverId = response.id.toLong()
@@ -59,7 +59,7 @@ class AIModelRepositoryImpl @Inject constructor(
 
     override suspend fun updateModel(model: AIModelConfig) {
         try {
-            deviceManager.ensureRegistered()
+            userAuthManager.ensureAuthenticated()
             apiService.updateModel(model.id.toInt(), model.domainToDto())
             Timber.d("Model updated on server: id=${model.id}")
         } catch (e: Exception) {
@@ -73,7 +73,7 @@ class AIModelRepositoryImpl @Inject constructor(
 
     override suspend fun deleteModel(id: Long) {
         try {
-            deviceManager.ensureRegistered()
+            userAuthManager.ensureAuthenticated()
             apiService.deleteModel(id.toInt())
             Timber.d("Model deleted on server: id=$id")
         } catch (e: Exception) {
@@ -102,7 +102,7 @@ class AIModelRepositoryImpl @Inject constructor(
      */
     suspend fun syncFromServer(): Result<Int> {
         return try {
-            deviceManager.ensureRegistered()
+            userAuthManager.ensureAuthenticated()
             val remoteModels = apiService.getModels()
 
             // Build new entities first before touching local DB

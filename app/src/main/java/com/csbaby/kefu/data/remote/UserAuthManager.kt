@@ -93,17 +93,6 @@ class UserAuthManager @Inject constructor(
         }
     }
 
-    /**
-     * 发送心跳
-     */
-    suspend fun heartbeat() {
-        try {
-            apiService.heartbeat()
-        } catch (e: Exception) {
-            Timber.w(e, "Heartbeat failed")
-        }
-    }
-
     private suspend fun registerDevice(): String {
         val request = RegisterRequest(
             platform = "android",

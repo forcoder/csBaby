@@ -2,6 +2,7 @@
 
 ## Rules
 
+- 使用中文回复我
 - Do what has been asked; nothing more, nothing less
 - NEVER create files unless absolutely necessary — prefer editing existing files
 - NEVER create documentation files unless explicitly requested
