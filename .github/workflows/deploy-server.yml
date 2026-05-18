@@ -49,11 +49,44 @@ jobs:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
 
     steps:
+      - name: Check Render Service Info
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          echo "Listing all Render services..."
+          SERVICES=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
+            "https://api.render.com/v1/services?limit=20")
+          echo "$SERVICES" | node -e "
+            let d=''; process.stdin.on('data',c=>d+=c);
+            process.stdin.on('end',()=>{
+              try {
+                const j = JSON.parse(d);
+                if (Array.isArray(j)) {
+                  j.forEach(s => {
+                    const svc = s.service;
+                    console.log('---');
+                    console.log('ID:', svc.id);
+                    console.log('Name:', svc.name);
+                    console.log('Type:', svc.type);
+                    console.log('Repo:', svc.repo || 'N/A');
+                    console.log('Branch:', svc.branch || 'N/A');
+                    console.log('AutoDeploy:', svc.autoDeploy);
+                    console.log('URL:', svc.url || 'N/A');
+                    console.log('BuildCommand:', svc.buildCommand || 'N/A');
+                    console.log('StartCommand:', svc.startCommand || 'N/A');
+                  });
+                } else {
+                  console.log('Response:', JSON.stringify(j).substring(0, 500));
+                }
+              } catch(e) { console.error('Parse error:', e.message, d.substring(0,200)); }
+            });
+          "
+
       - name: Trigger Render Deploy
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          SERVICE_ID="srv-d7s88gbeo5us73cga3d0"
+          SERVICE_ID="srv-d7s88gbeo5us73cga30"
           echo "Triggering deploy for service: $SERVICE_ID"
 
           RESPONSE=$(curl -s -w "\n%{http_code}" \
@@ -75,28 +108,29 @@ jobs:
             exit 1
           fi
 
-      - name: Wait for Render deployment
+      - name: Wait and Health Check
         run: |
-          echo "Waiting for Render to build and deploy..."
-          sleep 30
+          echo "Waiting for Render deployment..."
+          sleep 60
 
-          # 尝试多次健康检查
-          for i in 1 2 3 4 5; do
+          for i in 1 2 3 4 5 6; do
             echo "Health check attempt $i..."
             HTTP_CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" \
+              --connect-timeout 10 \
               "https://csbaby-sync-server.onrender.com/" 2>/dev/null)
-            echo "HTTP: $HTTP_CODE"
-            cat /tmp/health.json 2>/dev/null
+            BODY=$(cat /tmp/health.json 2>/dev/null)
+            echo "HTTP: $HTTP_CODE | Body: $BODY"
 
             if [ "$HTTP_CODE" = "200" ]; then
               echo "✅ Service is healthy!"
               exit 0
             fi
 
-            if [ $i -lt 5 ]; then
-              echo "Waiting 30s before next attempt..."
+            if [ $i -lt 6 ]; then
+              echo "Waiting 30s..."
               sleep 30
             fi
           done
 
-          echo "⚠️ Service may still be starting up (Render free tier cold start can take 1-2 minutes)"
+          echo "⚠️ Service did not become healthy after 3 minutes"
+          echo "This may indicate a build failure on Render. Check Render Dashboard."
