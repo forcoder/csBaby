@@ -1,0 +1,5 @@
+flask
+jinja2
+requests
+gunicorn
+openpyxl>=3.1.0

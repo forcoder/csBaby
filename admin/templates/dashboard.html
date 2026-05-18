@@ -1,0 +1,71 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1>总览</h1>
+<div class="stats-grid">
+    <a href="/admin/tenants" class="stat-card stat-card-link">
+        <div class="stat-value">{{ stats.get('total_tenants', 0) }}</div>
+        <div class="stat-label">总租户数</div>
+    </a>
+    <a href="/admin/tenants?status=active" class="stat-card stat-card-link">
+        <div class="stat-value">{{ stats.get('active_tenants', 0) }}</div>
+        <div class="stat-label">活跃租户</div>
+    </a>
+    <a href="/admin/tenants" class="stat-card stat-card-link">
+        <div class="stat-value">{{ stats.get('total_rules', 0) }}</div>
+        <div class="stat-label">总规则数</div>
+    </a>
+    <a href="/admin/tenants" class="stat-card stat-card-link">
+        <div class="stat-value">{{ stats.get('today_history', 0) }}</div>
+        <div class="stat-label">今日回复</div>
+    </a>
+    <a href="/admin/tenants" class="stat-card stat-card-link">
+        <div class="stat-value">{{ stats.get('total_history', 0) }}</div>
+        <div class="stat-label">总回复数</div>
+    </a>
+    <a href="/admin/tenants" class="stat-card stat-card-link">
+        <div class="stat-value">{{ stats.get('total_models', 0) }}</div>
+        <div class="stat-label">总模型数</div>
+    </a>
+    <a href="/admin/tenants" class="stat-card stat-card-link">
+        <div class="stat-value">{{ stats.get('total_feedback', 0) }}</div>
+        <div class="stat-label">总反馈数</div>
+    </a>
+    <a href="/admin/tenants" class="stat-card stat-card-link">
+        <div class="stat-value">{{ stats.get('total_blacklist', 0) }}</div>
+        <div class="stat-label">总黑名单数</div>
+    </a>
+</div>
+
+<div class="section">
+    <h2>最近活跃租户</h2>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>手机号</th>
+                <th>状态</th>
+                <th>最后活跃时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in recent_tenants %}
+            <tr>
+                <td>{{ t.phone }}</td>
+                <td>
+                    {% if t.get('is_active', 1) %}
+                    <span class="badge badge-success">正常</span>
+                    {% else %}
+                    <span class="badge badge-danger">已禁用</span>
+                    {% endif %}
+                </td>
+                <td>{{ t.get('last_active', '') }}</td>
+                <td><a href="/admin/tenants/{{ t.tenant_id }}">详情</a></td>
+            </tr>
+            {% endfor %}
+            {% if not recent_tenants %}
+            <tr><td colspan="4" style="text-align:center;color:#888;">暂无数据</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

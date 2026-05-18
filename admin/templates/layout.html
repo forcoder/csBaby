@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>csBaby 管理后台</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    {% if admin_phone %}
+    <nav class="navbar">
+        <div class="nav-brand">csBaby 管理后台</div>
+        <div class="nav-links">
+            <a href="/admin/dashboard">总览</a>
+            <a href="/admin/tenants">租户管理</a>
+            <a href="/admin/default-model">默认模型</a>
+            <a href="/admin/admins">管理员</a>
+            <a href="/admin/audit-log">操作日志</a>
+            <a href="/admin/profile">修改密码</a>
+            <span class="nav-user">{{ admin_phone }}</span>
+            <a href="/admin/logout" class="nav-logout">退出</a>
+        </div>
+    </nav>
+    {% endif %}
+    <div class="container">
+        {% block content %}{{ content }}{% endblock %}
+    </div>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="page-header">
+    <div class="page-header-left">
+        <h1>样式配置</h1>
+        <span class="page-subtitle">{{ tenant.phone }}</span>
+    </div>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}" class="btn btn-back">← 返回详情</a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+{% if success %}
+<div class="alert alert-success">{{ success }}</div>
+{% endif %}
+
+<form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}/style" class="form-card form-card-lg">
+    <div class="form-row">
+        <div class="form-group">
+            <label>主题</label>
+            <select name="theme">
+                <option value="light" {{ 'selected' if style_config and style_config.get('theme') == 'light' }}>浅色</option>
+                <option value="dark" {{ 'selected' if style_config and style_config.get('theme') == 'dark' }}>深色</option>
+                <option value="auto" {{ 'selected' if style_config and style_config.get('theme') == 'auto' }}>跟随系统</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>字体大小</label>
+            <select name="font_size">
+                <option value="small" {{ 'selected' if style_config and style_config.get('font_size') == 'small' }}>小</option>
+                <option value="medium" {{ 'selected' if style_config and style_config.get('font_size') == 'medium' }}>中</option>
+                <option value="large" {{ 'selected' if style_config and style_config.get('font_size') == 'large' }}>大</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>气泡样式</label>
+            <select name="bubble_style">
+                <option value="rounded" {{ 'selected' if style_config and style_config.get('bubble_style') == 'rounded' }}>圆角</option>
+                <option value="square" {{ 'selected' if style_config and style_config.get('bubble_style') == 'square' }}>直角</option>
+                <option value="bubble" {{ 'selected' if style_config and style_config.get('bubble_style') == 'bubble' }}>气泡</option>
+            </select>
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label>主色调</label>
+            <input type="color" name="primary_color" value="{{ style_config.get('primary_color', '#1976D2') if style_config else '#1976D2' }}" style="width:60px;height:36px;padding:2px;">
+            <input type="text" name="primary_color" value="{{ style_config.get('primary_color', '#1976D2') if style_config else '#1976D2' }}" placeholder="#1976D2" style="width:120px;">
+        </div>
+        <div class="form-group">
+            <label>强调色</label>
+            <input type="color" name="accent_color" value="{{ style_config.get('accent_color', '#FF4081') if style_config else '#FF4081' }}" style="width:60px;height:36px;padding:2px;">
+            <input type="text" name="accent_color" value="{{ style_config.get('accent_color', '#FF4081') if style_config else '#FF4081' }}" placeholder="#FF4081" style="width:120px;">
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label><input type="checkbox" name="avatar_enabled" {{ 'checked' if not style_config or style_config.get('avatar_enabled', 1) }}> 显示头像</label>
+        </div>
+        <div class="form-group">
+            <label><input type="checkbox" name="show_timestamp" {{ 'checked' if not style_config or style_config.get('show_timestamp', 1) }}> 显示时间戳</label>
+        </div>
+        <div class="form-group">
+            <label><input type="checkbox" name="send_sound" {{ 'checked' if not style_config or style_config.get('send_sound', 1) }}> 发送音效</label>
+        </div>
+    </div>
+    <div class="form-group">
+        <label>自定义 CSS（可选）</label>
+        <textarea name="custom_css" rows="4" placeholder="/* 自定义 CSS 样式 */">{{ style_config.get('custom_css', '') if style_config else '' }}</textarea>
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">保存样式配置</button>
+    </div>
+</form>
+{% endblock %}

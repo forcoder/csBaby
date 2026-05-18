@@ -1,0 +1,138 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="page-header">
+    <div class="page-header-left">
+        <h1>{{ tenant.phone }}</h1>
+        <span class="badge {{ 'badge-success' if tenant.get('is_active', 1) else 'badge-danger' }}">{{ '正常' if tenant.get('is_active', 1) else '已禁用' }}</span>
+    </div>
+    <a href="/admin/tenants" class="btn btn-back">← 返回列表</a>
+</div>
+
+<div class="detail-meta">
+    <span>ID: {{ tenant.tenant_id }}</span>
+    <span>注册: {{ tenant.get('created_at', '')[:10] }}</span>
+    <span>最后活跃: {{ tenant.get('last_active', '')[:16] if tenant.get('last_active') else '-' }}</span>
+</div>
+
+<div class="stats-grid">
+    <a href="/admin/tenants/{{ tenant.tenant_id }}/rules" class="stat-card stat-card-link">
+        <div class="stat-value">{{ tenant.get('rule_count', 0) }}</div>
+        <div class="stat-label">知识库规则</div>
+    </a>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}/models" class="stat-card stat-card-link">
+        <div class="stat-value">{{ tenant.get('model_count', 0) }}</div>
+        <div class="stat-label">模型配置</div>
+    </a>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}/history" class="stat-card stat-card-link">
+        <div class="stat-value">{{ tenant.get('history_count', 0) }}</div>
+        <div class="stat-label">回复历史</div>
+    </a>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}/feedback" class="stat-card stat-card-link">
+        <div class="stat-value">{{ tenant.get('feedback_count', 0) }}</div>
+        <div class="stat-label">用户反馈</div>
+    </a>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}/blacklist" class="stat-card stat-card-link">
+        <div class="stat-value">{{ tenant.get('blacklist_count', 0) }}</div>
+        <div class="stat-label">黑名单</div>
+    </a>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}/metrics" class="stat-card stat-card-link">
+        <div class="stat-value stat-value-sm">查看</div>
+        <div class="stat-label">优化指标</div>
+    </a>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}/routing" class="stat-card stat-card-link">
+        <div class="stat-value stat-value-sm">🔀</div>
+        <div class="stat-label">智能路由</div>
+    </a>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}/backup" class="stat-card stat-card-link">
+        <div class="stat-value stat-value-sm">💾</div>
+        <div class="stat-label">备份恢复</div>
+    </a>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}/style" class="stat-card stat-card-link">
+        <div class="stat-value stat-value-sm">🎨</div>
+        <div class="stat-label">样式配置</div>
+    </a>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}/app-config" class="stat-card stat-card-link">
+        <div class="stat-value stat-value-sm">⚙️</div>
+        <div class="stat-label">应用配置</div>
+    </a>
+</div>
+
+<div class="section">
+    <h2>默认 LLM 模型配置</h2>
+    <p class="section-desc">配置后，该租户首次注册时将自动获得此模型配置。</p>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+    {% if success %}
+    <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+
+    <form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}" class="form-card form-card-lg">
+        <input type="hidden" name="action" value="save_default_model">
+        <div class="form-row">
+            <div class="form-group">
+                <label>模型名称</label>
+                <input type="text" name="name" value="{{ default_model.get('name', '') if default_model else '' }}" placeholder="如：GPT-4o" required>
+            </div>
+            <div class="form-group">
+                <label>模型类型</label>
+                <select name="model_type">
+                    <option value="OPENAI" {{ 'selected' if default_model and default_model.get('model_type') == 'OPENAI' }}>OpenAI</option>
+                    <option value="CLAUDE" {{ 'selected' if default_model and default_model.get('model_type') == 'CLAUDE' }}>Claude</option>
+                    <option value="ZHIPU" {{ 'selected' if default_model and default_model.get('model_type') == 'ZHIPU' }}>智谱 GLM</option>
+                    <option value="TONGYI" {{ 'selected' if default_model and default_model.get('model_type') == 'TONGYI' }}>通义千问</option>
+                    <option value="CUSTOM" {{ 'selected' if default_model and default_model.get('model_type') == 'CUSTOM' }}>自定义</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>模型 ID</label>
+                <input type="text" name="model" value="{{ default_model.get('model', '') if default_model else '' }}" placeholder="如：gpt-4o" required>
+            </div>
+            <div class="form-group">
+                <label>API Key</label>
+                <input type="password" name="api_key" value="{{ default_model.get('api_key', '') if default_model else '' }}" placeholder="sk-...">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>API 端点（可选）</label>
+            <input type="text" name="api_endpoint" value="{{ default_model.get('api_endpoint', '') if default_model else '' }}" placeholder="留空使用默认">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Temperature</label>
+                <input type="number" name="temperature" value="{{ default_model.get('temperature', 0.7) if default_model else 0.7 }}" step="0.1" min="0" max="2">
+            </div>
+            <div class="form-group">
+                <label>Max Tokens</label>
+                <input type="number" name="max_tokens" value="{{ default_model.get('max_tokens', 2000) if default_model else 2000 }}" min="1" max="32000">
+            </div>
+        </div>
+        <div class="form-group">
+            <label><input type="checkbox" name="enabled" {{ 'checked' if default_model and default_model.get('enabled', 1) }}> 启用</label>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">保存默认模型</button>
+            {% if default_model %}
+            <button type="submit" name="action" value="delete_default_model" class="btn btn-danger"
+                    onclick="return confirm('确定删除该租户的默认模型配置？')">删除配置</button>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<div class="section section-danger">
+    <h2>危险操作</h2>
+    <p class="section-desc">禁用后该租户将无法使用系统。</p>
+    <form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}" class="action-form">
+        <input type="hidden" name="action" value="toggle_status">
+        <input type="hidden" name="is_active" value="{{ 0 if tenant.get('is_active', 1) else 1 }}">
+        <button type="submit" class="btn {{ 'btn-danger' if tenant.get('is_active', 1) else 'btn-success' }}"
+                onclick="return confirm('确定要{{ '禁用' if tenant.get('is_active', 1) else '启用' }}该租户吗？')">
+            {{ '禁用租户' if tenant.get('is_active', 1) else '启用租户' }}
+        </button>
+    </form>
+</div>
+{% endblock %}

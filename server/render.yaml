@@ -3,8 +3,8 @@ services:
     name: csbaby-sync-server
     env: node
     plan: free
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
     envVars:
       - key: NODE_ENV
         value: production
@@ -14,5 +14,5 @@ services:
         value: 8080
     disk:
       name: csbaby-data
-      mountPath: /opt/render/project/src
+      mountPath: /opt/render/project/src/server
       sizeGB: 1

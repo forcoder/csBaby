@@ -1,0 +1,147 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="page-header">
+    <div class="page-header-left">
+        <h1>黑名单管理</h1>
+        <span class="page-subtitle">{{ tenant.phone }}</span>
+    </div>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}" class="btn btn-back">← 返回详情</a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="section">
+    <h2>新增黑名单</h2>
+    <form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}/blacklist/add" class="form-card form-card-lg">
+        <div class="form-row">
+            <div class="form-group">
+                <label>黑名单类型</label>
+                <select name="type">
+                    <option value="KEYWORD">关键词</option>
+                    <option value="SENDER">发送者</option>
+                    <option value="CONTENT">完整内容</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>来源应用包名</label>
+                <input type="text" name="package_name" placeholder="可选，留空表示所有应用">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>值</label>
+            <input type="text" name="value" placeholder="关键词 / 发送者名称 / 消息内容" required>
+        </div>
+        <div class="form-group">
+            <label>备注说明</label>
+            <input type="text" name="description" placeholder="可选，方便后续管理">
+        </div>
+        <div class="form-group">
+            <label><input type="checkbox" name="is_enabled" checked> 启用</label>
+        </div>
+        <button type="submit" class="btn btn-primary">添加</button>
+    </form>
+</div>
+
+<div class="section">
+    <h2>黑名单列表（共 {{ blacklists|length }} 条）</h2>
+    {% if blacklists %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>类型</th>
+                <th>值</th>
+                <th>备注</th>
+                <th>来源应用</th>
+                <th>状态</th>
+                <th>创建时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in blacklists %}
+            <tr>
+                <td>{{ item.id }}</td>
+                <td>
+                    {% if item.type == 'KEYWORD' %}
+                    <span class="badge badge-warning">关键词</span>
+                    {% elif item.type == 'SENDER' %}
+                    <span class="badge badge-info">发送者</span>
+                    {% elif item.type == 'CONTENT' %}
+                    <span class="badge badge-danger">完整内容</span>
+                    {% else %}
+                    <span class="badge">{{ item.type }}</span>
+                    {% endif %}
+                </td>
+                <td style="max-width:220px;word-break:break-all;">{{ item.value }}</td>
+                <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ item.description or '-' }}</td>
+                <td>{{ item.package_name or '全部' }}</td>
+                <td>
+                    {% if item.is_enabled == 1 %}
+                    <span class="badge badge-success">启用</span>
+                    {% else %}
+                    <span class="badge badge-danger">禁用</span>
+                    {% endif %}
+                </td>
+                <td>{{ item.created_at or '-' }}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="document.getElementById('edit-{{ item.id }}').style.display='block'">编辑</button>
+                    <form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}/blacklist/{{ item.id }}/delete" style="display:inline;">
+                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定删除这条黑名单？')">删除</button>
+                    </form>
+                </td>
+            </tr>
+            <tr id="edit-{{ item.id }}" style="display:none;">
+                <td colspan="8">
+                    <form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}/blacklist/{{ item.id }}/edit" class="form-card">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>黑名单类型</label>
+                                <select name="type">
+                                    <option value="KEYWORD" {{ 'selected' if item.type == 'KEYWORD' }}>关键词</option>
+                                    <option value="SENDER" {{ 'selected' if item.type == 'SENDER' }}>发送者</option>
+                                    <option value="CONTENT" {{ 'selected' if item.type == 'CONTENT' }}>完整内容</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>来源应用包名</label>
+                                <input type="text" name="package_name" value="{{ item.package_name or '' }}" placeholder="留空表示所有应用">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>值</label>
+                            <input type="text" name="value" value="{{ item.value }}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>备注说明</label>
+                            <input type="text" name="description" value="{{ item.description or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label><input type="checkbox" name="is_enabled" {{ 'checked' if item.is_enabled == 1 }}> 启用</label>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">保存</button>
+                            <button type="button" class="btn" onclick="document.getElementById('edit-{{ item.id }}').style.display='none'">取消</button>
+                        </div>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:#888;padding:20px;text-align:center;">暂无黑名单记录。</p>
+    {% endif %}
+
+    <form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}/blacklist/clear">
+        <button type="submit" class="btn btn-danger" onclick="return confirm('确定清空该租户的所有黑名单？此操作不可恢复。')"
+                {{ 'disabled' if not blacklists }}>清空全部黑名单</button>
+    </form>
+</div>
+{% endblock %}

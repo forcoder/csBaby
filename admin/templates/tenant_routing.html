@@ -1,0 +1,247 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="page-header">
+    <div class="page-header-left">
+        <h1>智能路由管理</h1>
+        <span class="page-subtitle">{{ tenant.phone }}</span>
+    </div>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}" class="btn btn-back">← 返回详情</a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<!-- ===== 路由配置 ===== -->
+<div class="section">
+    <h2>路由策略配置</h2>
+    <form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}/routing/config" class="form-card form-card-lg">
+        <div class="form-row">
+            <div class="form-group">
+                <label>路由策略</label>
+                <select name="strategy">
+                    <option value="skill_first" {{ 'selected' if routing_config and routing_config.get('strategy') == 'skill_first' }}>技能优先</option>
+                    <option value="least_loaded" {{ 'selected' if routing_config and routing_config.get('strategy') == 'least_loaded' }}>最少负载</option>
+                    <option value="round_robin" {{ 'selected' if routing_config and routing_config.get('strategy') == 'round_robin' }}>轮询</option>
+                    <option value="priority" {{ 'selected' if routing_config and routing_config.get('strategy') == 'priority' }}>优先级</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>最大队列大小</label>
+                <input type="number" name="max_queue_size" min="1" max="200"
+                       value="{{ routing_config.get('max_queue_size', 50) if routing_config else 50 }}">
+            </div>
+            <div class="form-group">
+                <label>超时秒数</label>
+                <input type="number" name="timeout_seconds" min="10" max="3600"
+                       value="{{ routing_config.get('timeout_seconds', 300) if routing_config else 300 }}">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="fallback_to_ai"
+                       {{ 'checked' if not routing_config or routing_config.get('fallback_to_ai') }}>
+                无可用客服时降级到 AI 自动回复
+            </label>
+        </div>
+        <button type="submit" class="btn btn-primary">保存配置</button>
+    </form>
+</div>
+
+<!-- ===== 客服管理 ===== -->
+<div class="section">
+    <h2>客服管理（共 {{ agents|length }} 人）</h2>
+
+    <!-- 添加客服 -->
+    <form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}/routing/agent/add"
+          class="form-card" style="margin-bottom:20px;">
+        <h3 style="margin-bottom:12px;">添加客服</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>手机号</label>
+                <input type="text" name="agent_phone" placeholder="客服手机号" required>
+            </div>
+            <div class="form-group">
+                <label>姓名</label>
+                <input type="text" name="agent_name" placeholder="客服姓名">
+            </div>
+            <div class="form-group">
+                <label>初始状态</label>
+                <select name="status">
+                    <option value="online">在线</option>
+                    <option value="offline">离线</option>
+                    <option value="busy">忙碌</option>
+                    <option value="away">休息</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>最大并发</label>
+                <input type="number" name="max_concurrent" min="1" max="100" value="5">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">添加客服</button>
+    </form>
+
+    <!-- 客服列表 -->
+    {% if agents %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>手机号</th>
+                <th>姓名</th>
+                <th>状态</th>
+                <th>当前负载</th>
+                <th>最大并发</th>
+                <th>最后更新</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for agent in agents %}
+            <tr>
+                <td>{{ agent.agent_phone }}</td>
+                <td>{{ agent.agent_name or '-' }}</td>
+                <td>
+                    {% if agent.status == 'online' %}
+                    <span class="badge badge-success">在线</span>
+                    {% elif agent.status == 'offline' %}
+                    <span class="badge badge-danger">离线</span>
+                    {% elif agent.status == 'busy' %}
+                    <span class="badge badge-warning">忙碌</span>
+                    {% elif agent.status == 'away' %}
+                    <span class="badge badge-info">休息</span>
+                    {% else %}
+                    <span class="badge">{{ agent.status }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ agent.current_load }}</td>
+                <td>{{ agent.max_concurrent }}</td>
+                <td>{{ agent.updated_at or '-' }}</td>
+                <td>
+                    <!-- 状态切换 -->
+                    <form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}/routing/agent/{{ agent.agent_phone }}/status"
+                          style="display:inline;">
+                        <input type="hidden" name="status" value="online">
+                        <button type="submit" class="btn btn-sm btn-success"
+                                {{ 'disabled' if agent.status == 'online' }}>上线</button>
+                    </form>
+                    <form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}/routing/agent/{{ agent.agent_phone }}/status"
+                          style="display:inline;">
+                        <input type="hidden" name="status" value="busy">
+                        <button type="submit" class="btn btn-sm btn-warning"
+                                {{ 'disabled' if agent.status == 'busy' }}>忙碌</button>
+                    </form>
+                    <form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}/routing/agent/{{ agent.agent_phone }}/status"
+                          style="display:inline;">
+                        <input type="hidden" name="status" value="away">
+                        <button type="submit" class="btn btn-sm btn-info"
+                                {{ 'disabled' if agent.status == 'away' }}>休息</button>
+                    </form>
+                    <form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}/routing/agent/{{ agent.agent_phone }}/status"
+                          style="display:inline;">
+                        <input type="hidden" name="status" value="offline">
+                        <button type="submit" class="btn btn-sm btn-danger"
+                                {{ 'disabled' if agent.status == 'offline' }}>下线</button>
+                    </form>
+                    <!-- 技能设置按钮 -->
+                    <button class="btn btn-sm btn-primary"
+                            onclick="document.getElementById('skills-{{ agent.agent_phone }}').style.display='block'">技能</button>
+                </td>
+            </tr>
+            <!-- 技能设置行 -->
+            <tr id="skills-{{ agent.agent_phone }}" style="display:none;">
+                <td colspan="7">
+                    <form method="POST"
+                          action="/admin/tenants/{{ tenant.tenant_id }}/routing/agent/{{ agent.agent_phone }}/skills"
+                          class="form-card">
+                        <div class="form-group">
+                            <label>技能标签（每行一个，格式：技能名,熟练度，熟练度1-10）</label>
+                            <textarea name="skills" rows="4" placeholder="退款,9&#10;预订,5&#10;投诉处理,8"
+                                      style="width:100%;font-size:13px;"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">保存技能</button>
+                            <button type="button" class="btn"
+                                    onclick="document.getElementById('skills-{{ agent.agent_phone }}').style.display='none'">取消</button>
+                        </div>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:#888;padding:20px;text-align:center;">暂无客服，请添加。</p>
+    {% endif %}
+</div>
+
+<!-- ===== 会话列表 ===== -->
+<div class="section">
+    <h2>会话列表（共 {{ sessions_total }} 条）</h2>
+    {% if sessions %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>客户</th>
+                <th>平台</th>
+                <th>分配客服</th>
+                <th>状态</th>
+                <th>优先级</th>
+                <th>技能需求</th>
+                <th>创建时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in sessions %}
+            <tr>
+                <td>{{ s.id }}</td>
+                <td>
+                    {{ s.customer_name or '' }}
+                    {% if s.customer_phone %}
+                    <br><small style="color:#888;">{{ s.customer_phone }}</small>
+                    {% endif %}
+                </td>
+                <td>{{ s.platform or '-' }}</td>
+                <td>{{ s.assigned_agent_phone or '<span style=\"color:#e74c3c;\">未分配</span>'|safe }}</td>
+                <td>
+                    {% if s.status == 'pending' %}
+                    <span class="badge badge-warning">排队中</span>
+                    {% elif s.status == 'assigned' %}
+                    <span class="badge badge-info">已分配</span>
+                    {% elif s.status == 'active' %}
+                    <span class="badge badge-success">进行中</span>
+                    {% elif s.status == 'closed' %}
+                    <span class="badge">已关闭</span>
+                    {% else %}
+                    <span class="badge">{{ s.status }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ s.priority }}</td>
+                <td>{{ s.skill_required or '-' }}</td>
+                <td>{{ s.created_at or '-' }}</td>
+                <td>
+                    {% if s.status != 'closed' and s.assigned_agent_phone %}
+                    <form method="POST"
+                          action="/admin/tenants/{{ tenant.tenant_id }}/routing/session/{{ s.id }}/close"
+                          style="display:inline;">
+                        <input type="hidden" name="agent_phone" value="{{ s.assigned_agent_phone }}">
+                        <button type="submit" class="btn btn-sm btn-danger"
+                                onclick="return confirm('确认关闭此会话？')">关闭</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:#888;padding:20px;text-align:center;">暂无会话记录。</p>
+    {% endif %}
+</div>
+{% endblock %}

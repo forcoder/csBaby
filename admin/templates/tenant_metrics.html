@@ -1,0 +1,97 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="page-header">
+    <div class="page-header-left">
+        <h1>优化指标</h1>
+        <span class="page-subtitle">{{ tenant.phone }}</span>
+    </div>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}" class="btn btn-back">← 返回详情</a>
+</div>
+
+<div class="section">
+    <h2>时间范围</h2>
+    <form method="GET" action="/admin/tenants/{{ tenant.tenant_id }}/metrics" class="form-card">
+        <div class="form-row">
+            <div class="form-group">
+                <label>天数</label>
+                <select name="days">
+                    <option value="7" {{ 'selected' if days == 7 }}>最近 7 天</option>
+                    <option value="14" {{ 'selected' if days == 14 }}>最近 14 天</option>
+                    <option value="30" {{ 'selected' if days == 30 }}>最近 30 天</option>
+                    <option value="90" {{ 'selected' if days == 90 }}>最近 90 天</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">查询</button>
+        </div>
+    </form>
+</div>
+
+<div class="section">
+    <h2>汇总统计（最近 {{ days }} 天）</h2>
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-value">{{ summary.get('total_generated', 0) }}</div><div class="stat-label">总生成数</div></div>
+        <div class="stat-card"><div class="stat-value">{{ summary.get('total_accepted', 0) }}</div><div class="stat-label">接受数</div></div>
+        <div class="stat-card"><div class="stat-value">{{ summary.get('total_modified', 0) }}</div><div class="stat-label">修改数</div></div>
+        <div class="stat-card"><div class="stat-value">{{ summary.get('total_rejected', 0) }}</div><div class="stat-label">拒绝数</div></div>
+        <div class="stat-card"><div class="stat-value">{{ "%.1f%%"|format(summary.get('accept_rate', 0) * 100) if summary.get('accept_rate') is not none else '-' }}</div><div class="stat-label">接受率</div></div>
+        <div class="stat-card"><div class="stat-value">{{ "%.2f"|format(summary.get('avg_confidence', 0)) if summary.get('avg_confidence') is not none else '-' }}</div><div class="stat-label">平均置信度</div></div>
+        <div class="stat-card"><div class="stat-value">{{ "%.0fms"|format(summary.get('avg_response_time_ms', 0)) if summary.get('avg_response_time_ms') is not none else '-' }}</div><div class="stat-label">平均响应时间</div></div>
+    </div>
+</div>
+
+<div class="section">
+    <h2>每日明细（共 {{ total }} 天）</h2>
+    {% if items %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>日期</th>
+                <th>生成数</th>
+                <th>接受数</th>
+                <th>修改数</th>
+                <th>拒绝数</th>
+                <th>接受率</th>
+                <th>平均置信度</th>
+                <th>平均响应时间</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.date or '-' }}</td>
+                <td>{{ item.total_generated or 0 }}</td>
+                <td>{{ item.total_accepted or 0 }}</td>
+                <td>{{ item.total_modified or 0 }}</td>
+                <td>{{ item.total_rejected or 0 }}</td>
+                <td>
+                    {% if item.total_generated and item.total_generated > 0 %}
+                        {{ "%.1f%%"|format((item.total_accepted or 0) / item.total_generated * 100) }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>{{ "%.2f"|format(item.avg_confidence) if item.avg_confidence is not none else '-' }}</td>
+                <td>{{ "%.0fms"|format(item.avg_response_time_ms) if item.avg_response_time_ms is not none else '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:#888;padding:20px;text-align:center;">暂无优化指标数据。</p>
+    {% endif %}
+
+    {% if total > page_size %}
+    <div class="pagination">
+        {% if page > 1 %}
+        <a href="/admin/tenants/{{ tenant.tenant_id }}/metrics?days={{ days }}&page={{ page - 1 }}&page_size={{ page_size }}">上一页</a>
+        {% endif %}
+        <span>第 {{ page }} 页 / 共 {{ (total + page_size - 1) // page_size }} 页</span>
+        {% if page * page_size < total %}
+        <a href="/admin/tenants/{{ tenant.tenant_id }}/metrics?days={{ days }}&page={{ page + 1 }}&page_size={{ page_size }}">下一页</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,95 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="page-header">
+    <div class="page-header-left">
+        <h1>用户反馈</h1>
+        <span class="page-subtitle">{{ tenant.phone }}</span>
+    </div>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}" class="btn btn-back">← 返回详情</a>
+</div>
+
+<div class="section">
+    <h2>筛选</h2>
+    <form method="GET" action="/admin/tenants/{{ tenant.tenant_id }}/feedback" class="form-card">
+        <div class="form-row">
+            <div class="form-group">
+                <label>操作类型</label>
+                <select name="action">
+                    <option value="">全部</option>
+                    <option value="accept" {{ 'selected' if action == 'accept' }}>采纳</option>
+                    <option value="modify" {{ 'selected' if action == 'modify' }}>修改后采纳</option>
+                    <option value="reject" {{ 'selected' if action == 'reject' }}>拒绝</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">筛选</button>
+            <a href="/admin/tenants/{{ tenant.tenant_id }}/feedback" class="btn">重置</a>
+        </div>
+    </form>
+</div>
+
+<div class="section">
+    <h2>反馈记录（共 {{ total }} 条）</h2>
+    {% if items %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>关联回复ID</th>
+                <th>操作类型</th>
+                <th>修改文本</th>
+                <th>评分</th>
+                <th>备注</th>
+                <th>时间</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.id }}</td>
+                <td>{{ item.reply_history_id or '-' }}</td>
+                <td>
+                    {% if item.action == 'accept' %}
+                    <span class="badge badge-success">采纳</span>
+                    {% elif item.action == 'modify' %}
+                    <span class="badge badge-warning">修改后采纳</span>
+                    {% elif item.action == 'reject' %}
+                    <span class="badge badge-danger">拒绝</span>
+                    {% else %}
+                    <span class="badge">{{ item.action or '-' }}</span>
+                    {% endif %}
+                </td>
+                <td style="max-width:220px;word-break:break-all;">{{ item.modified_text or '-' }}</td>
+                <td>
+                    {% if item.rating is not none %}
+                    <span style="color:#f59e0b;">
+                        {% for _ in range(item.rating) %}★{% endfor %}
+                    </span>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td style="max-width:180px;word-break:break-all;">{{ item.comment or '-' }}</td>
+                <td>{{ item.created_at or '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:#888;padding:20px;text-align:center;">暂无用户反馈记录。</p>
+    {% endif %}
+
+    {% if total > page_size %}
+    <div class="pagination">
+        {% if page > 1 %}
+        <a href="/admin/tenants/{{ tenant.tenant_id }}/feedback?page={{ page - 1 }}&page_size={{ page_size }}&action={{ action }}">上一页</a>
+        {% endif %}
+        <span>第 {{ page }} 页 / 共 {{ (total + page_size - 1) // page_size }} 页</span>
+        {% if page * page_size < total %}
+        <a href="/admin/tenants/{{ tenant.tenant_id }}/feedback?page={{ page + 1 }}&page_size={{ page_size }}&action={{ action }}">下一页</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
