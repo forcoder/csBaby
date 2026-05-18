@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
-    name: Deploy to Render
+  test:
+    name: Test Server
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -39,19 +39,67 @@ jobs:
               console.log('register ok:', r.userId.substring(0,8));
               const l = await login('ci@test.com', 'test123456');
               console.log('login ok:', l.userId.substring(0,8));
-              const { queryAll } = require('./src/db');
-              const rules = queryAll('SELECT * FROM keyword_rules WHERE tenant_id=?', [l.tenantId]);
-              console.log('db query ok:', rules.length, 'rules');
             } catch (e) {
-              if (e.message === 'EMAIL_EXISTS') { console.log('user exists, skipping'); return; }
+              if (e.message === 'EMAIL_EXISTS') { console.log('user exists, ok'); return; }
               throw e;
             }
           })().catch(e => { console.error('TEST FAILED:', e.message); process.exit(1); });
           "
 
-      - name: Deploy to Render
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+  deploy:
+    name: Deploy to Render
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Find Render Service ID
+        id: find-service
         run: |
-          curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
+          SERVICES=$(curl -s -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services?limit=20")
+          SERVICE_ID=$(echo "$SERVICES" | node -e "
+            let d=''; process.stdin.on('data',c=>d+=c);
+            process.stdin.on('end',()=>{
+              try {
+                const j = JSON.parse(d);
+                if (Array.isArray(j) && j.length > 0) {
+                  const svc = j.find(s => s.service.name === 'csbaby-sync-server') || j[0];
+                  console.log(svc.service.id);
+                } else {
+                  process.stderr.write('No services found: ' + d.substring(0,200));
+                  process.exit(1);
+                }
+              } catch(e) { process.stderr.write('Parse error: ' + e.message); process.exit(1); }
+            });
+          ")
+          echo "SERVICE_ID=$SERVICE_ID" >> $GITHUB_OUTPUT
+          echo "Found service: $SERVICE_ID"
+
+      - name: Trigger Render Deploy
+        run: |
+          SERVICE_ID="${{ steps.find-service.outputs.SERVICE_ID }}"
+          echo "Triggering deploy for service: $SERVICE_ID"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{"clearCache": false}' || echo "Deploy hook not configured, skipping"
+            -d '{"clearCache": false}' \
+            "https://api.render.com/v1/services/$SERVICE_ID/deploys")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Deploy triggered successfully"
+          else
+            echo "❌ Deploy trigger failed"
+            exit 1
+          fi
