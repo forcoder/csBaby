@@ -74,3 +74,29 @@ jobs:
             echo "❌ Deploy failed with HTTP $HTTP_CODE"
             exit 1
           fi
+
+      - name: Wait for Render deployment
+        run: |
+          echo "Waiting for Render to build and deploy..."
+          sleep 30
+
+          # 尝试多次健康检查
+          for i in 1 2 3 4 5; do
+            echo "Health check attempt $i..."
+            HTTP_CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" \
+              "https://csbaby-sync-server.onrender.com/" 2>/dev/null)
+            echo "HTTP: $HTTP_CODE"
+            cat /tmp/health.json 2>/dev/null
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Service is healthy!"
+              exit 0
+            fi
+
+            if [ $i -lt 5 ]; then
+              echo "Waiting 30s before next attempt..."
+              sleep 30
+            fi
+          done
+
+          echo "⚠️ Service may still be starting up (Render free tier cold start can take 1-2 minutes)"
