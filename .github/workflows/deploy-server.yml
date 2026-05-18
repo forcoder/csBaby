@@ -49,108 +49,45 @@ jobs:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
 
     steps:
-      - name: Create Service & Deploy
-        env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      - uses: actions/checkout@v4
+
+      - name: Deploy via Render Deploy Hook
         run: |
-          set -e
+          echo "Triggering Render deploy via Deploy Hook..."
 
-          # 1. 获取 ownerId（从现有服务中提取）
-          SERVICES=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" "https://api.render.com/v1/services?limit=50")
-          OWNER_ID=$(echo "$SERVICES" | node -e "
-            let d=''; process.stdin.on('data',c=>d+=c);
-            process.stdin.on('end',()=>{
-              try {
-                const j = JSON.parse(d);
-                if (Array.isArray(j) && j.length > 0) {
-                  console.log(j[0].service.ownerId || j[0].service.owner || '');
-                }
-              } catch(e) { console.log(''); }
-            });
-          ")
-          echo "Owner ID: $OWNER_ID"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": false}' \
+            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
 
-          # 2. 检查服务是否已存在
-          SERVICE_ID=$(echo "$SERVICES" | node -e "
-            let d=''; process.stdin.on('data',c=>d+=c);
-            process.stdin.on('end',()=>{
-              try {
-                const j = JSON.parse(d);
-                if (Array.isArray(j)) {
-                  const svc = j.find(s => s.service.name === 'csbaby-sync-server');
-                  if (svc) { console.log(svc.service.id); return; }
-                }
-                console.log('NOT_FOUND');
-              } catch(e) { console.log('NOT_FOUND'); }
-            });
-          ")
-          echo "Service: $SERVICE_ID"
+          echo "Deploy Hook HTTP: $HTTP_CODE"
 
-          # 3. 如果没找到，创建新服务
-          if [ "$SERVICE_ID" = "NOT_FOUND" ]; then
-            echo "Creating service..."
-            node -e "
-              const https = require('https');
-              const body = JSON.stringify({
-                type: 'web_service',
-                name: 'csbaby-sync-server',
-                ownerId: '$OWNER_ID',
-                repo: 'https://github.com/forcoder/csBaby',
-                branch: 'main',
-                autoDeploy: 'yes',
-                serviceDetails: {
-                  env: 'node',
-                  buildCommand: 'cd server && npm install',
-                  startCommand: 'cd server && npm start'
-                }
-              });
-              const options = {
-                hostname: 'api.render.com',
-                path: '/v1/services',
-                method: 'POST',
-                headers: {
-                  'Authorization': 'Bearer ' + process.env.RENDER_API_KEY,
-                  'Content-Type': 'application/json',
-                  'Content-Length': Buffer.byteLength(body)
-                }
-              };
-              const req = https.request(options, (res) => {
-                let data = '';
-                res.on('data', c => data += c);
-                res.on('end', () => {
-                  console.log('HTTP:', res.statusCode);
-                  console.log('Body:', data);
-                  if (res.statusCode === 201) {
-                    try {
-                      const j = JSON.parse(data);
-                      const id = j.service ? j.service.id : j.id;
-                      console.log('SERVICE_ID=' + id);
-                    } catch(e) { console.log('PARSE_ERROR'); }
-                  }
-                });
-              });
-              req.on('error', e => { console.error('ERROR:', e.message); process.exit(1); });
-              req.write(body);
-              req.end();
-            " > /tmp/render-result.txt 2>&1
-
-            cat /tmp/render-result.txt
-            SERVICE_ID=$(grep "SERVICE_ID=" /tmp/render-result.txt 2>/dev/null | cut -d= -f2)
-            echo "Created: $SERVICE_ID"
-          fi
-
-          # 4. 触发部署
-          if [ -n "$SERVICE_ID" ] && [ "$SERVICE_ID" != "NOT_FOUND" ] && [ -n "$OWNER_ID" ]; then
-            echo "Deploying $SERVICE_ID..."
-            DEPLOY_RESP=$(curl -s -w "\n%{http_code}" \
-              -X POST \
-              -H "Authorization: Bearer $RENDER_API_KEY" \
-              -H "Accept: application/json" \
-              "https://api.render.com/v1/services/$SERVICE_ID/deploys")
-            HTTP=$(echo "$DEPLOY_RESP" | tail -1)
-            echo "Deploy HTTP: $HTTP"
-            echo "$(echo "$DEPLOY_RESP" | head -n -1)"
-            [ "$HTTP" = "201" ] || [ "$HTTP" = "200" ] || [ "$HTTP" = "202" ] && echo "✅ Deploy triggered" || exit 1
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202" ] || [ "$HTTP_CODE" = "204" ]; then
+            echo "✅ Deploy triggered via hook"
           else
-            echo "Skipping deploy (no service ID or owner ID)"
+            echo "⚠️ Deploy hook returned HTTP $HTTP_CODE"
           fi
+
+      - name: Wait and Health Check
+        run: |
+          echo "Waiting for Render deployment (free tier cold start)..."
+          sleep 60
+
+          for i in $(seq 1 8); do
+            echo "Health check attempt $i..."
+            HTTP_CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" \
+              --connect-timeout 10 \
+              "https://csbaby-sync-server.onrender.com/" 2>/dev/null)
+            BODY=$(cat /tmp/health.json 2>/dev/null)
+            echo "HTTP: $HTTP_CODE | Body: $BODY"
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Service is healthy!"
+              exit 0
+            fi
+
+            [ $i -lt 8 ] && sleep 30
+          done
+
+          echo "⚠️ Service not healthy after 4 min. Render Dashboard may have more info."
