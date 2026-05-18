@@ -171,14 +171,6 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Manual Version Management Card (新添加)
-            ManualVersionManagementCard(
-                viewModel = viewModel,
-                uiState = uiState
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             // Common Phrases
             if (uiState.commonPhrases.isNotEmpty()) {
                 Card(
