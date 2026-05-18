@@ -1,0 +1,67 @@
+# 构建文件
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+build/
+.gradle/
+app/build/
+captures/
+
+# IDE文件
+.idea/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+
+# 本地配置文件
+local.properties
+*.keystore
+*.jks
+
+# OSS配置文件（包含敏感信息）
+oss-config.properties
+
+# 上传生成的文件
+upload-history.json
+version-info.json
+
+# 日志文件
+*.log
+logs/
+
+# 临时文件
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# 系统文件
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 缓存文件
+.cache/
+.cache
+.caches/
+
+# Gradle缓存
+.gradle/
+gradle-app.setting
+
+# 环境配置（包含 API Key，不要提交）
+.env.local
+.env*.local
+
+# 服务端 node_modules
+server/node_modules/
+server/data.db
+server/data.db-wal
+server/data.db-shm
+
+# 其他
+*.orig
+*.rej

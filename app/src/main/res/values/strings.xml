@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">客服小秘</string>
+    <string name="notification_listener_label">客服小秘 - 消息监控</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">首页</string>
+    <string name="nav_knowledge">知识库</string>
+    <string name="nav_models">模型</string>
+    <string name="nav_profile">我的</string>
+
+    <!-- Home -->
+    <string name="monitoring_status">监控状态</string>
+    <string name="monitoring_enabled">已开启</string>
+    <string name="monitoring_disabled">已关闭</string>
+    <string name="recent_replies">最近回复</string>
+    <string name="quick_actions">快捷操作</string>
+
+    <!-- Knowledge Base -->
+    <string name="knowledge_base">知识库管理</string>
+    <string name="add_rule">添加规则</string>
+    <string name="edit_rule">编辑规则</string>
+    <string name="delete_rule">删除规则</string>
+    <string name="keyword">关键词</string>
+    <string name="reply_template">回复模板</string>
+    <string name="category">分类</string>
+    <string name="priority">优先级</string>
+
+    <!-- Model Config -->
+    <string name="model_config">模型配置</string>
+    <string name="add_model">添加模型</string>
+    <string name="api_key">API密钥</string>
+    <string name="api_endpoint">API地址</string>
+    <string name="model_name">模型名称</string>
+    <string name="temperature">温度参数</string>
+    <string name="max_tokens">最大Token数</string>
+    <string name="test_connection">测试连接</string>
+
+    <!-- Style Learning -->
+    <string name="style_learning">风格学习</string>
+    <string name="formality">正式度</string>
+    <string name="enthusiasm">热情度</string>
+    <string name="professionalism">专业度</string>
+    <string name="learning_samples">学习样本</string>
+
+    <!-- Actions -->
+    <string name="save">保存</string>
+    <string name="cancel">取消</string>
+    <string name="confirm">确认</string>
+    <string name="send">发送</string>
+    <string name="edit">编辑</string>
+    <string name="delete">删除</string>
+    <string name="import_data">导入</string>
+    <string name="export_data">导出</string>
+
+    <!-- Permissions -->
+    <string name="permission_notification_title">通知权限</string>
+    <string name="permission_notification_desc">需要通知权限来监听新消息</string>
+    <string name="permission_overlay_title">悬浮窗权限</string>
+    <string name="permission_overlay_desc">需要悬浮窗权限来显示回复建议</string>
+    <string name="accessibility_service_label">客服小秘 - 自动发送</string>
+    <string name="accessibility_service_desc">用于将建议回复自动填入当前微信、百居易、美团民宿、途家民宿等聊天窗口并点击发送</string>
+
+
+
+    <!-- Notifications -->
+
+    <string name="notification_channel_service">后台服务</string>
+    <string name="notification_channel_service_desc">用于保持消息监控服务运行</string>
+</resources>

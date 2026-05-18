@@ -1,0 +1,60 @@
+> Task :app:clean
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors
+> Task :app:generateDebugBuildConfig
+> Task :app:generateDebugResValues
+> Task :app:checkDebugAarMetadata
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:packageDebugResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:parseDebugLocalResources
+> Task :app:extractDeepLinksDebug
+> Task :app:mergeDebugResources
+
+> Task :app:processDebugMainManifest
+D:\workspace\workbuddy\csBaby\app\src\main\AndroidManifest.xml:37:5-77 Warning:
+	Element uses-permission#android.permission.POST_NOTIFICATIONS at AndroidManifest.xml:37:5-77 duplicated with element declared at AndroidManifest.xml:19:5-77
+
+> Task :app:processDebugManifest
+> Task :app:mergeDebugShaders
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:javaPreCompileDebug
+> Task :app:mergeDebugAssets
+> Task :app:compressDebugAssets
+> Task :app:desugarDebugFileDependencies
+> Task :app:mergeDebugJniLibFolders
+> Task :app:mergeDebugNativeLibs NO-SOURCE
+> Task :app:stripDebugDebugSymbols NO-SOURCE
+> Task :app:checkDebugDuplicateClasses
+> Task :app:validateSigningDebug
+> Task :app:writeDebugAppMetadata
+> Task :app:writeDebugSigningConfigVersions
+> Task :app:mergeLibDexDebug
+> Task :app:processDebugManifestForPackage
+> Task :app:processDebugResources
+
+> Task :app:kaptGenerateStubsDebugKotlin FAILED
+e: file:///D:/workspace/workbuddy/csBaby/app/src/main/java/com/csbaby/kefu/di/OtaModule.kt:92:1 Expecting a top level declaration
+
+
+> Task :app:mergeExtDexDebug
+w: Detected multiple Kotlin daemon sessions at kotlin\sessions
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:kaptGenerateStubsDebugKotlin'.
+> Cannot access output property 'destinationDirectory' of task ':app:kaptGenerateStubsDebugKotlin'. Accessing unreadable inputs or outputs is not supported. Declare the task as untracked by using Task.doNotTrackState(). For more information, please refer to https://docs.gradle.org/8.2/userguide/incremental_build.html#disable-state-tracking in the Gradle documentation.
+   > Failed to create MD5 hash for file 'D:\workspace\workbuddy\csBaby\app\build\tmp\kapt3\incrementalData\debug\com\csbaby\kefu\infrastructure\window\FloatingWindowService$KnowledgeRuleItem.class' as it does not exist.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 10s
+28 actionable tasks: 28 executed

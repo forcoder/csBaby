@@ -1,0 +1,105 @@
+package com.csbaby.kefu.data.sync
+
+import android.content.Context
+import androidx.datastore.preferences.core.*
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.*
+import timber.log.Timber
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * 离线同步队列。
+ * 当网络不可用或同步失败时，操作被序列化存入 SharedPreferences。
+ * 网络恢复后按 FIFO 顺序重试，带指数退避。
+ */
+@Singleton
+class SyncQueue @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    private val prefs = context.getSharedPreferences("sync_queue", Context.MODE_PRIVATE)
+    private val gson = Gson()
+    private val queueKey = "pending_ops"
+
+    companion object {
+        private const val MAX_RETRY_COUNT = 5
+        private val BACKOFF_DELAYS = listOf(0L, 30_000L, 120_000L, 600_000L, 3_600_000L)
+    }
+
+    val pendingCount: Flow<Int> = flow {
+        while (true) {
+            emit(getQueue().size)
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+
+    suspend fun enqueue(op: SyncOperation) {
+        val current = getQueue()
+        val updated = current + op.copy(
+            retryCount = 0,
+            createdAt = System.currentTimeMillis(),
+            nextRetryAt = System.currentTimeMillis()
+        )
+        saveQueue(updated)
+        Timber.d("Sync op enqueued: ${op.type}:${op.entityId}")
+    }
+
+    suspend fun dequeueDue(): List<SyncOperation> {
+        val all = getQueue()
+        val now = System.currentTimeMillis()
+        return all.filter { it.nextRetryAt <= now && it.retryCount < MAX_RETRY_COUNT }
+    }
+
+    suspend fun markSuccess(opId: String) {
+        val updated = getQueue().filter { it.id != opId }
+        saveQueue(updated)
+    }
+
+    suspend fun markFailed(op: SyncOperation) {
+        val updated = getQueue().map {
+            if (it.id == op.id) {
+                val newRetryCount = it.retryCount + 1
+                val delay = BACKOFF_DELAYS.getOrElse(newRetryCount) { 3_600_000L }
+                it.copy(retryCount = newRetryCount, nextRetryAt = System.currentTimeMillis() + delay, lastError = "sync failed")
+            } else it
+        }
+        saveQueue(updated)
+        val delay = BACKOFF_DELAYS.getOrElse(op.retryCount + 1) { 3_600_000L }
+        Timber.w("Sync op failed, retry in ${delay / 1000}s: ${op.type}:${op.entityId}")
+    }
+
+    suspend fun clear() {
+        prefs.edit().remove(queueKey).apply()
+    }
+
+    private fun getQueue(): List<SyncOperation> {
+        val json = prefs.getString(queueKey, null) ?: return emptyList()
+        return try {
+            gson.fromJson(json, object : TypeToken<List<SyncOperation>>() {}.type)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to decode sync queue")
+            emptyList()
+        }
+    }
+
+    private fun saveQueue(queue: List<SyncOperation>) {
+        prefs.edit().putString(queueKey, gson.toJson(queue)).apply()
+    }
+}
+
+data class SyncOperation(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val type: String,
+    val entityType: String,
+    val entityId: String,
+    val tenantId: String,
+    val payload: String? = null,
+    val retryCount: Int = 0,
+    val createdAt: Long = System.currentTimeMillis(),
+    val nextRetryAt: Long = System.currentTimeMillis(),
+    val lastError: String? = null
+) {
+    val isExhausted: Boolean get() = retryCount >= 5
+}

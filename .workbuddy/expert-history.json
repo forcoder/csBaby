@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "sessions": {
+    "60a0430848824a1eb94a60c002bd5161": [
+      {
+        "expertId": "ContentCreator",
+        "name": "Kai",
+        "profession": "内容创作专家",
+        "avatarUrl": "https://acc-1258344699.cos.accelerate.myqcloud.com/workbuddy/experts/avatars/03-Marketing/ContentCreator/ContentCreator.png",
+        "promptUrl": "https://acc-1258344699.cos.accelerate.myqcloud.com/workbuddy/experts/experts/03-Marketing/ContentCreator/ContentCreator_zh.md",
+        "usedAt": 1775572592062,
+        "industryId": "all"
+      }
+    ],
+    "06cfd4f5a8fa43e4835963c6f58abe41": [
+      {
+        "expertId": "MobileApplicationDeveloper",
+        "name": "Tina",
+        "profession": "移动应用开发工程师",
+        "avatarUrl": "https://acc-1258344699.cos.accelerate.myqcloud.com/workbuddy/experts/avatars/02-Engineering/MobileApplicationDeveloper/MobileApplicationDeveloper.png",
+        "promptUrl": "https://acc-1258344699.cos.accelerate.myqcloud.com/workbuddy/experts/experts/02-Engineering/MobileApplicationDeveloper/MobileApplicationDeveloper_zh.md",
+        "usedAt": 1775737054212,
+        "industryId": "02-Engineering"
+      }
+    ]
+  },
+  "lastUpdated": 1775744352537
+}

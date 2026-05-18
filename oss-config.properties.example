@@ -1,0 +1,26 @@
+# 阿里云OSS配置示例
+# 请复制此文件为 oss-config.properties 并填写您的实际配置
+
+# OSS域名（从阿里云控制台获取）
+oss.endpoint=your-oss-endpoint.aliyuncs.com
+
+# Bucket名称
+oss.bucket=your-bucket-name
+
+# AccessKey ID（从阿里云RAM控制台获取）
+oss.access_key_id=your_access_key_id
+
+# AccessKey Secret（从阿里云RAM控制台获取）
+oss.access_key_secret=your_access_key_secret
+
+# 应用名称（用于构建文件路径）
+app.name=your_app_name
+
+# APK文件夹路径
+oss.apk_folder=apks/
+
+# 是否启用自动上传（true/false）
+auto_upload.enabled=true
+
+# 自动上传后是否自动升级版本号
+auto_upload.auto_upgrade=true

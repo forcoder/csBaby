@@ -1,0 +1,340 @@
+package com.csbaby.kefu.presentation.screens.profile
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.csbaby.kefu.data.sync.SyncState
+
+/**
+ * 数据同步设置卡片。
+ * 添加到 ProfileScreen 中，提供登录/注册/同步/登出功能。
+ */
+@Composable
+fun SyncSettingsCard(
+    syncState: SyncState,
+    isLoggedIn: Boolean,
+    currentTenantId: String?,
+    pendingSyncCount: Int,
+    lastSyncTime: Long,
+    onLogin: (email: String, password: String) -> Unit,
+    onRegister: (email: String, password: String, displayName: String) -> Unit,
+    onSync: () -> Unit,
+    onLogout: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var showLoginDialog by remember { mutableStateOf(false) }
+    var showRegisterDialog by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CloudSync,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "云端同步",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (isLoggedIn) {
+                // 已登录状态
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "已登录",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        currentTenantId?.let { tenantId ->
+                            Text(
+                                text = "租户: $tenantId",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        // 上次同步时间
+                        if (lastSyncTime > 0) {
+                            Text(
+                                text = "上次同步: ${formatSyncTime(lastSyncTime)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // 同步状态指示器
+                    when (syncState) {
+                        is SyncState.Syncing -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = syncState.message,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                        is SyncState.Error -> {
+                            Icon(
+                                imageVector = Icons.Default.Error,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        is SyncState.Success -> {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        else -> {}
+                    }
+                }
+
+                // 待同步数据提示
+                if (pendingSyncCount > 0) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "📤 $pendingSyncCount 条数据待同步",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onSync,
+                        modifier = Modifier.weight(1f),
+                        enabled = syncState !is SyncState.Syncing
+                    ) {
+                        Icon(Icons.Default.Sync, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("立即同步")
+                    }
+
+                    OutlinedButton(
+                        onClick = onLogout,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Logout, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("登出")
+                    }
+                }
+            } else {
+                // 未登录状态
+                Text(
+                    text = "登录后可在多设备间同步知识库、配置和风格数据",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { showLoginDialog = true },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Login, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("登录")
+                    }
+
+                    OutlinedButton(
+                        onClick = { showRegisterDialog = true },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.PersonAdd, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("注册")
+                    }
+                }
+            }
+
+            // 错误信息
+            if (syncState is SyncState.Error) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = syncState.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+
+    // 登录对话框
+    if (showLoginDialog) {
+        LoginDialog(
+            onDismiss = { showLoginDialog = false },
+            onLogin = { email, password ->
+                onLogin(email, password)
+                showLoginDialog = false
+            }
+        )
+    }
+
+    // 注册对话框
+    if (showRegisterDialog) {
+        RegisterDialog(
+            onDismiss = { showRegisterDialog = false },
+            onRegister = { email, password, displayName ->
+                onRegister(email, password, displayName)
+                showRegisterDialog = false
+            }
+        )
+    }
+}
+
+private fun formatSyncTime(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp
+    return when {
+        diff < 60_000 -> "刚刚"
+        diff < 3_600_000 -> "${diff / 60_000} 分钟前"
+        diff < 86_400_000 -> "${diff / 3_600_000} 小时前"
+        diff < 604_800_000 -> "${diff / 86_400_000} 天前"
+        else -> {
+            val sdf = java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
+            sdf.format(java.util.Date(timestamp))
+        }
+    }
+}
+
+@Composable
+fun LoginDialog(
+    onDismiss: () -> Unit,
+    onLogin: (String, String) -> Unit
+) {
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("登录") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("邮箱") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("密码") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onLogin(email, password) },
+                enabled = email.isNotBlank() && password.isNotBlank()
+            ) {
+                Text("登录")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+@Composable
+fun RegisterDialog(
+    onDismiss: () -> Unit,
+    onRegister: (String, String, String) -> Unit
+) {
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var displayName by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("注册") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = displayName,
+                    onValueChange = { displayName = it },
+                    label = { Text("显示名称") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("邮箱") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("密码") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onRegister(email, password, displayName) },
+                enabled = email.isNotBlank() && password.isNotBlank()
+            ) {
+                Text("注册")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}

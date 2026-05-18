@@ -1,0 +1,381 @@
+package com.csbaby.kefu.presentation.screens.home
+
+import androidx.compose.foundation.layout.*
+
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.csbaby.kefu.R
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HomeScreen(
+    viewModel: HomeViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    var showAppManager by rememberSaveable { mutableStateOf(false) }
+
+    if (showAppManager) {
+        MonitoredAppsDialog(
+            apps = uiState.monitoredApps,
+            onDismiss = { showAppManager = false },
+            onSave = { selectedApps ->
+                viewModel.updateSelectedApps(selectedApps)
+                showAppManager = false
+            }
+        )
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("客服小秘") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+        ) {
+            MonitoringStatusCard(
+                isMonitoring = uiState.isMonitoringEnabled,
+                isFloatingIconEnabled = uiState.isFloatingIconEnabled,
+                monitoredApps = uiState.monitoredApps,
+                onToggle = viewModel::toggleMonitoring,
+                onToggleFloatingIcon = viewModel::updateFloatingIconEnabled,
+                onManageApps = { showAppManager = true }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            QuickStatsCard(
+                totalReplies = uiState.totalReplies,
+                todayReplies = uiState.todayReplies,
+                knowledgeBaseCount = uiState.knowledgeBaseCount
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = stringResource(R.string.recent_replies),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(items = uiState.recentReplies, key = { it.id }) { replyHistory ->
+                    RecentReplyItem(
+                        originalMessage = replyHistory.originalMessage,
+                        reply = replyHistory.finalReply,
+                        time = replyHistory.sendTime
+                    )
+                }
+            }
+
+        }
+    }
+}
+
+@Composable
+fun MonitoringStatusCard(
+    isMonitoring: Boolean,
+    isFloatingIconEnabled: Boolean,
+    monitoredApps: List<MonitoredAppUiModel>,
+    onToggle: () -> Unit,
+    onToggleFloatingIcon: (Boolean) -> Unit,
+    onManageApps: () -> Unit
+) {
+    val selectedApps = monitoredApps.filter { it.isSelected }
+    val selectedSummary = if (selectedApps.isEmpty()) {
+        "当前未选择任何应用"
+    } else {
+        selectedApps.joinToString("、") { it.displayName }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isMonitoring) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = stringResource(R.string.monitoring_status),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = if (isMonitoring) {
+                            stringResource(R.string.monitoring_enabled)
+                        } else {
+                            stringResource(R.string.monitoring_disabled)
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                IconButton(onClick = onToggle) {
+                    Icon(
+                        imageVector = if (isMonitoring) Icons.Default.Stop else Icons.Default.PlayArrow,
+                        contentDescription = if (isMonitoring) "停止监控" else "开启监控"
+                    )
+                }
+            }
+
+            // 开启悬浮图标开关
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "开启悬浮图标",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        text = if (isFloatingIconEnabled) "已开启默认显示悬浮图标" else "关闭后将不显示悬浮图标",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = isFloatingIconEnabled,
+                    onCheckedChange = onToggleFloatingIcon
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "监控应用",
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(
+                    text = selectedSummary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (selectedApps.isEmpty()) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+                Text(
+                    text = "仅会监听已勾选应用的新消息通知。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            OutlinedButton(onClick = onManageApps) {
+                Text("管理监控应用")
+            }
+        }
+    }
+}
+
+@Composable
+fun MonitoredAppsDialog(
+    apps: List<MonitoredAppUiModel>,
+    onDismiss: () -> Unit,
+    onSave: (Set<String>) -> Unit
+) {
+    var selectedPackages by remember(apps) {
+        mutableStateOf(
+            apps.filter { it.isSelected }
+                .map { it.packageName }
+                .toSet()
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("管理监控应用") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "勾选后才会监听对应应用的新消息并生成建议回复。",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                apps.forEachIndexed { index, app ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = app.displayName,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = app.packageName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = app.packageName in selectedPackages,
+                            onCheckedChange = { checked ->
+                                selectedPackages = if (checked) {
+                                    selectedPackages + app.packageName
+                                } else {
+                                    selectedPackages - app.packageName
+                                }
+                            }
+                        )
+                    }
+                    if (index < apps.lastIndex) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+
+                }
+                Text(
+                    text = if (selectedPackages.isEmpty()) {
+                        "保存后将不再监控任何应用。"
+                    } else {
+                        "已选择 ${selectedPackages.size} 个应用"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (selectedPackages.isEmpty()) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(selectedPackages) }) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+@Composable
+fun QuickStatsCard(
+    totalReplies: Int,
+    todayReplies: Int,
+    knowledgeBaseCount: Int
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            StatItem(label = "总回复", value = totalReplies.toString())
+            StatItem(label = "今日", value = todayReplies.toString())
+            StatItem(label = "知识库", value = knowledgeBaseCount.toString())
+        }
+    }
+}
+
+@Composable
+fun StatItem(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+fun RecentReplyItem(
+    originalMessage: String,
+    reply: String,
+    time: Long
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp)
+        ) {
+            Text(
+                text = "客户: $originalMessage",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "回复: $reply",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
+}
+
