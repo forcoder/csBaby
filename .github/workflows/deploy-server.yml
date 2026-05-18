@@ -67,48 +67,66 @@ jobs:
               try {
                 const j = JSON.parse(d);
                 if (Array.isArray(j)) {
-                  // 先找同名服务
                   const byName = j.find(s => s.service.name === 'csbaby-sync-server');
                   if (byName) { console.log(byName.service.id); return; }
-                  // 再找 csBaby 仓库的 Node.js 服务
-                  const byRepo = j.find(s => s.service.repo === 'https://github.com/forcoder/csBaby' && s.service.type === 'web_service');
-                  if (byRepo) { console.log(byRepo.service.id); return; }
                 }
                 console.log('NOT_FOUND');
               } catch(e) { console.log('NOT_FOUND'); }
             });
           ")
 
-          echo "Found service: $SERVICE_ID"
+          echo "Service: $SERVICE_ID"
 
-          # 2. 如果没找到，创建新服务
+          # 2. 如果没找到，创建新服务（使用 node 生成 JSON 避免 shell 转义问题）
           if [ "$SERVICE_ID" = "NOT_FOUND" ]; then
             echo "Creating new Render service..."
+
+            CREATE_BODY=$(node -e "
+              const body = {
+                type: 'web_service',
+                name: 'csbaby-sync-server',
+                repo: 'https://github.com/forcoder/csBaby',
+                branch: 'main',
+                autoDeploy: true,
+                env: 'node',
+                buildCommand: 'cd server && npm install',
+                startCommand: 'cd server && npm start',
+                envVars: [
+                  { key: 'NODE_ENV', value: 'production' },
+                  { key: 'PORT', value: '8080' }
+                ]
+              };
+              console.log(JSON.stringify(body));
+            ")
+
+            echo "Create body: $CREATE_BODY"
+
             CREATE_RESP=$(curl -s -w "\n%{http_code}" \
               -X POST \
               -H "Authorization: Bearer $RENDER_API_KEY" \
               -H "Content-Type: application/json" \
-              -d '{"type":"web_service","name":"csbaby-sync-server","repo":"https://github.com/forcoder/csBaby","branch":"main","autoDeploy":true,"serviceDetails":{"env":"node","buildCommand":"cd server && npm install","startCommand":"cd server && npm start","disk":{"name":"csbaby-data","mountPath":"/opt/render/project/src/server","sizeGB":1}},"envVars":[{"key":"NODE_ENV","value":"production"},{"key":"PORT","value":"8080"}]}' \
+              -d "$CREATE_BODY" \
               "https://api.render.com/v1/services")
 
             CREATE_HTTP=$(echo "$CREATE_RESP" | tail -1)
+            CREATE_BODY_RESP=$(echo "$CREATE_RESP" | head -n -1)
             echo "Create HTTP: $CREATE_HTTP"
+            echo "Create Response: $CREATE_BODY_RESP"
 
             if [ "$CREATE_HTTP" = "201" ]; then
-              SERVICE_ID=$(echo "$CREATE_RESP" | head -n -1 | node -e "
+              SERVICE_ID=$(echo "$CREATE_BODY_RESP" | node -e "
                 let d=''; process.stdin.on('data',c=>d+=c);
                 process.stdin.on('end',()=>{ try{console.log(JSON.parse(d).service.id)}catch(e){console.log('ERROR')} });
               ")
-              echo "Created service: $SERVICE_ID"
+              echo "Created: $SERVICE_ID"
             else
-              echo "Failed to create service"
-              echo "$CREATE_RESP"
+              echo "Create failed"
               exit 1
             fi
           fi
 
           # 3. 触发部署
-          echo "Triggering deploy for $SERVICE_ID..."
+          echo "Deploying $SERVICE_ID..."
           DEPLOY_RESP=$(curl -s -w "\n%{http_code}" \
             -X POST \
             -H "Authorization: Bearer $RENDER_API_KEY" \
@@ -116,9 +134,8 @@ jobs:
             "https://api.render.com/v1/services/$SERVICE_ID/deploys")
 
           DEPLOY_HTTP=$(echo "$DEPLOY_RESP" | tail -1)
-          DEPLOY_BODY=$(echo "$DEPLOY_RESP" | head -n -1)
           echo "Deploy HTTP: $DEPLOY_HTTP"
-          echo "Deploy Response: $DEPLOY_BODY"
+          echo "$(echo "$DEPLOY_RESP" | head -n -1)"
 
           if [ "$DEPLOY_HTTP" = "201" ] || [ "$DEPLOY_HTTP" = "200" ] || [ "$DEPLOY_HTTP" = "202" ]; then
             echo "✅ Deploy triggered"
@@ -129,7 +146,7 @@ jobs:
 
       - name: Health Check
         run: |
-          echo "Waiting for Render (free tier cold start)..."
+          echo "Waiting for Render..."
           sleep 90
           for i in $(seq 1 6); do
             CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 "https://csbaby-sync-server.onrender.com/" 2>/dev/null)
