@@ -43,50 +43,106 @@ jobs:
           "
 
   deploy:
-    name: Deploy to Render
+    name: Create Service & Deploy to Render
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
 
     steps:
-      - name: Check Render Service Info
+      - name: Create Render Service (if not exists)
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          echo "Listing all Render services..."
+          SERVICE_NAME="csbaby-sync-server"
+          REPO="https://github.com/forcoder/csBaby"
+          BRANCH="main"
+
+          # 检查服务是否已存在
           SERVICES=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
-            "https://api.render.com/v1/services?limit=20")
-          echo "$SERVICES" | node -e "
+            "https://api.render.com/v1/services?limit=50")
+
+          SERVICE_ID=$(echo "$SERVICES" | node -e "
             let d=''; process.stdin.on('data',c=>d+=c);
             process.stdin.on('end',()=>{
               try {
                 const j = JSON.parse(d);
                 if (Array.isArray(j)) {
-                  j.forEach(s => {
-                    const svc = s.service;
-                    console.log('---');
-                    console.log('ID:', svc.id);
-                    console.log('Name:', svc.name);
-                    console.log('Type:', svc.type);
-                    console.log('Repo:', svc.repo || 'N/A');
-                    console.log('Branch:', svc.branch || 'N/A');
-                    console.log('AutoDeploy:', svc.autoDeploy);
-                    console.log('URL:', svc.url || 'N/A');
-                    console.log('BuildCommand:', svc.buildCommand || 'N/A');
-                    console.log('StartCommand:', svc.startCommand || 'N/A');
-                  });
-                } else {
-                  console.log('Response:', JSON.stringify(j).substring(0, 500));
+                  const svc = j.find(s => s.service.name === '$SERVICE_NAME');
+                  if (svc) { console.log(svc.service.id); process.exit(0); }
                 }
-              } catch(e) { console.error('Parse error:', e.message, d.substring(0,200)); }
+                // 如果没找到，尝试查找 csBaby 仓库的服务
+                const csBaby = j.find(s => s.service.repo === '$REPO' && s.service.type === 'web_service');
+                if (csBaby) { console.log('FOUND_OTHER:' + csBaby.service.id + ':' + csBaby.service.name); }
+                else { console.log('NOT_FOUND'); }
+              } catch(e) { console.log('ERROR:' + e.message); }
             });
-          "
+          ")
+
+          echo "Service check result: $SERVICE_ID"
+
+          if [ "$SERVICE_ID" = "NOT_FOUND" ] || [[ "$SERVICE_ID" == ERROR* ]]; then
+            echo "Creating new Render service: $SERVICE_NAME"
+            CREATE_RESPONSE=$(curl -s -w "\n%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer $RENDER_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "type": "web_service",
+                "name": "'"$SERVICE_NAME"'",
+                "repo": "'"$REPO"'",
+                "branch": "'"$BRANCH'"",
+                "autoDeploy": true,
+                "serviceDetails": {
+                  "env": "node",
+                  "buildCommand": "cd server && npm install",
+                  "startCommand": "cd server && npm start",
+                  "disk": {
+                    "name": "csbaby-data",
+                    "mountPath": "/opt/render/project/src/server",
+                    "sizeGB": 1
+                  }
+                },
+                "envVars": [
+                  {"key": "NODE_ENV", "value": "production"},
+                  {"key": "PORT", "value": "8080"}
+                ]
+              }' \
+              "https://api.render.com/v1/services")
+
+            CREATE_HTTP=$(echo "$CREATE_RESPONSE" | tail -1)
+            CREATE_BODY=$(echo "$CREATE_RESPONSE" | head -n -1)
+            echo "Create HTTP: $CREATE_HTTP"
+            echo "Create Response: $CREATE_BODY"
+
+            if [ "$CREATE_HTTP" = "201" ]; then
+              SERVICE_ID=$(echo "$CREATE_BODY" | node -e "
+                let d=''; process.stdin.on('data',c=>d+=c);
+                process.stdin.on('end',()=>{
+                  try { console.log(JSON.parse(d).service.id); }
+                  catch(e) { console.log('PARSE_ERROR'); }
+                });
+              ")
+              echo "New service ID: $SERVICE_ID"
+            else
+              echo "Failed to create service"
+              exit 1
+            fi
+          elif [[ "$SERVICE_ID" == FOUND_OTHER* ]]; then
+            # 找到了其他 csBaby 服务，提取 ID
+            SERVICE_ID=$(echo "$SERVICE_ID" | sed 's/FOUND_OTHER://' | cut -d: -f1)
+            echo "Using existing csBaby service: $SERVICE_ID"
+          else
+            echo "Service already exists: $SERVICE_ID"
+          fi
+
+          echo "SERVICE_ID=$SERVICE_ID" >> $GITHUB_ENV
+          echo "Final SERVICE_ID: $SERVICE_ID"
 
       - name: Trigger Render Deploy
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          SERVICE_ID="srv-d7s88gbeo5us73cga30"
+          SERVICE_ID="${{ env.SERVICE_ID }}"
           echo "Triggering deploy for service: $SERVICE_ID"
 
           RESPONSE=$(curl -s -w "\n%{http_code}" \
@@ -110,10 +166,10 @@ jobs:
 
       - name: Wait and Health Check
         run: |
-          echo "Waiting for Render deployment..."
+          echo "Waiting for Render deployment (free tier cold start)..."
           sleep 60
 
-          for i in 1 2 3 4 5 6; do
+          for i in 1 2 3 4 5 6 7 8; do
             echo "Health check attempt $i..."
             HTTP_CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" \
               --connect-timeout 10 \
@@ -126,11 +182,10 @@ jobs:
               exit 0
             fi
 
-            if [ $i -lt 6 ]; then
+            if [ $i -lt 8 ]; then
               echo "Waiting 30s..."
               sleep 30
             fi
           done
 
-          echo "⚠️ Service did not become healthy after 3 minutes"
-          echo "This may indicate a build failure on Render. Check Render Dashboard."
+          echo "⚠️ Service did not become healthy after 4 minutes"
