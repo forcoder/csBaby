@@ -1,0 +1,90 @@
+name: Render Health Check Setup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup-health-checks:
+    name: Add Health Checks to All Render Services
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: List services and add health checks
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          node -e "
+          const https = require('https');
+          const API_KEY = process.env.RENDER_API_KEY;
+          const BASE = 'https://api.render.com/v1';
+
+          function api(method, path, body) {
+            return new Promise((resolve, reject) => {
+              const data = body ? JSON.stringify(body) : null;
+              const options = {
+                hostname: 'api.render.com',
+                path: path,
+                method: method,
+                headers: {
+                  'Authorization': 'Bearer ' + API_KEY,
+                  'Content-Type': 'application/json',
+                  ...(data ? { 'Content-Length': Buffer.byteLength(data) } : {})
+                }
+              };
+              const req = https.request(options, (res) => {
+                let d = '';
+                res.on('data', c => d += c);
+                res.on('end', () => {
+                  try { resolve({ status: res.statusCode, body: JSON.parse(d) }); }
+                  catch(e) { resolve({ status: res.statusCode, body: d }); }
+                });
+              });
+              req.on('error', reject);
+              if (data) req.write(data);
+              req.end();
+            });
+          }
+
+          async function main() {
+            console.log('=== Listing Render services ===');
+            const services = await api('GET', '/v1/services?limit=50');
+            if (services.status !== 200) {
+              console.error('Failed:', services);
+              process.exit(1);
+            }
+
+            const list = Array.isArray(services.body) ? services.body : services.body.services || [];
+            console.log('Found', list.length, 'services\n');
+
+            for (const item of list) {
+              const svc = item.service;
+              console.log('---');
+              console.log('ID:', svc.id);
+              console.log('Name:', svc.name);
+              console.log('Type:', svc.type);
+              console.log('URL:', svc.url || 'N/A');
+              console.log('Health Check:', svc.healthCheckPath || 'NONE');
+
+              // 添加健康检查（如果没有且是 web_service）
+              if (!svc.healthCheckPath && svc.type === 'web_service') {
+                console.log('→ Adding health check path: /');
+                const update = await api('PATCH', '/v1/services/' + svc.id, {
+                  healthCheckPath: '/'
+                });
+                console.log('  Update HTTP:', update.status);
+                if (update.status >= 400) {
+                  console.log('  Error:', JSON.stringify(update.body));
+                }
+              } else if (svc.healthCheckPath) {
+                console.log('✓ Already has health check:', svc.healthCheckPath);
+              } else {
+                console.log('⊘ Skipping (type:', svc.type, ')');
+              }
+              console.log('');
+            }
+
+            console.log('=== Health check setup complete ===');
+          }
+
+          main().catch(e => { console.error(e); process.exit(1); });
+          "

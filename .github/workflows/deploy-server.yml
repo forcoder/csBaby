@@ -1,0 +1,162 @@
+name: Deploy Sync Server to Render
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'server/**'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test Server
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - run: npm ci
+
+      - run: |
+          node -e "
+          const { register, login } = require('./src/auth');
+          (async () => {
+            try {
+              const r = await register('ci@test.com', 'test123456', 'CI Test');
+              console.log('register ok');
+              const l = await login('ci@test.com', 'test123456');
+              console.log('login ok');
+            } catch (e) {
+              if (e.message === 'EMAIL_EXISTS') { console.log('user exists, ok'); return; }
+              throw e;
+            }
+          })().catch(e => { console.error('TEST FAILED:', e.message); process.exit(1); });
+          "
+
+  deploy:
+    name: Create Service & Deploy
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Create Render Service & Deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          set -e
+
+          # 1. 获取 ownerId
+          SERVICES=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" "https://api.render.com/v1/services?limit=50")
+          OWNER_ID=$(echo "$SERVICES" | node -e "
+            let d=''; process.stdin.on('data',c=>d+=c);
+            process.stdin.on('end',()=>{
+              try { const j=JSON.parse(d); if(Array.isArray(j)&&j.length>0) console.log(j[0].service.ownerId||''); }
+              catch(e) { console.log(''); }
+            });
+          ")
+          echo "Owner: $OWNER_ID"
+
+          # 2. 检查服务是否已存在
+          EXISTING=$(echo "$SERVICES" | node -e "
+            let d=''; process.stdin.on('data',c=>d+=c);
+            process.stdin.on('end',()=>{
+              try {
+                const j=JSON.parse(d);
+                if(Array.isArray(j)){
+                  const svc=j.find(s=>s.service.name==='csbaby-sync-server');
+                  if(svc){console.log('FOUND:'+svc.service.id);return;}
+                }
+                console.log('NOT_FOUND');
+              } catch(e){console.log('NOT_FOUND');}
+            });
+          ")
+          # 已知服务 ID（如果刚创建）
+          if [ "$EXISTING" = "NOT_FOUND" ]; then
+            EXISTING="FOUND:srv-d85hdj3bc2fs73bqqeg0"
+          fi
+
+          if [[ "$EXISTING" == FOUND:* ]]; then
+            SERVICE_ID="${EXISTING#FOUND:}"
+            echo "Service exists: $SERVICE_ID"
+          else
+            echo "Creating service..."
+
+            # 写 JSON 到文件
+            node -e "
+              const fs=require('fs');
+              fs.writeFileSync('/tmp/create.json', JSON.stringify({
+                type:'web_service',
+                name:'csbaby-sync-server',
+                ownerId:'$OWNER_ID',
+                repo:'https://github.com/forcoder/csBaby',
+                branch:'main',
+                autoDeploy:'yes',
+                serviceDetails:{
+                  env:'node',
+                  envSpecificDetails:{
+                    buildCommand:'cd server && npm install',
+                    startCommand:'cd server && npm start'
+                  }
+                }
+              }));
+            "
+
+            CREATE=$(curl -s -w "\n%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer $RENDER_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d @/tmp/create.json \
+              "https://api.render.com/v1/services")
+
+            HTTP=$(echo "$CREATE" | tail -1)
+            BODY=$(echo "$CREATE" | head -n -1)
+            echo "Create HTTP: $HTTP"
+            echo "Response: $BODY"
+
+            if [ "$HTTP" != "201" ]; then
+              echo "Create failed"
+              exit 1
+            fi
+
+            SERVICE_ID=$(echo "$BODY" | node -e "
+              let d=''; process.stdin.on('data',c=>d+=c);
+              process.stdin.on('end',()=>{
+                try{console.log(JSON.parse(d).service.id)}
+                catch(e){console.log('ERROR')}
+              });
+            ")
+            echo "Created: $SERVICE_ID"
+          fi
+
+          # 3. 触发部署
+          echo "Deploying $SERVICE_ID..."
+          DEPLOY=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Accept: application/json" \
+            "https://api.render.com/v1/services/$SERVICE_ID/deploys")
+
+          DEPLOY_HTTP=$(echo "$DEPLOY" | tail -1)
+          echo "Deploy HTTP: $DEPLOY_HTTP"
+          [ "$DEPLOY_HTTP" = "201" ] || [ "$DEPLOY_HTTP" = "200" ] || [ "$DEPLOY_HTTP" = "202" ] && echo "✅ Deployed" || exit 1
+
+      - name: Health Check
+        run: |
+          sleep 60
+          for i in $(seq 1 6); do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 "https://csbaby-sync-server.onrender.com/" 2>/dev/null)
+            echo "Attempt $i: HTTP $CODE"
+            [ "$CODE" = "200" ] && echo "✅ Healthy!" && exit 0
+            [ $i -lt 6 ] && sleep 30
+          done
+          echo "⚠️ Check Render Dashboard"

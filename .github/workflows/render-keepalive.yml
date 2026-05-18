@@ -1,0 +1,83 @@
+name: Render Keepalive
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    name: Ping All Render Services
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Health Check All Services
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          node -e "
+          const https = require('https');
+          const API_KEY = process.env.RENDER_API_KEY;
+
+          const SERVICES = [
+            { id: 'srv-d7s88gbeo5us73cga3d0', name: 'csbaby-admin' },
+            { id: 'srv-d7qchv1ugtpc73augh0g', name: 'csbaby-api2' },
+            { id: 'srv-d7pvcngk1i2s738dgpv0', name: 'quick-speech-api' },
+            { id: 'srv-d85hdj3bc2fs73bqqeg0', name: 'csbaby-sync-server' }
+          ];
+
+          function ping(url) {
+            return new Promise((resolve) => {
+              const req = https.get(url, { timeout: 10000 }, (res) => {
+                let d = '';
+                res.on('data', c => d += c);
+                res.on('end', () => resolve({ status: res.statusCode, body: d.substring(0, 100) }));
+              });
+              req.on('error', () => resolve({ status: 0, body: 'error' }));
+              req.on('timeout', () => { req.destroy(); resolve({ status: 0, body: 'timeout' }); });
+            });
+          }
+
+          function api(method, path) {
+            return new Promise((resolve) => {
+              const options = {
+                hostname: 'api.render.com',
+                path: path,
+                method: method,
+                headers: { 'Authorization': 'Bearer ' + API_KEY, 'Accept': 'application/json' }
+              };
+              const req = https.request(options, (res) => {
+                let d = '';
+                res.on('data', c => d += c);
+                res.on('end', () => resolve({ status: res.statusCode, body: d }));
+              });
+              req.on('error', () => resolve({ status: 0 }));
+              req.end();
+            });
+          }
+
+          async function main() {
+            console.log('=== Render Keepalive Check ===');
+            console.log('Time:', new Date().toISOString());
+
+            for (const svc of SERVICES) {
+              const url = 'https://' + svc.name + '.onrender.com/';
+              const result = await ping(url);
+              console.log(svc.name + ': HTTP ' + result.status + ' | ' + result.body);
+
+              // 如果服务完全不可用（超时/连接错误/5xx），触发重新部署
+              // 404 视为健康（服务在线，只是根路径没处理器）
+              if (result.status === 0 || result.status >= 500) {
+                console.log('  → Service down! Triggering redeploy...');
+                const deploy = await api('POST', '/v1/services/' + svc.id + '/deploys');
+                console.log('  → Deploy HTTP:', deploy.status);
+              } else {
+                console.log('  → OK (HTTP ' + result.status + ')');
+              }
+            }
+
+            console.log('=== Done ===');
+          }
+
+          main().catch(e => { console.error(e); process.exit(1); });
+          "
