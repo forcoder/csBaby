@@ -72,11 +72,29 @@ jobs:
           ")
           echo "Service: $SERVICE_ID"
 
-          # 2. 如果没找到，创建新服务
+          # 2. 如果没找到，创建新服务（参考现有服务的结构）
           if [ "$SERVICE_ID" = "NOT_FOUND" ]; then
             echo "Creating service..."
 
-            # 写 JSON 到文件
+            # 先查看现有服务的配置结构
+            EXISTING=$(echo "$SERVICES" | node -e "
+              let d=''; process.stdin.on('data',c=>d+=c);
+              process.stdin.on('end',()=>{
+                try {
+                  const j = JSON.parse(d);
+                  if (Array.isArray(j) && j.length > 0) {
+                    const svc = j.find(s => s.service.name === 'csbaby-admin');
+                    if (svc) {
+                      console.log(JSON.stringify(svc, null, 2));
+                    }
+                  }
+                } catch(e) {}
+              });
+            ")
+            echo "Existing service structure:"
+            echo "$EXISTING" | head -30
+
+            # 创建服务（简化结构，不带 envVars）
             node -e "
               const fs = require('fs');
               const body = {
@@ -85,19 +103,15 @@ jobs:
                 repo: 'https://github.com/forcoder/csBaby',
                 branch: 'main',
                 autoDeploy: true,
-                serviceDetails: {
-                  env: 'node',
-                  buildCommand: 'cd server && npm install',
-                  startCommand: 'cd server && npm start',
-                  envVars: [
-                    { key: 'NODE_ENV', value: 'production' },
-                    { key: 'PORT', value: '8080' }
-                  ]
-                }
+                env: 'node',
+                buildCommand: 'cd server && npm install',
+                startCommand: 'cd server && npm start'
               };
               fs.writeFileSync('/tmp/render-create.json', JSON.stringify(body));
-              console.log(JSON.stringify(body, null, 2));
+              console.log('Body:', JSON.stringify(body));
             "
+
+            cat /tmp/render-create.json
 
             CREATE_RESP=$(curl -s -w "\n%{http_code}" \
               -X POST \
@@ -108,14 +122,15 @@ jobs:
 
             CREATE_HTTP=$(echo "$CREATE_RESP" | tail -1)
             echo "HTTP: $CREATE_HTTP"
-            echo "$(echo "$CREATE_RESP" | head -n -1)"
+            BODY=$(echo "$CREATE_RESP" | head -n -1)
+            echo "Response: $BODY"
 
             if [ "$CREATE_HTTP" != "201" ]; then
               echo "Create failed"
               exit 1
             fi
 
-            SERVICE_ID=$(echo "$CREATE_RESP" | head -n -1 | node -e "
+            SERVICE_ID=$(echo "$BODY" | node -e "
               let d=''; process.stdin.on('data',c=>d+=c);
               process.stdin.on('end',()=>{
                 try { console.log(JSON.parse(d).service.id); }
