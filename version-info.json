@@ -1,9 +1,16 @@
-﻿{
-    "versionUrl":  "https://shz.al/~csBabyLog",
-    "versionName":  "0.0.1",
-    "downloadUrl":  "https://shz.al/~csBabyApk",
-    "versionCode":  1,
-    "releaseDate":  "2026-04-12 10:10:52",
-    "md5":  "a693cb630a9386e81f0de792e61a9f74",
-    "fileSize":  17180522
+{
+  "version_name": "1.2.0",
+  "version_code": 8,
+  "build_time": "2026-05-18",
+  "changes": [
+    "多租户数据同步架构改造",
+    "JWT 认证 + Token 刷新",
+    "全量/增量同步 API",
+    "离线同步队列 + 指数退避重试",
+    "智能冲突解决策略",
+    "同步状态可视化",
+    "服务端 Node.js + sql.js 实现",
+    "移除 OSS 相关代码",
+    "GitHub Actions 自动部署"
+  ]
 }
