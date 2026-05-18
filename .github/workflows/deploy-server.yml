@@ -49,45 +49,20 @@ jobs:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy via Render Deploy Hook
+      - name: Trigger Render Deploy
         run: |
-          echo "Triggering Render deploy via Deploy Hook..."
+          echo "Triggering Render deploy..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
+          echo "HTTP: $HTTP_CODE"
+          [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202" ] || [ "$HTTP_CODE" = "204" ] && echo "✅ Deploy triggered" || echo "⚠️ HTTP $HTTP_CODE"
 
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -d '{"clearCache": false}' \
-            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
-
-          echo "Deploy Hook HTTP: $HTTP_CODE"
-
-          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202" ] || [ "$HTTP_CODE" = "204" ]; then
-            echo "✅ Deploy triggered via hook"
-          else
-            echo "⚠️ Deploy hook returned HTTP $HTTP_CODE"
-          fi
-
-      - name: Wait and Health Check
+      - name: Health Check
         run: |
-          echo "Waiting for Render deployment (free tier cold start)..."
           sleep 60
-
-          for i in $(seq 1 8); do
-            echo "Health check attempt $i..."
-            HTTP_CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" \
-              --connect-timeout 10 \
-              "https://csbaby-sync-server.onrender.com/" 2>/dev/null)
-            BODY=$(cat /tmp/health.json 2>/dev/null)
-            echo "HTTP: $HTTP_CODE | Body: $BODY"
-
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "✅ Service is healthy!"
-              exit 0
-            fi
-
-            [ $i -lt 8 ] && sleep 30
+          for i in $(seq 1 6); do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 "https://csbaby-sync-server.onrender.com/" 2>/dev/null)
+            echo "Attempt $i: HTTP $CODE"
+            [ "$CODE" = "200" ] && echo "✅ Healthy!" && exit 0
+            [ $i -lt 6 ] && sleep 30
           done
-
-          echo "⚠️ Service not healthy after 4 min. Render Dashboard may have more info."
+          echo "⚠️ Check Render Dashboard for build status"
