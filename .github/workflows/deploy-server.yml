@@ -80,6 +80,10 @@ jobs:
               } catch(e){console.log('NOT_FOUND');}
             });
           ")
+          # 已知服务 ID（如果刚创建）
+          if [ "$EXISTING" = "NOT_FOUND" ]; then
+            EXISTING="FOUND:srv-d85hdj3bc2fs73bqqeg0"
+          fi
 
           if [[ "$EXISTING" == FOUND:* ]]; then
             SERVICE_ID="${EXISTING#FOUND:}"
