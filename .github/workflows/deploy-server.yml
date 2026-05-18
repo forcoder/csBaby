@@ -98,9 +98,11 @@ jobs:
                 repo: 'https://github.com/forcoder/csBaby',
                 branch: 'main',
                 autoDeploy: 'yes',
-                env: 'node',
-                buildCommand: 'cd server && npm install',
-                startCommand: 'cd server && npm start'
+                serviceDetails: {
+                  env: 'node',
+                  buildCommand: 'cd server && npm install',
+                  startCommand: 'cd server && npm start'
+                }
               });
               const options = {
                 hostname: 'api.render.com',
