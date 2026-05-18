@@ -65,11 +65,14 @@ jobs:
               const result = await ping(url);
               console.log(svc.name + ': HTTP ' + result.status + ' | ' + result.body);
 
-              // 如果服务不健康，触发重新部署
-              if (result.status !== 200) {
-                console.log('  → Triggering redeploy...');
+              // 如果服务完全不可用（超时/连接错误/5xx），触发重新部署
+              // 404 视为健康（服务在线，只是根路径没处理器）
+              if (result.status === 0 || result.status >= 500) {
+                console.log('  → Service down! Triggering redeploy...');
                 const deploy = await api('POST', '/v1/services/' + svc.id + '/deploys');
                 console.log('  → Deploy HTTP:', deploy.status);
+              } else {
+                console.log('  → OK (HTTP ' + result.status + ')');
               }
             }
 
