@@ -99,8 +99,10 @@ jobs:
                 autoDeploy:'yes',
                 serviceDetails:{
                   env:'node',
-                  buildCommand:'cd server && npm install',
-                  startCommand:'cd server && npm start'
+                  envSpecificDetails:{
+                    buildCommand:'cd server && npm install',
+                    startCommand:'cd server && npm start'
+                  }
                 }
               }));
             "
