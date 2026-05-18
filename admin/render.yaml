@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: csbaby-admin
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
+    envVars:
+      - key: API_BASE_URL
+        value: https://csbaby-api2.onrender.com
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: "3.11"

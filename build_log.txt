@@ -1,0 +1,99 @@
+========================================
+客服小秘 - 编译 + 版本升级 + 上传
+========================================
+
+[1/2] 编译 APK（自动递增版本号）...
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:kspDebugKotlin UP-TO-DATE
+> Task :app:kaptGenerateStubsDebugKotlin UP-TO-DATE
+> Task :app:kaptDebugKotlin UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:hiltAggregateDepsDebug UP-TO-DATE
+> Task :app:hiltJavaCompileDebug UP-TO-DATE
+> Task :app:transformDebugClassesWithAsm UP-TO-DATE
+> Task :app:dexBuilderDebug UP-TO-DATE
+> Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:mergeDebugJavaResource UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:mergeProjectDexDebug UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeDebugNativeLibs NO-SOURCE
+> Task :app:stripDebugDebugSymbols NO-SOURCE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:packageDebug UP-TO-DATE
+> Task :app:createDebugApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleDebug UP-TO-DATE
+
+BUILD SUCCESSFUL in 19s
+41 actionable tasks: 1 executed, 40 up-to-date
+
+[成功] 编译完成
+
+[2/2] 上传到 shz.al...
+At D:\workspace\workbuddy\csBaby\upload-to-shzl.ps1:150 char:32
++     $dt = (Get-Date).ToString('yyyy-MM-dd')
++                                ~~~~~~~~~~~~
+Unexpected token 'yyyy-MM-dd')
+    $versionJson = @{
+        versionCode = $versionInfo.VersionCode
+        versionName = $versionInfo.VersionName
+        releaseDate = $dt
+        fileSize = $apkSize
+        md5 = $apkMd5
+        downloadUrl = "$ApiBaseUrl/~$ApkFileName"
+        releaseNotes = "v$($versionInfo.VersionName) 鏇存柊"
+        forceUpdate = $false
+    } | ConvertTo-Json -Depth 10
+    Write-Log '[1/2]' in expression or statement.
+At D:\workspace\workbuddy\csBaby\upload-to-shzl.ps1:169 char:38
++     Write-Log '閿欒: $_' -Level 'ERROR'
++                                      ~
+The string is missing the terminator: '.
+At D:\workspace\workbuddy\csBaby\upload-to-shzl.ps1:146 char:36
++     if (-not (Test-Path $ApkPath)) { throw 'APK涓嶅瓨鍦? }
++                                    ~
+Missing closing '}' in statement block or type definition.
+At D:\workspace\workbuddy\csBaby\upload-to-shzl.ps1:133 char:5
++ try {
++     ~
+Missing closing '}' in statement block or type definition.
+At D:\workspace\workbuddy\csBaby\upload-to-shzl.ps1:172 char:1
++ 
+The Try statement is missing its Catch or Finally block.
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : UnexpectedToken
+ 
+
+[错误] 上传失败

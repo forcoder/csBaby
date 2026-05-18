@@ -1,0 +1,137 @@
+name: Build - Debug APK
+
+on:
+  push:
+    branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      skip_version_increment:
+        description: '跳过版本号递增（仅构建不升版本）'
+        required: false
+        default: 'false'
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-debug:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          # 获取完整历史，支持版本号自增后 push 回仓库
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 设置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'microsoft'
+          cache: gradle
+
+      - name: 授权 gradlew 执行权限
+        run: chmod +x ./gradlew
+
+      - name: 缓存 Gradle 构建产物
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            .gradle
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: 读取当前版本
+        id: version
+        run: |
+          VERSION_CODE=$(grep 'APP_VERSION_CODE' gradle.properties | cut -d'=' -f2)
+          VERSION_NAME=$(grep 'APP_VERSION_NAME' gradle.properties | cut -d'=' -f2)
+          echo "code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "📦 当前版本: v$VERSION_NAME ($VERSION_CODE)"
+
+      # 版本号递增：修改 gradle.properties 并提交
+      - name: 递增版本号
+        if: ${{ inputs.skip_version_increment != 'true' }}
+        id: bump
+        run: |
+          # 读取当前版本
+          CUR_CODE=$(grep 'APP_VERSION_CODE' gradle.properties | cut -d'=' -f2)
+          CUR_NAME=$(grep 'APP_VERSION_NAME' gradle.properties | cut -d'=' -f2)
+
+          NEW_CODE=$((CUR_CODE + 1))
+
+          # 递增补丁号 x.y.z → x.y.(z+1)
+          IFS='.' read -ra PARTS <<< "$CUR_NAME"
+          if [ ${#PARTS[@]} -ge 3 ]; then
+            NEW_PATCH=$((PARTS[2] + 1))
+            NEW_NAME="${PARTS[0]}.${PARTS[1]}.$NEW_PATCH"
+          else
+            NEW_NAME="$CUR_NAME"
+          fi
+
+          # 写回文件（Linux sed 兼容写法）
+          sed -i "s/APP_VERSION_CODE=.*/APP_VERSION_CODE=$NEW_CODE/" gradle.properties
+          sed -i "s/APP_VERSION_NAME=.*/APP_VERSION_NAME=$NEW_NAME/" gradle.properties
+
+          echo "new_code=$NEW_CODE" >> $GITHUB_OUTPUT
+          echo "new_name=$NEW_NAME" >> $GITHUB_OUTPUT
+          echo "🚀 版本升级: v$CUR_NAME ($CUR_CODE) → v$NEW_NAME ($NEW_CODE)"
+
+      - name: 构建 Debug APK
+        run: |
+          ./gradlew assembleDebug --no-daemon -PskipVersionIncrement -PskipUpload \
+            --stacktrace
+
+      - name: 读取最终版本（构建后）
+        id: final_version
+        run: |
+          VERSION_CODE=$(grep 'APP_VERSION_CODE' gradle.properties | cut -d'=' -f2)
+          VERSION_NAME=$(grep 'APP_VERSION_NAME' gradle.properties | cut -d'=' -f2)
+          echo "code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "name=$VERSION_NAME" >> $GITHUB_OUTPUT
+
+      - name: 重命名 APK
+        run: |
+          APK_SRC="app/build/outputs/apk/debug/app-debug.apk"
+          APK_DST="app/build/outputs/apk/debug/csBaby-v${{ steps.final_version.outputs.name }}-debug.apk"
+          mv "$APK_SRC" "$APK_DST"
+          echo "APK_PATH=$APK_DST" >> $GITHUB_ENV
+          echo "APK_NAME=csBaby-v${{ steps.final_version.outputs.name }}-debug.apk" >> $GITHUB_ENV
+
+      - name: 上传 APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: csBaby-debug-v${{ steps.final_version.outputs.name }}
+          path: ${{ env.APK_PATH }}
+          retention-days: 14
+
+      - name: 提交版本号变更
+        if: ${{ inputs.skip_version_increment != 'true' && github.event_name == 'push' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add gradle.properties
+          git diff --cached --quiet || git commit -m "chore: bump version to v${{ steps.bump.outputs.new_name }} (${{ steps.bump.outputs.new_code }}) [skip ci]"
+          git push
+
+      - name: 输出构建摘要
+        run: |
+          echo "## 🎉 构建成功" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 字段 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| 版本名 | v${{ steps.final_version.outputs.name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 版本号 | ${{ steps.final_version.outputs.code }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| APK 文件 | ${{ env.APK_NAME }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 分支 | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 提交 | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY

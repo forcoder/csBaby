@@ -1,0 +1,77 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="page-header">
+    <div class="page-header-left">
+        <h1>应用配置</h1>
+        <span class="page-subtitle">{{ tenant.phone }}</span>
+    </div>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}" class="btn btn-back">← 返回详情</a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+{% if success %}
+<div class="alert alert-success">{{ success }}</div>
+{% endif %}
+
+<form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}/app-config" class="form-card form-card-lg">
+    <div class="form-group">
+        <label>应用名称</label>
+        <input type="text" name="app_name" value="{{ app_config.get('app_name', '客服小秘') if app_config else '客服小秘' }}" placeholder="客服小秘">
+    </div>
+    <div class="form-group">
+        <label>欢迎消息</label>
+        <input type="text" name="welcome_message" value="{{ app_config.get('welcome_message', '') if app_config else '您好，请问有什么可以帮您？' }}" placeholder="您好，请问有什么可以帮您？">
+    </div>
+    <div class="form-group">
+        <label>离线消息</label>
+        <input type="text" name="offline_message" value="{{ app_config.get('offline_message', '') if app_config else '当前无客服在线，请稍后再试。' }}" placeholder="当前无客服在线，请稍后再试。">
+    </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label>语言</label>
+            <select name="language">
+                <option value="zh-CN" {{ 'selected' if app_config and app_config.get('language') == 'zh-CN' }}>简体中文</option>
+                <option value="zh-TW" {{ 'selected' if app_config and app_config.get('language') == 'zh-TW' }}>繁体中文</option>
+                <option value="en-US" {{ 'selected' if app_config and app_config.get('language') == 'en-US' }}>English</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>会话超时（秒）</label>
+            <input type="number" name="session_timeout" min="30" max="3600"
+                   value="{{ app_config.get('session_timeout', 300) if app_config else 300 }}">
+        </div>
+        <div class="form-group">
+            <label>最大队列大小</label>
+            <input type="number" name="max_queue_size" min="1" max="500"
+                   value="{{ app_config.get('max_queue_size', 50) if app_config else 50 }}">
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label><input type="checkbox" name="auto_reply_enabled" {{ 'checked' if not app_config or app_config.get('auto_reply_enabled', 1) }}> 启用自动回复</label>
+        </div>
+        <div class="form-group">
+            <label><input type="checkbox" name="notification_enabled" {{ 'checked' if not app_config or app_config.get('notification_enabled', 1) }}> 启用通知</label>
+        </div>
+        <div class="form-group">
+            <label><input type="checkbox" name="voice_enabled" {{ 'checked' if app_config and app_config.get('voice_enabled') }}> 启用语音</label>
+        </div>
+        <div class="form-group">
+            <label><input type="checkbox" name="file_upload_enabled" {{ 'checked' if not app_config or app_config.get('file_upload_enabled', 1) }}> 允许文件上传</label>
+        </div>
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">保存应用配置</button>
+    </div>
+</form>
+{% endblock %}

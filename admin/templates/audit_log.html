@@ -1,0 +1,75 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1>平台操作日志</h1>
+
+<!-- 筛选表单 -->
+<h2>筛选</h2>
+<form method="GET" action="/admin/audit-log" class="form-card">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;align-items:end;">
+        <div class="form-group">
+            <label>操作关键词</label>
+            <input type="text" name="action" value="{{ action }}" placeholder="如 create_rule">
+        </div>
+        <div class="form-group">
+            <label>开始日期</label>
+            <input type="date" name="date_from" value="{{ date_from }}">
+        </div>
+        <div class="form-group">
+            <label>结束日期</label>
+            <input type="date" name="date_to" value="{{ date_to }}">
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary">筛选</button>
+            <a href="/admin/audit-log" class="btn">重置</a>
+        </div>
+    </div>
+</form>
+
+<!-- 日志列表 -->
+<h2>操作记录（共 {{ total }} 条）</h2>
+{% if items %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>管理员</th>
+            <th>操作</th>
+            <th>目标类型</th>
+            <th>目标 ID</th>
+            <th>详情</th>
+            <th>IP 地址</th>
+            <th>时间</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in items %}
+        <tr>
+            <td>{{ item.id }}</td>
+            <td>{{ item.admin_phone }}</td>
+            <td><span class="badge badge-info">{{ item.action }}</span></td>
+            <td>{{ item.target_type or '-' }}</td>
+            <td style="max-width:150px;word-break:break-all;">{{ item.target_id or '-' }}</td>
+            <td style="max-width:250px;word-break:break-all;">{{ item.detail or '-' }}</td>
+            <td>{{ item.ip_address or '-' }}</td>
+            <td>{{ item.created_at or '-' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p style="color:#888;padding:20px;text-align:center;">暂无操作日志。</p>
+{% endif %}
+
+<!-- 分页 -->
+{% if total > page_size %}
+<div class="pagination">
+    {% if page > 1 %}
+    <a href="/admin/audit-log?page={{ page - 1 }}&action={{ action }}&date_from={{ date_from }}&date_to={{ date_to }}">上一页</a>
+    {% endif %}
+    <span>第 {{ page }} 页 / 共 {{ (total + page_size - 1) // page_size }} 页</span>
+    {% if page * page_size < total %}
+    <a href="/admin/audit-log?page={{ page + 1 }}&action={{ action }}&date_from={{ date_from }}&date_to={{ date_to }}">下一页</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

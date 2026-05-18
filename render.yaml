@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: csbaby-api2
+    runtime: python
+    plan: starter
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn "app:application" --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: ADMIN_PHONE
+        value: "13800138000"
+      - key: ADMIN_PASSWORD
+        value: "admin123"
+      - key: DATABASE_PATH
+        value: "/var/data/csBaby.db"
+      - key: PYTHON_VERSION
+        value: "3.11"

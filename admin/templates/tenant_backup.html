@@ -1,0 +1,73 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="page-header">
+    <div class="page-header-left">
+        <h1>备份与恢复</h1>
+        <span class="page-subtitle">{{ tenant.phone }}</span>
+    </div>
+    <a href="/admin/tenants/{{ tenant.tenant_id }}" class="btn btn-back">← 返回详情</a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<!-- ===== 导出备份 ===== -->
+<div class="section">
+    <h2>导出备份</h2>
+    <p class="section-desc">导出该租户的所有配置数据（规则、模型、黑名单等）为 JSON 文件，可用于备份或迁移。</p>
+
+    {% if backup_json %}
+    <div class="form-card" style="margin-bottom:16px;">
+        <h3 style="margin-bottom:8px;">当前备份数据预览</h3>
+        <pre class="code-preview">{{ backup_json[:2000] }}{% if backup_json|length > 2000 %}...（已截断，完整数据请下载）{% endif %}</pre>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}/backup/export" class="action-form">
+        <button type="submit" class="btn btn-primary">📥 下载备份文件</button>
+    </form>
+</div>
+
+<!-- ===== 恢复备份 ===== -->
+<div class="section section-danger">
+    <h2>恢复备份</h2>
+    <p class="section-desc">上传之前导出的 JSON 备份文件，将恢复规则、模型配置和黑名单数据。<span style="color:#e74c3c;font-weight:bold;">此操作会覆盖现有数据，请谨慎操作。</span></p>
+    <form method="POST" action="/admin/tenants/{{ tenant.tenant_id }}/backup/restore"
+          enctype="multipart/form-data" class="form-card">
+        <div class="form-group">
+            <label>选择备份文件 (.json)</label>
+            <input type="file" name="backup_file" accept=".json" required>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-danger"
+                    onclick="return confirm('确定要恢复备份吗？此操作将覆盖现有的规则、模型和黑名单数据。')">
+                ⚠️ 恢复备份
+            </button>
+        </div>
+    </form>
+</div>
+
+<style>
+.code-preview {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 12px;
+    max-height: 300px;
+    overflow: auto;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+</style>
+{% endblock %}

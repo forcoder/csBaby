@@ -1,0 +1,62 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1>租户管理</h1>
+<form method="GET" action="/admin/tenants" class="search-form">
+    <input type="text" name="search" value="{{ search }}" placeholder="搜索手机号...">
+    <select name="status">
+        <option value="all" {% if status == 'all' %}selected{% endif %}>全部状态</option>
+        <option value="active" {% if status == 'active' %}selected{% endif %}>正常</option>
+        <option value="disabled" {% if status == 'disabled' %}selected{% endif %}>已禁用</option>
+    </select>
+    <button type="submit" class="btn btn-primary">搜索</button>
+</form>
+<table class="table">
+    <thead>
+        <tr>
+            <th>手机号</th>
+            <th>规则数</th>
+            <th>回复数</th>
+            <th>模型数</th>
+            <th>黑名单数</th>
+            <th>反馈数</th>
+            <th>注册时间</th>
+            <th>最后活跃</th>
+            <th>状态</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for t in tenants %}
+        <tr>
+            <td>{{ t.phone }}</td>
+            <td><a href="/admin/tenants/{{ t.tenant_id }}/rules">{{ t.get('rule_count', 0) }}</a></td>
+            <td><a href="/admin/tenants/{{ t.tenant_id }}/history">{{ t.get('history_count', 0) }}</a></td>
+            <td><a href="/admin/tenants/{{ t.tenant_id }}/models">{{ t.get('model_count', 0) }}</a></td>
+            <td><a href="/admin/tenants/{{ t.tenant_id }}/blacklist">{{ t.get('blacklist_count', 0) }}</a></td>
+            <td><a href="/admin/tenants/{{ t.tenant_id }}/feedback">{{ t.get('feedback_count', 0) }}</a></td>
+            <td>{{ t.get('created_at', '')[:10] }}</td>
+            <td>{{ t.get('last_active', '')[:16] if t.get('last_active') else '-' }}</td>
+            <td>
+                {% if t.get('is_active', 1) %}
+                <span class="badge badge-success">正常</span>
+                {% else %}
+                <span class="badge badge-danger">已禁用</span>
+                {% endif %}
+            </td>
+            <td><a href="/admin/tenants/{{ t.tenant_id }}">详情</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% if total > page_size %}
+<div class="pagination">
+    {% if page > 1 %}
+    <a href="/admin/tenants?page={{ page - 1 }}&search={{ search }}&status={{ status }}">上一页</a>
+    {% endif %}
+    <span>第 {{ page }} 页 / 共 {{ (total + page_size - 1) // page_size }} 页</span>
+    {% if page * page_size < total %}
+    <a href="/admin/tenants?page={{ page + 1 }}&search={{ search }}&status={{ status }}">下一页</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
