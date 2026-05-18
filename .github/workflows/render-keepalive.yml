@@ -22,7 +22,7 @@ jobs:
           const SERVICES = [
             { id: 'srv-d7s88gbeo5us73cga3d0', name: 'csbaby-admin' },
             { id: 'srv-d7qchv1ugtpc73augh0g', name: 'csbaby-api2' },
-            { id: 'srv-d7pvcngk1i2s738dgpv0', name: 'quick-speech-api' }
+            { id: 'srv-d7pvcngk1i2s738dgpv0', name: 'quick-speech-api' },
           ];
 
           function ping(url) {
