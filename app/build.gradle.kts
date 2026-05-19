@@ -24,7 +24,7 @@ android {
 
         // 同步服务器配置（Render.com）
         // 认证改为运行时 JWT，不再使用静态 API Key
-        buildConfigField("String", "SYNC_BASE_URL", "\"https://your-service-name.onrender.com/\"")
+        buildConfigField("String", "SYNC_BASE_URL", "\"https://csbaby-sync-server.onrender.com/\"")
     }
 
     buildTypes {

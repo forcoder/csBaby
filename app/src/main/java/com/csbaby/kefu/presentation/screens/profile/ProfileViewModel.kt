@@ -10,6 +10,7 @@ import com.csbaby.kefu.data.sync.SyncManager
 import com.csbaby.kefu.data.sync.SyncState
 import com.csbaby.kefu.domain.model.UserStyleProfile
 import com.csbaby.kefu.domain.repository.UserStyleRepository
+import com.csbaby.kefu.infrastructure.backup.BackupManager
 import com.csbaby.kefu.infrastructure.ota.OtaManager
 import com.csbaby.kefu.infrastructure.style.StyleLearningEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -36,7 +37,11 @@ data class ProfileUiState(
     val isLoggedIn: Boolean = false,
     val currentTenantId: String? = null,
     val pendingSyncCount: Int = 0,
-    val lastSyncTime: Long = 0L
+    val lastSyncTime: Long = 0L,
+    // 数据备份与恢复
+    val backupStatus: BackupStatus = BackupStatus.IDLE,
+    val backupMessage: String = "",
+    val backupRecords: List<BackupRecord> = emptyList()
 )
 
 data class OtaUpdateInfo(
@@ -54,7 +59,8 @@ class ProfileViewModel @Inject constructor(
     private val styleLearningEngine: StyleLearningEngine,
     private val otaManager: OtaManager,
     private val syncManager: SyncManager,
-    private val authManager: AuthManager
+    private val authManager: AuthManager,
+    private val backupManager: BackupManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -69,6 +75,8 @@ class ProfileViewModel @Inject constructor(
         observeAuthState()
         observeSyncQueue()
         observeLastSyncTime()
+        observeBackupState()
+        backupManager.setApiService(syncManager.syncClient.apiService)
     }
 
     private fun observeSyncState() {
@@ -255,7 +263,10 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             syncManager.login(email, password).fold(
                 onSuccess = { syncManager.fullSync(it.tenantId) },
-                onFailure = { e -> Timber.e(e, "登录失败") }
+                onFailure = { e ->
+                    Timber.e(e, "登录失败")
+                    _uiState.update { it.copy(syncState = SyncState.Error(e.message ?: "登录失败，请检查网络")) }
+                }
             )
         }
     }
@@ -264,7 +275,10 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             syncManager.register(email, password, displayName).fold(
                 onSuccess = { syncManager.fullSync(it.tenantId) },
-                onFailure = { e -> Timber.e(e, "注册失败") }
+                onFailure = { e ->
+                    Timber.e(e, "注册失败")
+                    _uiState.update { it.copy(syncState = SyncState.Error(e.message ?: "注册失败，请检查网络")) }
+                }
             )
         }
     }
@@ -277,4 +291,67 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun logout() { syncManager.logout() }
+
+    // ========== 数据备份与恢复 ==========
+
+    private fun observeBackupState() {
+        viewModelScope.launch {
+            backupManager.backupStatus.collect { status ->
+                _uiState.update { it.copy(backupStatus = status) }
+            }
+        }
+        viewModelScope.launch {
+            backupManager.backupMessage.collect { msg ->
+                _uiState.update { it.copy(backupMessage = msg) }
+            }
+        }
+        viewModelScope.launch {
+            backupManager.backupRecords.collect { records ->
+                _uiState.update { it.copy(backupRecords = records) }
+            }
+        }
+    }
+
+    /**
+     * 上传本地数据备份到云端
+     */
+    fun uploadBackup() {
+        viewModelScope.launch {
+            backupManager.uploadBackup()
+        }
+    }
+
+    /**
+     * 获取云端备份列表
+     */
+    fun fetchBackupList() {
+        viewModelScope.launch {
+            backupManager.fetchBackupList()
+        }
+    }
+
+    /**
+     * 从云端恢复备份
+     */
+    fun restoreBackup(backupId: Int) {
+        viewModelScope.launch {
+            backupManager.downloadAndRestore(backupId)
+        }
+    }
+
+    /**
+     * 删除云端备份
+     */
+    fun deleteBackup(backupId: Int) {
+        viewModelScope.launch {
+            backupManager.deleteBackup(backupId)
+        }
+    }
+
+    /**
+     * 清除备份状态
+     */
+    fun clearBackupStatus() {
+        backupManager.clearStatus()
+    }
 }
