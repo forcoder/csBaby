@@ -146,27 +146,8 @@ class KnowledgeViewModel @Inject constructor(
             }
 
             // 导入成功后，如果已登录，自动触发增量同步到服务端
-            if (result.successCount > 0 && syncManager.isLoggedIn()) {
-                val tenantId = syncManager.currentTenantId()
-                if (tenantId != null) {
-                    triggerAutoSync(tenantId)
-                }
-            }
-        }
-    }
-
-    /**
-     * 导入/导出/增删改操作后自动触发同步到服务端
-     */
-    private fun triggerAutoSync(tenantId: String) {
-        viewModelScope.launch {
-            try {
-                val checkpoint = syncManager.lastSyncTime
-                val since = checkpoint ?: 0L
-                syncManager.pushLocalChanges(tenantId, since)
-            } catch (e: Exception) {
-                // 自动同步失败不影响用户体验，静默处理
-                timber.log.Timber.w(e, "自动同步到服务端失败")
+            if (result.successCount > 0) {
+                triggerAutoSyncForLoggedInUser()
             }
         }
     }
@@ -181,25 +162,18 @@ class KnowledgeViewModel @Inject constructor(
             }
 
             _uiState.update { it.copy(isClearing = true, noticeMessage = null) }
-            val noticeMessage = runCatching {
-                val removedCount = knowledgeBaseManager.clearAllRules()
-                if (removedCount > 0) {
-                    "已清空知识库，共删除 ${removedCount} 条规则"
-                } else {
-                    "知识库已经是空的"
-                }
-
-                // 自动同步到服务端
-                triggerAutoSyncForLoggedInUser()
-            }.getOrElse { exception ->
-                exception.message ?: "清空知识库失败"
+            val result = runCatching { knowledgeBaseManager.clearAllRules() }
+            val noticeMessage = if (result.isSuccess) {
+                val removedCount = result.getOrNull() ?: 0
+                if (removedCount > 0) "已清空知识库，共删除 ${removedCount} 条规则" else "知识库已经是空的"
+            } else {
+                result.exceptionOrNull()?.message ?: "清空知识库失败"
             }
+            // 自动同步到服务端
+            if (result.isSuccess) triggerAutoSyncForLoggedInUser()
 
             _uiState.update {
-                it.copy(
-                    isClearing = false,
-                    noticeMessage = noticeMessage
-                )
+                it.copy(isClearing = false, noticeMessage = noticeMessage)
             }
         }
     }
@@ -224,13 +198,11 @@ class KnowledgeViewModel @Inject constructor(
     }
 
     /**
-     * 如果用户已登录，触发自动同步
+     * 写入操作后触发自动同步（debounce 2s，由 SyncManager.triggerSync 处理）
      */
     private fun triggerAutoSyncForLoggedInUser() {
         if (syncManager.isLoggedIn()) {
-            syncManager.currentTenantId()?.let { tenantId ->
-                triggerAutoSync(tenantId)
-            }
+            syncManager.triggerSync()
         }
     }
 
