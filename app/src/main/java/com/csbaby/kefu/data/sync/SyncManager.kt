@@ -36,7 +36,7 @@ class SyncManager @Inject constructor(
     private val syncQueue: SyncQueue
 ) {
     // 带 JWT 认证的 API 客户端，Token 从 AuthManager 运行时读取
-    private val syncClient = AuthenticatedSyncClient(authManager)
+    val syncClient = AuthenticatedSyncClient(authManager)
     private val syncApiService: SyncApiService = syncClient.apiService
     private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
     val syncState: StateFlow<SyncState> = _syncState.asStateFlow()

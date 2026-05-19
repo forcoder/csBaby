@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const { register, login, refreshTokens, authMiddleware } = require('./auth');
 const syncRouter = require('./sync');
+const otaRouter = require('./ota');
+const backupRouter = require('./backup');
 const { getDb } = require('./db');
 
 const app = express();
@@ -57,6 +59,12 @@ app.post('/auth/refresh', (req, res) => {
 
 // 同步路由
 app.use('/sync', syncRouter);
+
+// OTA 更新路由（/api/v1/ota）
+app.use('/api/v1/ota', otaRouter);
+
+// 数据备份路由（/api/v1/backup）
+app.use('/api/v1/backup', backupRouter);
 
 // 等待数据库初始化后启动
 getDb().then(() => {

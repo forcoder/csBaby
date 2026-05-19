@@ -1,5 +1,8 @@
 package com.csbaby.kefu.data.remote
 
+import com.csbaby.kefu.data.model.BackupData
+import com.csbaby.kefu.data.model.BackupRecord
+import com.csbaby.kefu.data.model.BackupUploadRequest
 import retrofit2.http.*
 
 /**
@@ -45,6 +48,20 @@ interface SyncApiService {
 
     @POST("sync/resolve")
     suspend fun resolveConflict(@Body request: ConflictResolveRequest): ApiResponse<ConflictResolveResult>
+
+    // ========== 数据备份 ==========
+
+    @POST("api/v1/backup/upload")
+    suspend fun uploadBackup(@Body request: BackupUploadRequest): ApiResponse<BackupRecord>
+
+    @GET("api/v1/backup/list")
+    suspend fun getBackupList(): ApiResponse<List<BackupRecord>>
+
+    @GET("api/v1/backup/download/{id}")
+    suspend fun downloadBackup(@Path("id") id: Int): ApiResponse<BackupData>
+
+    @DELETE("api/v1/backup/{id}")
+    suspend fun deleteBackup(@Path("id") id: Int): ApiResponse<Unit>
 }
 
 // ========== 请求/响应数据模型 ==========

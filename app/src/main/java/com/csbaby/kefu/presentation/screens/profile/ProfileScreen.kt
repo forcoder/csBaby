@@ -171,6 +171,20 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Data Backup & Restore Card
+            BackupCard(
+                backupStatus = uiState.backupStatus,
+                backupMessage = uiState.backupMessage,
+                backupRecords = uiState.backupRecords,
+                onUploadBackup = { viewModel.uploadBackup() },
+                onFetchBackupList = { viewModel.fetchBackupList() },
+                onRestoreBackup = { viewModel.restoreBackup(it) },
+                onDeleteBackup = { viewModel.deleteBackup(it) },
+                onClearStatus = { viewModel.clearBackupStatus() }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // Common Phrases
             if (uiState.commonPhrases.isNotEmpty()) {
                 Card(

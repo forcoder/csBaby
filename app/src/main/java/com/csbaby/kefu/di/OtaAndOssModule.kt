@@ -1,9 +1,12 @@
 package com.csbaby.kefu.di
 
 import android.content.Context
+import com.csbaby.kefu.data.local.dao.*
 import com.csbaby.kefu.data.remote.OtaApiService
 import com.csbaby.kefu.data.repository.OtaRepository
 import com.csbaby.kefu.data.repository.OtaRepositoryImpl
+import com.csbaby.kefu.data.sync.AuthManager
+import com.csbaby.kefu.infrastructure.backup.BackupManager
 import com.csbaby.kefu.infrastructure.ota.OtaManager
 import com.csbaby.kefu.infrastructure.ota.OtaScheduler
 import com.csbaby.kefu.infrastructure.ota.OtaUpdateWorker
@@ -57,5 +60,25 @@ object OtaAndOssModule {
                 return OtaUpdateWorker(context, params, repository)
             }
         }
+    }
+
+    @Provides
+    @Singleton
+    fun provideBackupManager(
+        @ApplicationContext context: Context,
+        authManager: AuthManager,
+        keywordRuleDao: KeywordRuleDao,
+        aiModelConfigDao: AIModelConfigDao,
+        userStyleProfileDao: UserStyleProfileDao,
+        appConfigDao: AppConfigDao,
+        scenarioDao: ScenarioDao,
+        replyHistoryDao: ReplyHistoryDao,
+        messageBlacklistDao: MessageBlacklistDao
+    ): BackupManager {
+        return BackupManager(
+            context, authManager,
+            keywordRuleDao, aiModelConfigDao, userStyleProfileDao,
+            appConfigDao, scenarioDao, replyHistoryDao, messageBlacklistDao
+        )
     }
 }

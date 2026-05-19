@@ -43,6 +43,35 @@ function initSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_am_tenant ON ai_model_configs(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_rh_tenant ON reply_history(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_mb_tenant ON message_blacklist(tenant_id);
+
+    // OTA 版本管理
+    CREATE TABLE IF NOT EXISTS ota_versions (
+      version_code INTEGER PRIMARY KEY,
+      version_name TEXT NOT NULL,
+      download_url TEXT NOT NULL,
+      file_size INTEGER NOT NULL DEFAULT 0,
+      md5 TEXT NOT NULL DEFAULT '',
+      release_notes TEXT NOT NULL DEFAULT '',
+      channel TEXT NOT NULL DEFAULT 'default',
+      is_force_update INTEGER NOT NULL DEFAULT 0,
+      min_required_version INTEGER NOT NULL DEFAULT 1,
+      is_published INTEGER NOT NULL DEFAULT 1,
+      release_date INTEGER,
+      created INTEGER NOT NULL
+    );
+
+    // 数据备份记录
+    CREATE TABLE IF NOT EXISTS backup_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL,
+      device_name TEXT NOT NULL DEFAULT '',
+      app_version TEXT NOT NULL DEFAULT '',
+      data_json TEXT NOT NULL,
+      data_size INTEGER NOT NULL DEFAULT 0,
+      checksum TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_backup_tenant ON backup_records(tenant_id);
   `);
 }
 
