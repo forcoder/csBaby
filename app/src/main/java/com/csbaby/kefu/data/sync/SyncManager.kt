@@ -65,7 +65,7 @@ class SyncManager @Inject constructor(
     suspend fun login(email: String, password: String): Result<SyncAuthState> {
         Log.d("SyncManager", "login() 开始: email=$email")
         _syncState.value = SyncState.Syncing("正在登录...")
-        try {
+        return try {
             val response = syncApiService.login(LoginRequest(email, password))
             Log.d("SyncManager", "login() 响应: isSuccess=${response.isSuccess}, msg=${response.message}")
             if (response.isSuccess && response.data != null) {
