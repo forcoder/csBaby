@@ -1,6 +1,7 @@
 package com.csbaby.kefu.data.remote
 
 import com.csbaby.kefu.data.model.OtaUpdate
+import com.google.gson.annotations.SerializedName
 import retrofit2.http.*
 
 /**
@@ -42,26 +43,26 @@ interface OtaApiService {
 
 data class OtaVersionItem(
     val id: Int = 0,
-    @field:SerializedName("version_code") val versionCode: Int = 0,
-    @field:SerializedName("version_name") val versionName: String = "",
+    @SerializedName("version_code") val versionCode: Int = 0,
+    @SerializedName("version_name") val versionName: String = "",
     val channel: String = "default",
-    @field:SerializedName("is_published") val isPublished: Boolean = true,
-    @field:SerializedName("is_force_update") val isForceUpdate: Boolean = false,
-    @field:SerializedName("release_date") val releaseDate: Long = 0,
-    @field:SerializedName("file_size") val fileSize: Long = 0,
-    @field:SerializedName("created_at") val createdAt: Long = 0
+    @SerializedName("is_published") val isPublished: Boolean = true,
+    @SerializedName("is_force_update") val isForceUpdate: Boolean = false,
+    @SerializedName("release_date") val releaseDate: Long = 0,
+    @SerializedName("file_size") val fileSize: Long = 0,
+    @SerializedName("created_at") val createdAt: Long = 0
 )
 
 data class PublishVersionRequest(
-    @field:SerializedName("version_code") val versionCode: Int,
-    @field:SerializedName("version_name") val versionName: String,
-    @field:SerializedName("download_url") val downloadUrl: String,
-    @field:SerializedName("file_size") val fileSize: Long = 0,
+    @SerializedName("version_code") val versionCode: Int,
+    @SerializedName("version_name") val versionName: String,
+    @SerializedName("download_url") val downloadUrl: String,
+    @SerializedName("file_size") val fileSize: Long = 0,
     val md5: String = "",
-    @field:SerializedName("release_notes") val releaseNotes: String = "",
+    @SerializedName("release_notes") val releaseNotes: String = "",
     val channel: String = "default",
-    @field:SerializedName("is_force_update") val isForceUpdate: Boolean = false,
-    @field:SerializedName("min_required_version") val minRequiredVersion: Int = 1
+    @SerializedName("is_force_update") val isForceUpdate: Boolean = false,
+    @SerializedName("min_required_version") val minRequiredVersion: Int = 1
 )
 
 data class PublishVersionResult(

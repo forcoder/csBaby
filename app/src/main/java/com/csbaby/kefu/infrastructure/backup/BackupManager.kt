@@ -10,6 +10,7 @@ import com.csbaby.kefu.data.sync.AuthManager
 import com.google.gson.Gson
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -224,32 +225,20 @@ class BackupManager @Inject constructor(
     private suspend fun restoreToLocal(content: BackupContent?, tenantId: String) {
         if (content == null) return
 
-        // 先清除该租户的现有数据（软删除）
-        keywordRuleDao.getRulesByTenant(tenantId).forEach {
-            keywordRuleDao.deleteById(it.id)
-        }
-        aiModelConfigDao.getModelsByTenant(tenantId).forEach {
-            aiModelConfigDao.deleteById(it.id)
-        }
-        appConfigDao.getAppsByTenant(tenantId).forEach {
-            appConfigDao.deleteByPackage(it.packageName)
-        }
-        scenarioDao.getScenariosByTenant(tenantId).forEach {
-            scenarioDao.deleteById(it.id)
-        }
-        replyHistoryDao.getRepliesByTenant(tenantId).forEach {
-            replyHistoryDao.deleteById(it.id)
-        }
-        messageBlacklistDao.getByTenant(tenantId).forEach {
-            messageBlacklistDao.deleteById(it.id)
-        }
+        // 先清除该租户的现有数据
+        keywordRuleDao.getRulesByTenant(tenantId).first().forEach { keywordRuleDao.deleteById(it.id) }
+        aiModelConfigDao.getModelsByTenantSync(tenantId).forEach { aiModelConfigDao.deleteById(it.id) }
+        appConfigDao.getAppsByTenantSync(tenantId).forEach { appConfigDao.deleteByPackage(it.packageName) }
+        scenarioDao.getScenariosByTenantSync(tenantId).forEach { scenarioDao.deleteById(it.id) }
+        replyHistoryDao.getRepliesByTenantSync(tenantId).forEach { replyHistoryDao.deleteById(it.id) }
+        messageBlacklistDao.getByTenantSync(tenantId).forEach { messageBlacklistDao.deleteById(it.id) }
 
         // 写入备份数据
-        content.keywordRules.forEach { map ->
+        for (map in content.keywordRules) {
             val entity = mapToKeywordRule(map, tenantId)
             if (entity != null) keywordRuleDao.insertRule(entity)
         }
-        content.aiModelConfigs.forEach { map ->
+        for (map in content.aiModelConfigs) {
             val entity = mapToAIModelConfig(map, tenantId)
             if (entity != null) aiModelConfigDao.insertModel(entity)
         }
@@ -257,19 +246,19 @@ class BackupManager @Inject constructor(
             val entity = mapToStyleProfile(map, tenantId)
             if (entity != null) userStyleProfileDao.insertProfile(entity)
         }
-        content.appConfigs.forEach { map ->
+        for (map in content.appConfigs) {
             val entity = mapToAppConfig(map, tenantId)
             if (entity != null) appConfigDao.insertApp(entity)
         }
-        content.scenarios.forEach { map ->
+        for (map in content.scenarios) {
             val entity = mapToScenario(map, tenantId)
             if (entity != null) scenarioDao.insertScenario(entity)
         }
-        content.replyHistory.forEach { map ->
+        for (map in content.replyHistory) {
             val entity = mapToReplyHistory(map, tenantId)
             if (entity != null) replyHistoryDao.insertReply(entity)
         }
-        content.messageBlacklist.forEach { map ->
+        for (map in content.messageBlacklist) {
             val entity = mapToMessageBlacklist(map, tenantId)
             if (entity != null) messageBlacklistDao.insert(entity)
         }
