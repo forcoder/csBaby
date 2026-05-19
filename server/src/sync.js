@@ -43,6 +43,11 @@ function toReply(h) {
     styleApplied:!!h.style_applied, sendTime:h.send_time, modified:!!h.modified,
     tenantId:h.tenant_id, syncVersion:h.sync_version, deleted:!!h.deleted };
 }
+function toBlacklist(b) {
+  return { id:b.id, type:b.type, value:b.value, description:b.description,
+    packageName:b.package_name, createdAt:b.created_at, isEnabled:!!b.is_enabled,
+    tenantId:b.tenant_id, syncVersion:b.sync_version, deleted:!!b.deleted };
+}
 
 // 全量同步
 router.get('/all', async (req, res) => {
@@ -55,6 +60,7 @@ router.get('/all', async (req, res) => {
     appConfigs: queryAll('SELECT * FROM app_configs WHERE tenant_id=? AND deleted=0 ORDER BY last_used DESC', [t]).map(toApp),
     scenarios: queryAll('SELECT * FROM scenarios WHERE tenant_id=? AND deleted=0 ORDER BY created_at DESC', [t]).map(toScenario),
     replyHistory: queryAll('SELECT * FROM reply_history WHERE tenant_id=? AND deleted=0 ORDER BY send_time DESC LIMIT 500', [t]).map(toReply),
+    messageBlacklist: queryAll('SELECT * FROM message_blacklist WHERE tenant_id=? AND deleted=0 ORDER BY created_at DESC', [t]).map(toBlacklist),
     serverTime: now
   }});
 });
@@ -74,6 +80,8 @@ router.get('/changes', async (req, res) => {
   if (ds.length) del['scenarios'] = ds.map(r=>String(r.id));
   const dh = queryAll('SELECT id FROM reply_history WHERE tenant_id=? AND sync_version>? AND deleted=1', [t, since]);
   if (dh.length) del['reply_history'] = dh.map(r=>String(r.id));
+  const db = queryAll('SELECT id FROM message_blacklist WHERE tenant_id=? AND sync_version>? AND deleted=1', [t, since]);
+  if (db.length) del['message_blacklist'] = db.map(r=>String(r.id));
 
   res.json({ code:0, message:'成功', data:{
     keywordRules: queryAll('SELECT * FROM keyword_rules WHERE tenant_id=? AND sync_version>?', [t, since]).map(toRule),
@@ -82,6 +90,7 @@ router.get('/changes', async (req, res) => {
     appConfigs: queryAll('SELECT * FROM app_configs WHERE tenant_id=? AND sync_version>?', [t, since]).map(toApp),
     scenarios: queryAll('SELECT * FROM scenarios WHERE tenant_id=? AND sync_version>?', [t, since]).map(toScenario),
     replyHistory: queryAll('SELECT * FROM reply_history WHERE tenant_id=? AND sync_version>?', [t, since]).map(toReply),
+    messageBlacklist: queryAll('SELECT * FROM message_blacklist WHERE tenant_id=? AND sync_version>?', [t, since]).map(toBlacklist),
     deletedIds: del, serverTime: now, hasMore: false, nextCursor: null
   }});
 });
@@ -90,7 +99,7 @@ router.get('/changes', async (req, res) => {
 router.post('/push', async (req, res) => {
   await getDb();
   const t = req.tenantId;
-  const { keywordRules=[], aiModelConfigs=[], userStyleProfile, appConfigs=[], scenarios=[], replyHistory=[], deletedIds={}, baseVersion=0 } = req.body;
+  const { keywordRules=[], aiModelConfigs=[], userStyleProfile, appConfigs=[], scenarios=[], replyHistory=[], messageBlacklist=[], deletedIds={}, baseVersion=0 } = req.body;
   const now = Date.now();
   const conflicts = [];
 
@@ -118,6 +127,10 @@ router.post('/push', async (req, res) => {
     const e = queryOne('SELECT sync_version,send_time FROM reply_history WHERE id=? AND tenant_id=?', [h.id, t]);
     if (e && e.sync_version > baseVersion) conflicts.push({ entityType:'reply_history', entityId:String(h.id), serverVersion:e.sync_version, serverUpdatedAt:e.send_time });
   }
+  for (const b of messageBlacklist) {
+    const e = queryOne('SELECT sync_version,created_at FROM message_blacklist WHERE id=? AND tenant_id=?', [b.id, t]);
+    if (e && e.sync_version > baseVersion) conflicts.push({ entityType:'message_blacklist', entityId:String(b.id), serverVersion:e.sync_version, serverUpdatedAt:e.created_at });
+  }
 
   try {
     for (const r of keywordRules)
@@ -138,6 +151,9 @@ router.post('/push', async (req, res) => {
     for (const h of replyHistory)
       exec('INSERT OR REPLACE INTO reply_history (id,source_app,original_message,generated_reply,final_reply,rule_matched_id,model_used_id,style_applied,send_time,modified,tenant_id,sync_version,deleted) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
         [h.id,h.sourceApp,h.originalMessage,h.generatedReply,h.finalReply,h.ruleMatchedId||null,h.modelUsedId||null,h.styleApplied?1:0,h.sendTime,h.modified?1:0,t,now,h.deleted?1:0]);
+    for (const b of messageBlacklist)
+      exec('INSERT OR REPLACE INTO message_blacklist (id,type,value,description,package_name,created_at,is_enabled,tenant_id,sync_version,deleted) VALUES (?,?,?,?,?,?,?,?,?,?)',
+        [b.id,b.type,b.value,b.description,b.package_name||null,b.createdAt,b.isEnabled?1:0,t,now,b.deleted?1:0]);
 
     for (const [et, ids] of Object.entries(deletedIds)) {
       for (const id of ids) {
@@ -146,6 +162,7 @@ router.post('/push', async (req, res) => {
         else if (et==='app_configs') exec('UPDATE app_configs SET deleted=1,sync_version=? WHERE package_name=? AND tenant_id=?', [now,id,t]);
         else if (et==='scenarios') exec('UPDATE scenarios SET deleted=1,sync_version=? WHERE id=? AND tenant_id=?', [now,id,t]);
         else if (et==='reply_history') exec('UPDATE reply_history SET deleted=1,sync_version=? WHERE id=? AND tenant_id=?', [now,id,t]);
+        else if (et==='message_blacklist') exec('UPDATE message_blacklist SET deleted=1,sync_version=? WHERE id=? AND tenant_id=?', [now,id,t]);
       }
     }
 

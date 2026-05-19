@@ -1,6 +1,8 @@
 package com.csbaby.kefu.data.sync
 
 import com.csbaby.kefu.data.local.dao.*
+import com.csbaby.kefu.data.local.entity.MessageBlacklistEntity
+import com.csbaby.kefu.data.remote.SyncMessageBlacklist
 import com.csbaby.kefu.data.local.entity.*
 import com.csbaby.kefu.data.model.SyncAuthState
 import com.csbaby.kefu.data.remote.*
@@ -28,6 +30,7 @@ class SyncManager @Inject constructor(
     private val appConfigDao: AppConfigDao,
     private val scenarioDao: ScenarioDao,
     private val replyHistoryDao: ReplyHistoryDao,
+    private val messageBlacklistDao: MessageBlacklistDao,
     private val syncCheckpointDao: SyncCheckpointDao,
     private val authManager: AuthManager,
     private val syncQueue: SyncQueue
@@ -221,7 +224,10 @@ class SyncManager @Inject constructor(
         val replies = replyHistoryDao.getRepliesByTenantSync(tenantId)
             .filter { it.syncVersion > since || it.syncVersion == 0L }
 
-        if (rules.isEmpty() && models.isEmpty() && profiles.isEmpty() && apps.isEmpty() && scenarios.isEmpty() && replies.isEmpty()) {
+        val blacklists = messageBlacklistDao.getByTenantSync(tenantId)
+            .filter { it.syncVersion > since || it.syncVersion == 0L }
+
+        if (rules.isEmpty() && models.isEmpty() && profiles.isEmpty() && apps.isEmpty() && scenarios.isEmpty() && replies.isEmpty() && blacklists.isEmpty()) {
             Timber.d("没有本地变更需要推送")
             return
         }
@@ -234,6 +240,7 @@ class SyncManager @Inject constructor(
             appConfigs = apps.map { it.toSyncModel() },
             scenarios = scenarios.map { it.toSyncModel() },
             replyHistory = replies.map { it.toSyncModel() },
+            messageBlacklist = blacklists.map { it.toSyncModel() },
             deletedIds = emptyMap(),
             baseVersion = since
         )
@@ -252,6 +259,7 @@ class SyncManager @Inject constructor(
             apps.forEach { appConfigDao.updateSyncVersion(it.packageName, newVersion) }
             scenarios.forEach { scenarioDao.updateSyncVersion(it.id, newVersion) }
             replies.forEach { replyHistoryDao.updateSyncVersion(it.id, newVersion) }
+            blacklists.forEach { messageBlacklistDao.updateSyncVersion(it.id, newVersion) }
         }
     }
 
@@ -287,6 +295,11 @@ class SyncManager @Inject constructor(
         data.replyHistory.forEach { reply ->
             replyHistoryDao.insertReply(reply.toEntity(tenantId))
         }
+
+        // 消息黑名单
+        data.messageBlacklist.forEach { blacklist ->
+            messageBlacklistDao.insert(blacklist.toEntity(tenantId))
+        }
     }
 
     private suspend fun applyChangesToLocal(changes: SyncChanges, tenantId: String) {
@@ -296,6 +309,7 @@ class SyncManager @Inject constructor(
         changes.appConfigs.forEach { appConfigDao.insertApp(it.toEntity(tenantId)) }
         changes.scenarios.forEach { scenarioDao.insertScenario(it.toEntity(tenantId)) }
         changes.replyHistory.forEach { replyHistoryDao.insertReply(it.toEntity(tenantId)) }
+        changes.messageBlacklist.forEach { messageBlacklistDao.insert(it.toEntity(tenantId)) }
 
         // 处理删除
         changes.deletedIds.forEach { (entityType, ids) ->
@@ -305,6 +319,7 @@ class SyncManager @Inject constructor(
                 "app_configs" -> ids.forEach { appConfigDao.deleteByPackage(it) }
                 "scenarios" -> ids.forEach { scenarioDao.deleteById(it.toLong()) }
                 "reply_history" -> ids.forEach { replyHistoryDao.deleteById(it.toLong()) }
+                "message_blacklist" -> ids.forEach { messageBlacklistDao.deleteById(it.toLong()) }
             }
         }
     }
@@ -381,8 +396,31 @@ class SyncManager @Inject constructor(
                 entityId = conflict.entityId,
                 strategy = "MERGE"
             )
+            // 消息黑名单：服务端优先（团队共享配置）
+            "message_blacklist" -> ConflictResolution(
+                entityType = conflict.entityType,
+                entityId = conflict.entityId,
+                strategy = "SERVER_WINS"
+            )
             // 其他：无法自动解决
             else -> null
+        }
+    }
+
+    // ========== 写入即同步触发器 ==========
+
+    private var syncTriggerJob: Job? = null
+
+    /**
+     * 写入本地数据后调用此方法触发同步。
+     * Debounce 2 秒避免高频写入打爆 API。
+     */
+    fun triggerSync() {
+        val tenantId = _authState.value?.tenantId ?: return
+        syncTriggerJob?.cancel()
+        syncTriggerJob = CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+            kotlinx.coroutines.delay(2000) // 2 秒 debounce
+            incrementalSync(tenantId)
         }
     }
 
@@ -487,6 +525,20 @@ class SyncManager @Inject constructor(
         generatedReply = generatedReply, finalReply = finalReply,
         ruleMatchedId = ruleMatchedId, modelUsedId = modelUsedId,
         styleApplied = styleApplied, sendTime = sendTime, modified = modified,
+        tenantId = tenantId, syncVersion = syncVersion, deleted = deleted
+    )
+
+    // ========== MessageBlacklist 转换 ==========
+
+    private fun SyncMessageBlacklist.toEntity(tenantId: String) = MessageBlacklistEntity(
+        id = id, type = type, value = value, description = description,
+        packageName = packageName, createdAt = createdAt, isEnabled = isEnabled,
+        tenantId = tenantId, syncVersion = syncVersion, deleted = deleted
+    )
+
+    private fun MessageBlacklistEntity.toSyncModel() = SyncMessageBlacklist(
+        id = id, type = type, value = value, description = description,
+        packageName = packageName, createdAt = createdAt, isEnabled = isEnabled,
         tenantId = tenantId, syncVersion = syncVersion, deleted = deleted
     )
 }

@@ -4,9 +4,9 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.csbaby.kefu.data.sync.SyncManager
 import com.csbaby.kefu.domain.model.KeywordRule
 import com.csbaby.kefu.infrastructure.knowledge.KnowledgeBaseManager
-
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +31,8 @@ data class KnowledgeUiState(
 @HiltViewModel
 class KnowledgeViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
-    private val knowledgeBaseManager: KnowledgeBaseManager
+    private val knowledgeBaseManager: KnowledgeBaseManager,
+    private val syncManager: SyncManager
 ) : ViewModel() {
 
 
@@ -92,6 +93,8 @@ class KnowledgeViewModel @Inject constructor(
             } else {
                 knowledgeBaseManager.updateRule(rule)
             }
+            // 自动同步到服务端
+            triggerAutoSyncForLoggedInUser()
         }
     }
 
@@ -141,6 +144,30 @@ class KnowledgeViewModel @Inject constructor(
                     noticeMessage = noticeMessage
                 )
             }
+
+            // 导入成功后，如果已登录，自动触发增量同步到服务端
+            if (result.successCount > 0 && syncManager.isLoggedIn()) {
+                val tenantId = syncManager.currentTenantId()
+                if (tenantId != null) {
+                    triggerAutoSync(tenantId)
+                }
+            }
+        }
+    }
+
+    /**
+     * 导入/导出/增删改操作后自动触发同步到服务端
+     */
+    private fun triggerAutoSync(tenantId: String) {
+        viewModelScope.launch {
+            try {
+                val checkpoint = syncManager.lastSyncTime
+                val since = checkpoint ?: 0L
+                syncManager.pushLocalChanges(tenantId, since)
+            } catch (e: Exception) {
+                // 自动同步失败不影响用户体验，静默处理
+                timber.log.Timber.w(e, "自动同步到服务端失败")
+            }
         }
     }
 
@@ -161,6 +188,9 @@ class KnowledgeViewModel @Inject constructor(
                 } else {
                     "知识库已经是空的"
                 }
+
+                // 自动同步到服务端
+                triggerAutoSyncForLoggedInUser()
             }.getOrElse { exception ->
                 exception.message ?: "清空知识库失败"
             }
@@ -182,12 +212,25 @@ class KnowledgeViewModel @Inject constructor(
     fun deleteRule(id: Long) {
         viewModelScope.launch {
             knowledgeBaseManager.deleteRule(id)
+            triggerAutoSyncForLoggedInUser()
         }
     }
 
     fun toggleRule(id: Long, enabled: Boolean) {
         viewModelScope.launch {
             knowledgeBaseManager.toggleRule(id, enabled)
+            triggerAutoSyncForLoggedInUser()
+        }
+    }
+
+    /**
+     * 如果用户已登录，触发自动同步
+     */
+    private fun triggerAutoSyncForLoggedInUser() {
+        if (syncManager.isLoggedIn()) {
+            syncManager.currentTenantId()?.let { tenantId ->
+                triggerAutoSync(tenantId)
+            }
         }
     }
 

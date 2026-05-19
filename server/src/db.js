@@ -38,9 +38,11 @@ function initSchema(db) {
     CREATE TABLE IF NOT EXISTS rule_scenario_relation (rule_id INTEGER NOT NULL, scenario_id INTEGER NOT NULL, tenant_id TEXT NOT NULL, PRIMARY KEY (rule_id, scenario_id));
     CREATE TABLE IF NOT EXISTS reply_history (id INTEGER PRIMARY KEY AUTOINCREMENT, source_app TEXT NOT NULL, original_message TEXT NOT NULL, generated_reply TEXT NOT NULL, final_reply TEXT NOT NULL, rule_matched_id INTEGER, model_used_id INTEGER, style_applied INTEGER NOT NULL DEFAULT 0, send_time INTEGER NOT NULL, modified INTEGER NOT NULL DEFAULT 0, tenant_id TEXT NOT NULL, sync_version INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS sync_checkpoints (tenant_id TEXT PRIMARY KEY, last_sync_time INTEGER NOT NULL DEFAULT 0, sync_token TEXT, is_syncing INTEGER NOT NULL DEFAULT 0, last_error TEXT);
+    CREATE TABLE IF NOT EXISTS message_blacklist (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, value TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', package_name TEXT, created_at INTEGER NOT NULL, is_enabled INTEGER NOT NULL DEFAULT 1, tenant_id TEXT NOT NULL, sync_version INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0);
     CREATE INDEX IF NOT EXISTS idx_kr_tenant ON keyword_rules(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_am_tenant ON ai_model_configs(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_rh_tenant ON reply_history(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_mb_tenant ON message_blacklist(tenant_id);
   `);
 }
 

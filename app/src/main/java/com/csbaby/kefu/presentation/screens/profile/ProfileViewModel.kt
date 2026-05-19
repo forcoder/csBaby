@@ -144,6 +144,7 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             styleLearningEngine.updateStyleParameters(userId = currentUserId, formality = value)
             _uiState.update { it.copy(formalityLevel = value) }
+            triggerAutoSync()
         }
     }
 
@@ -151,6 +152,7 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             styleLearningEngine.updateStyleParameters(userId = currentUserId, enthusiasm = value)
             _uiState.update { it.copy(enthusiasmLevel = value) }
+            triggerAutoSync()
         }
     }
 
@@ -158,6 +160,21 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             styleLearningEngine.updateStyleParameters(userId = currentUserId, professionalism = value)
             _uiState.update { it.copy(professionalismLevel = value) }
+            triggerAutoSync()
+        }
+    }
+
+    private fun triggerAutoSync() {
+        if (syncManager.isLoggedIn()) {
+            syncManager.currentTenantId()?.let { tenantId ->
+                viewModelScope.launch {
+                    try {
+                        syncManager.pushLocalChanges(tenantId, 0L)
+                    } catch (e: Exception) {
+                        Timber.w(e, "风格设置自动同步失败")
+                    }
+                }
+            }
         }
     }
 

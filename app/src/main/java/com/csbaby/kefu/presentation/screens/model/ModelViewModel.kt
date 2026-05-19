@@ -2,6 +2,7 @@ package com.csbaby.kefu.presentation.screens.model
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.csbaby.kefu.data.sync.SyncManager
 import com.csbaby.kefu.domain.model.AIModelConfig
 import com.csbaby.kefu.domain.repository.AIModelRepository
 import com.csbaby.kefu.infrastructure.ai.AIService
@@ -19,7 +20,8 @@ data class ModelUiState(
 @HiltViewModel
 class ModelViewModel @Inject constructor(
     private val aiModelRepository: AIModelRepository,
-    private val aiService: AIService
+    private val aiService: AIService,
+    private val syncManager: SyncManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ModelUiState())
@@ -45,18 +47,35 @@ class ModelViewModel @Inject constructor(
             } else {
                 aiModelRepository.updateModel(model)
             }
+            triggerAutoSync()
         }
     }
 
     fun deleteModel(id: Long) {
         viewModelScope.launch {
             aiModelRepository.deleteModel(id)
+            triggerAutoSync()
         }
     }
 
     fun setDefaultModel(id: Long) {
         viewModelScope.launch {
             aiModelRepository.setDefaultModel(id)
+            triggerAutoSync()
+        }
+    }
+
+    private fun triggerAutoSync() {
+        if (syncManager.isLoggedIn()) {
+            syncManager.currentTenantId()?.let { tenantId ->
+                viewModelScope.launch {
+                    try {
+                        syncManager.pushLocalChanges(tenantId, 0L)
+                    } catch (e: Exception) {
+                        timber.log.Timber.w(e, "AI模型配置自动同步失败")
+                    }
+                }
+            }
         }
     }
 

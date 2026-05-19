@@ -45,4 +45,12 @@ interface MessageBlacklistDao {
 
     @Query("SELECT * FROM message_blacklist ORDER BY createdAt DESC")
     suspend fun getAllList(): List<MessageBlacklistEntity>
+
+    // ========== 租户感知查询（同步用） ==========
+
+    @Query("SELECT * FROM message_blacklist WHERE tenantId = :tenantId ORDER BY createdAt DESC")
+    suspend fun getByTenantSync(tenantId: String): List<MessageBlacklistEntity>
+
+    @Query("UPDATE message_blacklist SET syncVersion = :version WHERE id = :id")
+    suspend fun updateSyncVersion(id: Long, version: Long)
 }

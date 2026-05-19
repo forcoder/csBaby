@@ -68,6 +68,7 @@ data class SyncAllData(
     val appConfigs: List<SyncAppConfig>,
     val scenarios: List<SyncScenario>,
     val replyHistory: List<SyncReplyHistory>,
+    val messageBlacklist: List<SyncMessageBlacklist>,
     val serverTime: Long
 )
 
@@ -78,6 +79,7 @@ data class SyncChanges(
     val appConfigs: List<SyncAppConfig>,
     val scenarios: List<SyncScenario>,
     val replyHistory: List<SyncReplyHistory>,
+    val messageBlacklist: List<SyncMessageBlacklist>,
     val deletedIds: Map<String, List<String>>,
     val serverTime: Long,
     val hasMore: Boolean,
@@ -92,6 +94,7 @@ data class PushChangesRequest(
     val appConfigs: List<SyncAppConfig>,
     val scenarios: List<SyncScenario>,
     val replyHistory: List<SyncReplyHistory>,
+    val messageBlacklist: List<SyncMessageBlacklist>,
     val deletedIds: Map<String, List<String>>,
     val baseVersion: Long
 )
@@ -216,6 +219,19 @@ data class SyncReplyHistory(
     val styleApplied: Boolean,
     val sendTime: Long,
     val modified: Boolean,
+    val tenantId: String,
+    val syncVersion: Long,
+    val deleted: Boolean
+)
+
+data class SyncMessageBlacklist(
+    val id: Long,
+    val type: String,
+    val value: String,
+    val description: String,
+    val packageName: String?,
+    val createdAt: Long,
+    val isEnabled: Boolean,
     val tenantId: String,
     val syncVersion: Long,
     val deleted: Boolean
