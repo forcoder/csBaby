@@ -56,7 +56,7 @@ fun ModelScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(uiState.models) { model ->
+            items(items = uiState.models, key = { it.id }) { model ->
                 ModelItem(
                     model = model,
                     testResult = uiState.testResults[model.id],

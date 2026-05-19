@@ -112,6 +112,12 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!-- Remove WorkManager auto-initialized provider (KefuApplication provides Configuration) -->
+        <provider
+            android:name="androidx.work.impl.WorkManagerInitializer"
+            android:authorities="${applicationId}.workmanager-init"
+            tools:node="remove" />
+
     </application>
 
 </manifest>

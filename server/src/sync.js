@@ -133,6 +133,8 @@ router.post('/push', async (req, res) => {
   }
 
   try {
+    // 使用事务保证原子性
+    exec('BEGIN TRANSACTION');
     for (const r of keywordRules)
       exec('INSERT OR REPLACE INTO keyword_rules (id,keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
         [r.id,r.keyword,r.matchType,r.replyTemplate,r.category,r.targetType,r.targetNamesJson,r.priority,r.enabled?1:0,r.createdAt,r.updatedAt,t,now,r.deleted?1:0]);
@@ -167,8 +169,10 @@ router.post('/push', async (req, res) => {
     }
 
     exec('INSERT OR REPLACE INTO sync_checkpoints (tenant_id,last_sync_time,is_syncing,last_error) VALUES (?,?,0,NULL)', [t, now]);
+    exec('COMMIT');
     res.json({ code:0, message:'成功', data:{ accepted:true, conflicts, newServerVersion:now, serverTime:now } });
   } catch (e) {
+    try { exec('ROLLBACK'); } catch (_) {}
     console.error('push error:', e);
     res.status(500).json({ code:500, message:e.message });
   }

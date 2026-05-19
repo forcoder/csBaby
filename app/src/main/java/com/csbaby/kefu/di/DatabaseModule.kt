@@ -157,6 +157,8 @@ object DatabaseModule {
             database.execSQL("ALTER TABLE message_blacklist ADD COLUMN syncVersion INTEGER NOT NULL DEFAULT 0")
             database.execSQL("ALTER TABLE message_blacklist ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0")
             database.execSQL("CREATE INDEX IF NOT EXISTS index_message_blacklist_tenantId ON message_blacklist(tenantId)")
+            // 补充 MIGRATION_2_3 中缺失的 user_style_profiles tenantId 索引
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_user_style_profiles_tenantId ON user_style_profiles(tenantId)")
         }
     }
 }

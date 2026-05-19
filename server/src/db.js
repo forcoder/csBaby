@@ -57,7 +57,7 @@ function initSchema(db) {
       min_required_version INTEGER NOT NULL DEFAULT 1,
       is_published INTEGER NOT NULL DEFAULT 1,
       release_date INTEGER,
-      created INTEGER NOT NULL
+      created_at INTEGER NOT NULL
     );
 
     // 数据备份记录

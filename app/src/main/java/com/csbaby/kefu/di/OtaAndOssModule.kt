@@ -1,6 +1,7 @@
 package com.csbaby.kefu.di
 
 import android.content.Context
+import com.csbaby.kefu.BuildConfig
 import com.csbaby.kefu.data.local.dao.*
 import com.csbaby.kefu.data.remote.OtaApiService
 import com.csbaby.kefu.data.repository.OtaRepository
@@ -15,12 +16,39 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 object OtaAndOssModule {
+
+    /**
+     * 为 OTA/Backup API 创建独立的 Retrofit 实例，使用同步服务器 base URL。
+     * 不能复用 NetworkModule 提供的 Retrofit（其 base URL 是 OpenAI）。
+     */
+    @Provides
+    @Singleton
+    fun provideSyncRetrofit(@ApplicationContext context: Context): Retrofit {
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BASIC
+        }
+        val client = OkHttpClient.Builder()
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
+        return Retrofit.Builder()
+            .baseUrl(BuildConfig.SYNC_BASE_URL)
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
 
     @Provides
     @Singleton

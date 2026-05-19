@@ -203,7 +203,7 @@ class BackupManager @Inject constructor(
     private suspend fun exportLocalData(tenantId: String): BackupContent {
         val rules = keywordRuleDao.getRulesByTenantSync(tenantId)
         val models = aiModelConfigDao.getModelsByTenantSync(tenantId)
-        val profile = userStyleProfileDao.getProfileByUserIdSync(tenantId)
+        val profile = userStyleProfileDao.getProfileByTenantIdSync(tenantId)
         val apps = appConfigDao.getAppsByTenantSync(tenantId)
         val scenarios = scenarioDao.getScenariosByTenantSync(tenantId)
         val replies = replyHistoryDao.getRepliesByTenantSync(tenantId)

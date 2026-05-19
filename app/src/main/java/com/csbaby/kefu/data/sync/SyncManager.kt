@@ -221,7 +221,7 @@ class SyncManager @Inject constructor(
         val models = aiModelConfigDao.getModelsByTenantSync(tenantId)
             .filter { it.syncVersion > since || it.syncVersion == 0L }
 
-        val profile = userStyleProfileDao.getProfileByUserIdSync(tenantId)
+        val profile = userStyleProfileDao.getProfileByTenantIdSync(tenantId)
         val profiles = if (profile != null && (profile.syncVersion > since || profile.syncVersion == 0L)) listOf(profile) else emptyList()
 
         val apps = appConfigDao.getAppsByTenantSync(tenantId)

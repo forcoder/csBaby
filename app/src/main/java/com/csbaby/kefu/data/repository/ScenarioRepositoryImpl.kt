@@ -39,7 +39,8 @@ class ScenarioRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteScenario(id: Long) {
-        scenarioDao.deleteScenario(scenarioDao.getScenarioById(id)!!)
+        val entity = scenarioDao.getScenarioById(id) ?: return
+        scenarioDao.deleteScenario(entity)
         syncManager.triggerSync()
     }
 }

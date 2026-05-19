@@ -1324,63 +1324,62 @@ class FloatingWindowService : Service() {
         }
 
         Log.d(TAG, "知识库搜索: $query")
-        
-        // 清空之前的结果
-        knowledgeResultsRecyclerContainer?.removeAllViews()
-        
-        // 显示加载中
-        val loadingView = TextView(this).apply {
-            text = "正在搜索知识库..."
-            textSize = 13f
-            setTextColor(Color.parseColor("#94A3B8"))
-            gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(80)
-            )
+
+        // 在主线程操作 UI
+        val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        mainHandler.post {
+            knowledgeResultsRecyclerContainer?.removeAllViews()
+            val loadingView = TextView(this).apply {
+                text = "正在搜索知识库..."
+                textSize = 13f
+                setTextColor(Color.parseColor("#94A3B8"))
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dp(80)
+                )
+            }
+            knowledgeResultsRecyclerContainer?.addView(loadingView)
         }
-        knowledgeResultsRecyclerContainer?.addView(loadingView)
 
         serviceScope.launch {
             try {
-                // 调用 ReplyOrchestrator 进行知识库搜索
                 val results = replyOrchestrator.searchKnowledgeRules(query)
-                
-                knowledgeResultsRecyclerContainer?.removeAllViews()
-                
-                if (results.isEmpty()) {
-                    val emptyView = TextView(this@FloatingWindowService).apply {
-                        text = "没有找到匹配的规则。试试其他关键词？"
-                        textSize = 13f
-                        setTextColor(Color.parseColor("#94A3B8"))
-                        gravity = Gravity.CENTER
-                        setPadding(0, dp(30), 0, 0)
+                // 切回主线程更新 UI
+                mainHandler.post {
+                    knowledgeResultsRecyclerContainer?.removeAllViews()
+                    if (results.isEmpty()) {
+                        val emptyView = TextView(this@FloatingWindowService).apply {
+                            text = "没有找到匹配的规则。试试其他关键词？"
+                            textSize = 13f
+                            setTextColor(Color.parseColor("#94A3B8"))
+                            gravity = Gravity.CENTER
+                            setPadding(0, dp(30), 0, 0)
+                        }
+                        knowledgeResultsRecyclerContainer?.addView(emptyView)
+                        return@post
                     }
-                    knowledgeResultsRecyclerContainer?.addView(emptyView)
-                    return@launch
-                }
-
-                // 显示搜索结果
-                results.forEachIndexed { index, rule ->
-                    val ruleView = createKnowledgeRuleView(rule, index)
-                    knowledgeResultsRecyclerContainer?.addView(ruleView)
-                    if (index < results.size - 1) {
-                        knowledgeResultsRecyclerContainer?.addView(verticalSpace(12))
+                    results.forEachIndexed { index, rule ->
+                        val ruleView = createKnowledgeRuleView(rule, index)
+                        knowledgeResultsRecyclerContainer?.addView(ruleView)
+                        if (index < results.size - 1) {
+                            knowledgeResultsRecyclerContainer?.addView(verticalSpace(12))
+                        }
                     }
+                    Toast.makeText(this@FloatingWindowService, "找到 ${results.size} 条匹配规则", Toast.LENGTH_SHORT).show()
                 }
-                
-                Toast.makeText(this@FloatingWindowService, "找到 ${results.size} 条匹配规则", Toast.LENGTH_SHORT).show()
-                
             } catch (e: Exception) {
                 Log.e(TAG, "知识库搜索失败", e)
-                knowledgeResultsRecyclerContainer?.removeAllViews()
-                val errorView = TextView(this@FloatingWindowService).apply {
-                    text = "搜索失败: ${e.message ?: "未知错误"}"
-                    textSize = 13f
-                    setTextColor(Color.parseColor("#F87171"))
-                    gravity = Gravity.CENTER
+                mainHandler.post {
+                    knowledgeResultsRecyclerContainer?.removeAllViews()
+                    val errorView = TextView(this@FloatingWindowService).apply {
+                        text = "搜索失败: ${e.message ?: "未知错误"}"
+                        textSize = 13f
+                        setTextColor(Color.parseColor("#F87171"))
+                        gravity = Gravity.CENTER
+                    }
+                    knowledgeResultsRecyclerContainer?.addView(errorView)
                 }
-                knowledgeResultsRecyclerContainer?.addView(errorView)
             }
         }
     }

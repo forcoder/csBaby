@@ -205,7 +205,7 @@ fun KnowledgeScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(uiState.rules) { rule ->
+                    items(items = uiState.rules, key = { it.id }) { rule ->
                         RuleItem(
                             rule = rule,
                             onEdit = { editingRule = rule },
