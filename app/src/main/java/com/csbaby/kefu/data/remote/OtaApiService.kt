@@ -68,7 +68,6 @@ data class PublishVersionResult(
     val versionCode: Int = 0,
     val versionName: String = ""
 )
-}
 
 /**
  * API响应包装类
