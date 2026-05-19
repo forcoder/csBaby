@@ -144,9 +144,10 @@ class SyncManager @Inject constructor(
     // ========== 全量同步（首次登录 / 换手机恢复） ==========
 
     suspend fun fullSync(tenantId: String): Result<Unit> {
-        _syncState.value = SyncState.Syncing("正在同步数据...")
-        syncCheckpointDao.updateSyncing(tenantId, true)
         return try {
+            _syncState.value = SyncState.Syncing("正在同步数据...")
+            syncCheckpointDao.updateSyncing(tenantId, true)
+
             val response = syncApiService.getAllData(tenantId)
             if (response.isSuccess && response.data != null) {
                 val data = response.data
@@ -155,33 +156,31 @@ class SyncManager @Inject constructor(
                 applyServerDataToLocal(data, tenantId)
 
                 syncCheckpointDao.updateSyncSuccess(tenantId, data.serverTime, null)
-                _syncState.value = SyncState.Success("同步完成")
                 Timber.d("全量同步完成: rules=${data.keywordRules.size}, models=${data.aiModelConfigs.size}")
                 Result.success(Unit)
             } else {
-                val msg = response.message.ifEmpty { "同步失败" }
-                _syncState.value = SyncState.Error(msg)
-                Result.failure(Exception(msg))
+                Result.failure(Exception(response.message.ifEmpty { "同步失败" }))
             }
         } catch (e: Exception) {
             Timber.e(e, "全量同步失败")
             syncCheckpointDao.updateLastError(tenantId, e.message)
-            _syncState.value = SyncState.Error(e.message ?: "同步失败")
             Result.failure(e)
         } finally {
             syncCheckpointDao.updateSyncing(tenantId, false)
+            _syncState.value = SyncState.Idle
         }
     }
 
     // ========== 增量同步 ==========
 
     suspend fun incrementalSync(tenantId: String): Result<Unit> {
-        val checkpoint = syncCheckpointDao.getCheckpoint(tenantId)
-        val since = checkpoint?.lastSyncTime ?: 0L
-
-        _syncState.value = SyncState.Syncing("正在同步变更...")
-        syncCheckpointDao.updateSyncing(tenantId, true)
         return try {
+            val checkpoint = syncCheckpointDao.getCheckpoint(tenantId)
+            val since = checkpoint?.lastSyncTime ?: 0L
+
+            _syncState.value = SyncState.Syncing("正在同步变更...")
+            syncCheckpointDao.updateSyncing(tenantId, true)
+
             // 1. 拉取服务端变更
             val changesResponse = syncApiService.getChanges(tenantId, since)
             if (changesResponse.isSuccess && changesResponse.data != null) {
@@ -198,16 +197,15 @@ class SyncManager @Inject constructor(
                 changesResponse.data?.nextCursor
             )
 
-            _syncState.value = SyncState.Success("同步完成")
             Timber.d("增量同步完成")
             Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "增量同步失败")
             syncCheckpointDao.updateLastError(tenantId, e.message)
-            _syncState.value = SyncState.Error(e.message ?: "同步失败")
             Result.failure(e)
         } finally {
             syncCheckpointDao.updateSyncing(tenantId, false)
+            _syncState.value = SyncState.Idle
         }
     }
 
