@@ -1,10 +1,8 @@
 package com.csbaby.kefu.data.sync
 
 import android.content.Context
-import androidx.hilt.work.HiltWorker
 import androidx.work.*
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
+import dagger.hilt.android.EntryPointAccessors
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 
@@ -12,14 +10,18 @@ import java.util.concurrent.TimeUnit
  * 兜底同步 Worker。
  * 每 15 分钟执行一次（有网络时），确保即使写入触发器失败，数据最终也会同步。
  */
-@HiltWorker
-class SyncWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted workerParams: WorkerParameters,
-    private val syncManager: SyncManager
+class SyncWorker(
+    context: Context,
+    workerParams: WorkerParameters
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
+        val entryPoint = EntryPointAccessors.fromApplication(
+            applicationContext,
+            com.csbaby.kefu.AppEntryPoint::class.java
+        )
+        val syncManager = entryPoint.syncManager()
+
         val tenantId = syncManager.currentTenantId()
         if (tenantId == null) {
             Timber.d("SyncWorker: 未登录，跳过")
