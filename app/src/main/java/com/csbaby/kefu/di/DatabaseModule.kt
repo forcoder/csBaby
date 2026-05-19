@@ -83,8 +83,12 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideMessageBlacklistDao(database: KefuDatabase): MessageBlacklistDao {
+        // 使用 Room.databaseBuilder 生成的实现类中的方法
         return database.messageBlacklistDao()
     }
+
+    // 注意：MessageBlacklistDao 的 @Provides 方法必须放在 provideDatabase 之后
+    // 因为 Hilt 需要确保 KefuDatabase 已经初始化
 
     private val MIGRATION_1_2 = object : Migration(1, 2) {
         override fun migrate(database: SupportSQLiteDatabase) {

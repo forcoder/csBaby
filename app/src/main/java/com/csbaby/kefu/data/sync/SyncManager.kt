@@ -24,19 +24,17 @@ import javax.inject.Singleton
  */
 @Singleton
 class SyncManager @Inject constructor(
-    private val database: KefuDatabase,
     private val keywordRuleDao: KeywordRuleDao,
     private val aiModelConfigDao: AIModelConfigDao,
     private val userStyleProfileDao: UserStyleProfileDao,
     private val appConfigDao: AppConfigDao,
     private val scenarioDao: ScenarioDao,
     private val replyHistoryDao: ReplyHistoryDao,
+    private val messageBlacklistDao: MessageBlacklistDao,
     private val syncCheckpointDao: SyncCheckpointDao,
     private val authManager: AuthManager,
     private val syncQueue: SyncQueue
 ) {
-    // 直接从 database 获取 DAO，避免 Hilt 循环依赖问题
-    private val messageBlacklistDao: MessageBlacklistDao = database.messageBlacklistDao()
     // 带 JWT 认证的 API 客户端，Token 从 AuthManager 运行时读取
     private val syncClient = AuthenticatedSyncClient(authManager)
     private val syncApiService: SyncApiService = syncClient.apiService
