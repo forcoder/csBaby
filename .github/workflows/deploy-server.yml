@@ -1,162 +1,131 @@
-name: Deploy Sync Server to Render
+name: Server CI — Build, Test & Deploy
 
 on:
   push:
     branches: [main, master]
     paths:
       - 'server/**'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'server/**'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  test:
-    name: Test Server
+  # ─────────────────────────────────────────
+  # Job 1: 安装依赖 + Lint + 测试
+  # ─────────────────────────────────────────
+  build-and-test:
+    name: Build & Test
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: server
 
     steps:
-      - uses: actions/checkout@v4
+      - name: 检出代码
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: 设置 Node.js 20
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: server/package-lock.json
 
-      - run: npm ci
+      - name: 安装依赖
+        run: npm ci
 
-      - run: |
-          node -e "
-          const { register, login } = require('./src/auth');
-          (async () => {
-            try {
-              const r = await register('ci@test.com', 'test123456', 'CI Test');
-              console.log('register ok');
-              const l = await login('ci@test.com', 'test123456');
-              console.log('login ok');
-            } catch (e) {
-              if (e.message === 'EMAIL_EXISTS') { console.log('user exists, ok'); return; }
-              throw e;
-            }
-          })().catch(e => { console.error('TEST FAILED:', e.message); process.exit(1); });
-          "
+      - name: 运行测试
+        run: npm test
 
+      - name: 语法检查（所有 JS 文件）
+        run: |
+          for f in src/*.js tests/*.js; do
+            [ -f "$f" ] && node --check "$f" && echo "✅ $f"
+          done
+
+  # ─────────────────────────────────────────
+  # Job 2: 部署到 Render（仅 main/master push）
+  # ─────────────────────────────────────────
   deploy:
-    name: Create Service & Deploy
-    needs: test
+    name: Deploy to Render
+    needs: build-and-test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
 
     steps:
-      - name: Create Render Service & Deploy
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 触发 Render 部署
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
           set -e
 
-          # 1. 获取 ownerId
-          SERVICES=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" "https://api.render.com/v1/services?limit=50")
-          OWNER_ID=$(echo "$SERVICES" | node -e "
-            let d=''; process.stdin.on('data',c=>d+=c);
-            process.stdin.on('end',()=>{
-              try { const j=JSON.parse(d); if(Array.isArray(j)&&j.length>0) console.log(j[0].service.ownerId||''); }
-              catch(e) { console.log(''); }
-            });
-          ")
-          echo "Owner: $OWNER_ID"
+          # 1. 获取已有服务列表
+          SERVICES=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
+            "https://api.render.com/v1/services?limit=50")
 
-          # 2. 检查服务是否已存在
-          EXISTING=$(echo "$SERVICES" | node -e "
+          # 2. 查找 csbaby-sync-server
+          SERVICE_ID=$(echo "$SERVICES" | node -e "
             let d=''; process.stdin.on('data',c=>d+=c);
             process.stdin.on('end',()=>{
               try {
                 const j=JSON.parse(d);
                 if(Array.isArray(j)){
                   const svc=j.find(s=>s.service.name==='csbaby-sync-server');
-                  if(svc){console.log('FOUND:'+svc.service.id);return;}
+                  if(svc){console.log(svc.service.id);return;}
                 }
                 console.log('NOT_FOUND');
               } catch(e){console.log('NOT_FOUND');}
             });
           ")
-          # 已知服务 ID（如果刚创建）
-          if [ "$EXISTING" = "NOT_FOUND" ]; then
-            EXISTING="FOUND:srv-d85hdj3bc2fs73bqqeg0"
+
+          if [ "$SERVICE_ID" = "NOT_FOUND" ]; then
+            echo "服务不存在，首次部署需要手动在 Render 创建服务"
+            echo "或使用 workflow_dispatch 触发带创建逻辑的部署"
+            exit 1
           fi
 
-          if [[ "$EXISTING" == FOUND:* ]]; then
-            SERVICE_ID="${EXISTING#FOUND:}"
-            echo "Service exists: $SERVICE_ID"
-          else
-            echo "Creating service..."
+          echo "Service ID: $SERVICE_ID"
 
-            # 写 JSON 到文件
-            node -e "
-              const fs=require('fs');
-              fs.writeFileSync('/tmp/create.json', JSON.stringify({
-                type:'web_service',
-                name:'csbaby-sync-server',
-                ownerId:'$OWNER_ID',
-                repo:'https://github.com/forcoder/csBaby',
-                branch:'main',
-                autoDeploy:'yes',
-                serviceDetails:{
-                  env:'node',
-                  envSpecificDetails:{
-                    buildCommand:'cd server && npm install',
-                    startCommand:'cd server && npm start'
-                  }
-                }
-              }));
-            "
-
-            CREATE=$(curl -s -w "\n%{http_code}" \
-              -X POST \
-              -H "Authorization: Bearer $RENDER_API_KEY" \
-              -H "Content-Type: application/json" \
-              -d @/tmp/create.json \
-              "https://api.render.com/v1/services")
-
-            HTTP=$(echo "$CREATE" | tail -1)
-            BODY=$(echo "$CREATE" | head -n -1)
-            echo "Create HTTP: $HTTP"
-            echo "Response: $BODY"
-
-            if [ "$HTTP" != "201" ]; then
-              echo "Create failed"
-              exit 1
-            fi
-
-            SERVICE_ID=$(echo "$BODY" | node -e "
-              let d=''; process.stdin.on('data',c=>d+=c);
-              process.stdin.on('end',()=>{
-                try{console.log(JSON.parse(d).service.id)}
-                catch(e){console.log('ERROR')}
-              });
-            ")
-            echo "Created: $SERVICE_ID"
-          fi
-
-          # 3. 触发部署
-          echo "Deploying $SERVICE_ID..."
+          # 3. 触发重新部署（Render 会自动 git pull + build + start）
           DEPLOY=$(curl -s -w "\n%{http_code}" \
             -X POST \
             -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Accept: application/json" \
             "https://api.render.com/v1/services/$SERVICE_ID/deploys")
 
-          DEPLOY_HTTP=$(echo "$DEPLOY" | tail -1)
-          echo "Deploy HTTP: $DEPLOY_HTTP"
-          [ "$DEPLOY_HTTP" = "201" ] || [ "$DEPLOY_HTTP" = "200" ] || [ "$DEPLOY_HTTP" = "202" ] && echo "✅ Deployed" || exit 1
+          HTTP=$(echo "$DEPLOY" | tail -1)
+          echo "Deploy HTTP: $HTTP"
 
-      - name: Health Check
+          [ "$HTTP" = "201" ] || [ "$HTTP" = "200" ] || [ "$HTTP" = "202" ] \
+            && echo "✅ 部署已触发" || { echo "❌ 部署触发失败"; exit 1; }
+
+      - name: 等待部署完成（健康检查）
         run: |
+          echo "等待 60 秒让 Render 完成部署..."
           sleep 60
-          for i in $(seq 1 6); do
-            CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 "https://csbaby-sync-server.onrender.com/" 2>/dev/null)
+
+          for i in $(seq 1 8); do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              --connect-timeout 10 \
+              "https://csbaby-sync-server.onrender.com/" 2>/dev/null)
             echo "Attempt $i: HTTP $CODE"
-            [ "$CODE" = "200" ] && echo "✅ Healthy!" && exit 0
-            [ $i -lt 6 ] && sleep 30
+
+            if [ "$CODE" = "200" ]; then
+              echo "✅ 服务健康！"
+              exit 0
+            fi
+
+            [ $i -lt 8 ] && sleep 30
           done
-          echo "⚠️ Check Render Dashboard"
+
+          echo "⚠️ 健康检查超时，请检查 Render Dashboard"
+          exit 1
