@@ -27,7 +27,7 @@ object DatabaseModule {
             KefuDatabase::class.java,
             KefuDatabase.DATABASE_NAME
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
     }
 
@@ -78,6 +78,12 @@ object DatabaseModule {
     @Singleton
     fun provideSyncCheckpointDao(database: KefuDatabase): SyncCheckpointDao {
         return database.syncCheckpointDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideMessageBlacklistDao(database: KefuDatabase): MessageBlacklistDao {
+        return database.messageBlacklistDao()
     }
 
     private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -137,6 +143,16 @@ object DatabaseModule {
             database.execSQL("CREATE INDEX IF NOT EXISTS index_user_style_profiles_tenantId ON user_style_profiles(tenantId)")
             database.execSQL("CREATE INDEX IF NOT EXISTS index_reply_history_tenantId ON reply_history(tenantId)")
             database.execSQL("CREATE INDEX IF NOT EXISTS index_scenarios_tenantId ON scenarios(tenantId)")
+        }
+    }
+
+    private val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            // message_blacklist 表加入同步字段
+            database.execSQL("ALTER TABLE message_blacklist ADD COLUMN tenantId TEXT NOT NULL DEFAULT 'default_tenant'")
+            database.execSQL("ALTER TABLE message_blacklist ADD COLUMN syncVersion INTEGER NOT NULL DEFAULT 0")
+            database.execSQL("ALTER TABLE message_blacklist ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_message_blacklist_tenantId ON message_blacklist(tenantId)")
         }
     }
 }
