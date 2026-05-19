@@ -5,10 +5,12 @@ on:
     branches: [main, master]
     paths:
       - 'server/**'
+      - 'app/**'
   pull_request:
     branches: [main, master]
     paths:
       - 'server/**'
+      - 'app/**'
   workflow_dispatch:
 
 concurrency:

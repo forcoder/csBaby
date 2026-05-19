@@ -9,6 +9,7 @@ on:
       - 'build.gradle.kts'
       - 'settings.gradle.kts'
       - 'gradle.properties'
+      - 'server/**'
   pull_request:
     branches: [main, master]
   workflow_dispatch:
