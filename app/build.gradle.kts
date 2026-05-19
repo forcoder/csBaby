@@ -38,8 +38,8 @@ android {
     }
 
     // Lint 检查不中止构建（CI 中先修复 lint 错误再开启）
-    lint {
-        abortOnError false
+    lintOptions {
+        isAbortOnError = false
     }
 
     compileOptions {
