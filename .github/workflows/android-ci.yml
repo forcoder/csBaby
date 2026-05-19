@@ -133,7 +133,7 @@ jobs:
           echo "📦 构建版本: v$VERSION_NAME ($VERSION_CODE)"
 
       - name: 构建 Debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew assembleDebug --no-daemon --stacktrace --no-build-cache -Dkotlin.compiler.execution.strategy=in-process
 
       - name: 重命名 APK
         run: |
