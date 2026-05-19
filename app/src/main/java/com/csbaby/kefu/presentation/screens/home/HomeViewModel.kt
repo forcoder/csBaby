@@ -1,17 +1,24 @@
 package com.csbaby.kefu.presentation.screens.home
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.csbaby.kefu.data.local.PreferencesManager
 import com.csbaby.kefu.domain.model.ReplyHistory
 import com.csbaby.kefu.domain.repository.KeywordRuleRepository
 import com.csbaby.kefu.domain.repository.ReplyHistoryRepository
+import com.csbaby.kefu.infrastructure.window.FloatingWindowService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 data class MonitoredAppUiModel(
@@ -32,6 +39,7 @@ data class HomeUiState(
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val preferencesManager: PreferencesManager,
     private val replyHistoryRepository: ReplyHistoryRepository,
     private val keywordRuleRepository: KeywordRuleRepository
@@ -88,6 +96,26 @@ class HomeViewModel @Inject constructor(
     fun updateFloatingIconEnabled(enabled: Boolean) {
         viewModelScope.launch {
             preferencesManager.updateFloatingIconEnabled(enabled)
+            if (enabled) {
+                if (Settings.canDrawOverlays(appContext)) {
+                    FloatingWindowService.showIconOnly(appContext)
+                } else {
+                    Timber.w("悬浮窗权限未授予，引导用户授权")
+                    try {
+                        val intent = Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:${appContext.packageName}")
+                        ).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        appContext.startActivity(intent)
+                    } catch (e: Exception) {
+                        Timber.e(e, "无法打开悬浮窗权限设置")
+                    }
+                }
+            } else {
+                FloatingWindowService.hide(appContext)
+            }
         }
     }
 
