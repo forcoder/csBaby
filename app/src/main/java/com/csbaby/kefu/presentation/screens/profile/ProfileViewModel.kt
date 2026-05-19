@@ -1,5 +1,6 @@
 package com.csbaby.kefu.presentation.screens.profile
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.csbaby.kefu.BuildConfig
@@ -260,6 +261,7 @@ class ProfileViewModel @Inject constructor(
     // ========== 云端同步 ==========
 
     fun login(email: String, password: String) {
+        Log.d("ProfileViewModel", "login() 调用: email=$email")
         viewModelScope.launch {
             syncManager.login(email, password).fold(
                 onSuccess = { syncManager.fullSync(it.tenantId) },
@@ -272,6 +274,7 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun register(email: String, password: String, displayName: String) {
+        Log.d("ProfileViewModel", "register() 调用: email=$email")
         viewModelScope.launch {
             syncManager.register(email, password, displayName).fold(
                 onSuccess = { syncManager.fullSync(it.tenantId) },

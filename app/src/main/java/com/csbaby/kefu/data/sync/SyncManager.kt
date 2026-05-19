@@ -8,6 +8,7 @@ import com.csbaby.kefu.data.model.SyncAuthState
 import com.csbaby.kefu.data.remote.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import android.util.Log
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -62,9 +63,11 @@ class SyncManager @Inject constructor(
     // ========== 认证 ==========
 
     suspend fun login(email: String, password: String): Result<SyncAuthState> {
+        Log.d("SyncManager", "login() 开始: email=$email")
         return try {
             _syncState.value = SyncState.Syncing("正在登录...")
             val response = syncApiService.login(LoginRequest(email, password))
+            Log.d("SyncManager", "login() 响应: isSuccess=${response.isSuccess}, msg=${response.message}")
             if (response.isSuccess && response.data != null) {
                 val auth = SyncAuthState(
                     userId = response.data.userId,

@@ -9,6 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.util.Log
 import com.csbaby.kefu.data.sync.SyncState
 
 /**
@@ -205,6 +206,7 @@ fun SyncSettingsCard(
         LoginDialog(
             onDismiss = { showLoginDialog = false },
             onLogin = { email, password ->
+                Log.d("SyncSettingsCard", "登录按钮点击: email=$email")
                 onLogin(email, password)
                 showLoginDialog = false
             }
@@ -216,6 +218,7 @@ fun SyncSettingsCard(
         RegisterDialog(
             onDismiss = { showRegisterDialog = false },
             onRegister = { email, password, displayName ->
+                Log.d("SyncSettingsCard", "注册按钮点击: email=$email")
                 onRegister(email, password, displayName)
                 showRegisterDialog = false
             }
