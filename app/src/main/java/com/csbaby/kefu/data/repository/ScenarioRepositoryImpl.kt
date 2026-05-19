@@ -3,6 +3,7 @@ package com.csbaby.kefu.data.repository
 import com.csbaby.kefu.data.local.EntityMapper.toDomain
 import com.csbaby.kefu.data.local.EntityMapper.toEntity
 import com.csbaby.kefu.data.local.dao.ScenarioDao
+import com.csbaby.kefu.data.sync.SyncManager
 import com.csbaby.kefu.domain.model.Scenario
 import com.csbaby.kefu.domain.repository.ScenarioRepository
 import kotlinx.coroutines.flow.Flow
@@ -12,7 +13,8 @@ import javax.inject.Singleton
 
 @Singleton
 class ScenarioRepositoryImpl @Inject constructor(
-    private val scenarioDao: ScenarioDao
+    private val scenarioDao: ScenarioDao,
+    private val syncManager: SyncManager
 ) : ScenarioRepository {
 
     override fun getAllScenarios(): Flow<List<Scenario>> {
@@ -26,14 +28,18 @@ class ScenarioRepositoryImpl @Inject constructor(
     }
 
     override suspend fun insertScenario(scenario: Scenario): Long {
-        return scenarioDao.insertScenario(scenario.toEntity())
+        val id = scenarioDao.insertScenario(scenario.toEntity())
+        syncManager.triggerSync()
+        return id
     }
 
     override suspend fun updateScenario(scenario: Scenario) {
         scenarioDao.updateScenario(scenario.toEntity())
+        syncManager.triggerSync()
     }
 
     override suspend fun deleteScenario(id: Long) {
         scenarioDao.deleteScenario(scenarioDao.getScenarioById(id)!!)
+        syncManager.triggerSync()
     }
 }

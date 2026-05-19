@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.csbaby.kefu.data.sync.SyncManager
+import com.csbaby.kefu.data.sync.SyncWorker
 import com.csbaby.kefu.infrastructure.ota.OtaScheduler
 import com.csbaby.kefu.infrastructure.reply.ReplyOrchestrator
 import dagger.hilt.android.HiltAndroidApp
@@ -64,6 +65,14 @@ class KefuApplication : Application(), Configuration.Provider {
             } catch (e: Exception) {
                 Timber.e(e, "Failed to schedule OTA updates")
                 Log.e(TAG, "Failed to schedule OTA updates", e)
+            }
+
+            // 调度兜底同步 Worker（每 15 分钟，有网时）
+            try {
+                SyncWorker.schedule(this)
+                Timber.d("SyncWorker scheduled")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to schedule SyncWorker")
             }
 
             // 恢复同步登录状态

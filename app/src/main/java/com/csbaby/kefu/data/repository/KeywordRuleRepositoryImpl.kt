@@ -5,6 +5,7 @@ import com.csbaby.kefu.data.local.EntityMapper.toEntity
 import com.csbaby.kefu.data.local.dao.KeywordRuleDao
 import com.csbaby.kefu.data.local.dao.ScenarioDao
 import com.csbaby.kefu.data.local.entity.RuleScenarioCrossRef
+import com.csbaby.kefu.data.sync.SyncManager
 import com.csbaby.kefu.domain.model.KeywordRule
 import com.csbaby.kefu.domain.repository.KeywordRuleRepository
 import kotlinx.coroutines.flow.Flow
@@ -15,7 +16,8 @@ import javax.inject.Singleton
 @Singleton
 class KeywordRuleRepositoryImpl @Inject constructor(
     private val keywordRuleDao: KeywordRuleDao,
-    private val scenarioDao: ScenarioDao
+    private val scenarioDao: ScenarioDao,
+    private val syncManager: SyncManager
 ) : KeywordRuleRepository {
 
     override fun getAllRules(): Flow<List<KeywordRule>> {
@@ -63,32 +65,34 @@ class KeywordRuleRepositoryImpl @Inject constructor(
 
     override suspend fun insertRule(rule: KeywordRule): Long {
         val id = keywordRuleDao.insertRule(rule.toEntity())
-        // Update scenario relations
         if (rule.applicableScenarios.isNotEmpty()) {
             rule.applicableScenarios.forEach { scenarioId ->
                 scenarioDao.insertRuleScenarioRelation(RuleScenarioCrossRef(id, scenarioId))
             }
         }
+        syncManager.triggerSync()
         return id
     }
 
     override suspend fun updateRule(rule: KeywordRule) {
         keywordRuleDao.updateRule(rule.toEntity())
-        // Update scenario relations
         scenarioDao.deleteRelationsForRule(rule.id)
         rule.applicableScenarios.forEach { scenarioId ->
             scenarioDao.insertRuleScenarioRelation(RuleScenarioCrossRef(rule.id, scenarioId))
         }
+        syncManager.triggerSync()
     }
 
     override suspend fun deleteRule(id: Long) {
         scenarioDao.deleteRelationsForRule(id)
         keywordRuleDao.deleteById(id)
+        syncManager.triggerSync()
     }
 
     override suspend fun deleteAllRules() {
         scenarioDao.deleteAllRelations()
         keywordRuleDao.deleteAllRules()
+        syncManager.triggerSync()
     }
 
     override suspend fun getRuleCount(): Int = keywordRuleDao.getRuleCount()
@@ -105,5 +109,6 @@ class KeywordRuleRepositoryImpl @Inject constructor(
         scenarioIds.forEach { scenarioId ->
             scenarioDao.insertRuleScenarioRelation(RuleScenarioCrossRef(ruleId, scenarioId))
         }
+        syncManager.triggerSync()
     }
 }

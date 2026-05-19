@@ -67,15 +67,7 @@ class ModelViewModel @Inject constructor(
 
     private fun triggerAutoSync() {
         if (syncManager.isLoggedIn()) {
-            syncManager.currentTenantId()?.let { tenantId ->
-                viewModelScope.launch {
-                    try {
-                        syncManager.pushLocalChanges(tenantId, 0L)
-                    } catch (e: Exception) {
-                        timber.log.Timber.w(e, "AI模型配置自动同步失败")
-                    }
-                }
-            }
+            syncManager.triggerSync()
         }
     }
 

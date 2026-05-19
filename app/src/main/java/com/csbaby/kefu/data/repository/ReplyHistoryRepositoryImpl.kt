@@ -3,6 +3,7 @@ package com.csbaby.kefu.data.repository
 import com.csbaby.kefu.data.local.EntityMapper.toDomain
 import com.csbaby.kefu.data.local.EntityMapper.toEntity
 import com.csbaby.kefu.data.local.dao.ReplyHistoryDao
+import com.csbaby.kefu.data.sync.SyncManager
 import com.csbaby.kefu.domain.model.ReplyHistory
 import com.csbaby.kefu.domain.repository.ReplyHistoryRepository
 import kotlinx.coroutines.flow.Flow
@@ -12,7 +13,8 @@ import javax.inject.Singleton
 
 @Singleton
 class ReplyHistoryRepositoryImpl @Inject constructor(
-    private val replyHistoryDao: ReplyHistoryDao
+    private val replyHistoryDao: ReplyHistoryDao,
+    private val syncManager: SyncManager
 ) : ReplyHistoryRepository {
 
     override fun getRecentReplies(limit: Int): Flow<List<ReplyHistory>> {
@@ -32,15 +34,19 @@ class ReplyHistoryRepositoryImpl @Inject constructor(
     }
 
     override suspend fun insertReply(reply: ReplyHistory): Long {
-        return replyHistoryDao.insertReply(reply.toEntity())
+        val id = replyHistoryDao.insertReply(reply.toEntity())
+        // insertReply 高频调用（每次生成回复），不触发同步，由兜底 Worker 处理
+        return id
     }
 
     override suspend fun updateFinalReply(id: Long, finalReply: String) {
         replyHistoryDao.updateFinalReply(id, finalReply)
+        syncManager.triggerSync()
     }
 
     override suspend fun deleteReply(id: Long) {
         replyHistoryDao.deleteById(id)
+        syncManager.triggerSync()
     }
 
     override suspend fun getStyleAppliedReplies(limit: Int): List<ReplyHistory> {
