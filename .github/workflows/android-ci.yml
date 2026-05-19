@@ -1,4 +1,4 @@
-name: Android CI
+name: Android CI - 编译最新版安卓客户端
 
 on:
   push:
@@ -7,34 +7,224 @@ on:
       - 'app/**'
       - 'gradle/**'
       - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+  pull_request:
+    branches: [main, master]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
-    name: Build & Upload APK
-    runs-on: windows-latest
+  # ========== 代码质量检查 ==========
+  lint:
+    name: 代码检查
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - name: 检出代码
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - name: 设置 JDK 17
+        uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
           java-version: '17'
+          distribution: 'temurin'
 
-      - uses: actions/cache@v4
+      - name: 缓存 Gradle
+        uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
-      - name: Build Debug APK
-        run: ./gradlew.bat assembleDebug --no-daemon
+      - name: 授权 gradlew
+        run: chmod +x ./gradlew
 
-      - name: Upload APK Artifact
+      - name: 运行 Lint 检查
+        run: ./gradlew lintDebug --no-daemon --stacktrace
+        continue-on-error: true
+
+  # ========== 单元测试 ==========
+  test:
+    name: 单元测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 缓存 Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: 授权 gradlew
+        run: chmod +x ./gradlew
+
+      - name: 运行单元测试
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+        continue-on-error: true
+
+  # ========== 构建 Debug APK ==========
+  build-debug:
+    name: 构建 Debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: [lint]
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: 授权 gradlew
+        run: chmod +x ./gradlew
+
+      - name: 缓存 Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: 读取版本信息
+        id: version
+        run: |
+          VERSION_CODE=$(grep 'APP_VERSION_CODE' gradle.properties | cut -d'=' -f2)
+          VERSION_NAME=$(grep 'APP_VERSION_NAME' gradle.properties | cut -d'=' -f2)
+          echo "code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "📦 构建版本: v$VERSION_NAME ($VERSION_CODE)"
+
+      - name: 构建 Debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: 重命名 APK
+        run: |
+          APK_SRC="app/build/outputs/apk/debug/app-debug.apk"
+          APK_NAME="csBaby-v${{ steps.version.outputs.name }}-debug.apk"
+          APK_DST="app/build/outputs/apk/debug/$APK_NAME"
+          cp "$APK_SRC" "$APK_DST"
+          echo "apk_path=$APK_DST" >> $GITHUB_ENV
+          echo "apk_name=$APK_NAME" >> $GITHUB_ENV
+
+      - name: 上传 Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: csBaby-v1.2.0-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: csBaby-debug-apk
+          path: app/build/outputs/apk/debug/csBaby-*.apk
           retention-days: 30
+
+  # ========== 构建 Release APK ==========
+  build-release:
+    name: 构建 Release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: [test]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: 授权 gradlew
+        run: chmod +x ./gradlew
+
+      - name: 缓存 Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: 读取版本信息
+        id: version
+        run: |
+          VERSION_CODE=$(grep 'APP_VERSION_CODE' gradle.properties | cut -d'=' -f2)
+          VERSION_NAME=$(grep 'APP_VERSION_NAME' gradle.properties | cut -d'=' -f2)
+          echo "code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "📦 构建版本: v$VERSION_NAME ($VERSION_CODE)"
+
+      - name: 构建 Release APK
+        run: |
+          ./gradlew assembleRelease --no-daemon -PskipVersionIncrement -PskipUpload \
+            --stacktrace
+
+      - name: 重命名 Release APK
+        id: rename
+        run: |
+          APK_SRC="app/build/outputs/apk/release/app-release-unsigned.apk"
+          # 兼容已配置签名的场景
+          [ -f "app/build/outputs/apk/release/app-release.apk" ] && \
+            APK_SRC="app/build/outputs/apk/release/app-release.apk"
+          APK_NAME="csBaby-v${{ steps.version.outputs.name }}.apk"
+          APK_DST="app/build/outputs/apk/release/$APK_NAME"
+          mv "$APK_SRC" "$APK_DST"
+          echo "apk_path=$APK_DST" >> $GITHUB_OUTPUT
+          echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
+          echo "APK_SIZE=$(du -sh $APK_DST | cut -f1)" >> $GITHUB_ENV
+
+      - name: 计算 MD5
+        id: md5
+        run: |
+          MD5=$(md5sum "${{ steps.rename.outputs.apk_path }}" | awk '{print $1}')
+          SIZE=$(stat -c%s "${{ steps.rename.outputs.apk_path }}")
+          echo "md5=$MD5" >> $GITHUB_OUTPUT
+          echo "size=$SIZE" >> $GITHUB_OUTPUT
+
+      - name: 上传 Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: csBaby-release-apk
+          path: app/build/outputs/apk/release/csBaby-*.apk
+          retention-days: 90
+
+      - name: 输出构建摘要
+        run: |
+          echo "## ✅ 构建完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 字段 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| 版本 | v${{ steps.version.outputs.name }} (${{ steps.version.outputs.code }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| APK | ${{ steps.rename.outputs.apk_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 大小 | $APK_SIZE |" >> $GITHUB_STEP_SUMMARY
+          echo "| MD5 | ${{ steps.md5.outputs.md5 }} |" >> $GITHUB_STEP_SUMMARY
