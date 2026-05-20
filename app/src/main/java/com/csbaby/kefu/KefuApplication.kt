@@ -104,6 +104,28 @@ class KefuApplication : Application(), Configuration.Provider {
                     Timber.e(e, "Failed to auto-show floating icon on startup")
                 }
             }
+
+            // DEBUG: 自动登录测试账号，验证 API 连通性
+            if (BuildConfig.DEBUG) {
+                CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+                    try {
+                        val syncManager = entryPoint.syncManager()
+                        Log.d("KefuApp", "DEBUG: 尝试自动登录 test@test.com")
+                        val result = syncManager.login("test@test.com", "123456")
+                        result.fold(
+                            onSuccess = { auth ->
+                                Log.d("KefuApp", "DEBUG: 自动登录成功! tenant=${auth.tenantId}")
+                                syncManager.fullSync(auth.tenantId)
+                            },
+                            onFailure = { e ->
+                                Log.e("KefuApp", "DEBUG: 自动登录失败: ${e.message}")
+                            }
+                        )
+                    } catch (e: Exception) {
+                        Log.e("KefuApp", "DEBUG: 自动登录异常", e)
+                    }
+                }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Hilt EntryPoint bootstrap failed — app will run without auto-reply", e)
         }
