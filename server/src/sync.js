@@ -89,7 +89,7 @@ router.get('/changes', async (req, res) => {
     userStyleProfile: toProfile(queryOne('SELECT * FROM user_style_profiles WHERE tenant_id=? AND sync_version>?', [t, since])),
     appConfigs: queryAll('SELECT * FROM app_configs WHERE tenant_id=? AND sync_version>?', [t, since]).map(toApp),
     scenarios: queryAll('SELECT * FROM scenarios WHERE tenant_id=? AND sync_version>?', [t, since]).map(toScenario),
-    replyHistory: queryAll('SELECT * FROM reply_history WHERE tenant_id=? AND sync_version>?', [t, since]).map(toReply),
+    replyHistory: queryAll('SELECT * FROM reply_history WHERE tenant_id=? AND sync_version>? ORDER BY send_time DESC LIMIT 500', [t, since]).map(toReply),
     messageBlacklist: queryAll('SELECT * FROM message_blacklist WHERE tenant_id=? AND sync_version>?', [t, since]).map(toBlacklist),
     deletedIds: del, serverTime: now, hasMore: false, nextCursor: null
   }});
@@ -165,6 +165,7 @@ router.post('/push', async (req, res) => {
         else if (et==='scenarios') exec('UPDATE scenarios SET deleted=1,sync_version=? WHERE id=? AND tenant_id=?', [now,id,t]);
         else if (et==='reply_history') exec('UPDATE reply_history SET deleted=1,sync_version=? WHERE id=? AND tenant_id=?', [now,id,t]);
         else if (et==='message_blacklist') exec('UPDATE message_blacklist SET deleted=1,sync_version=? WHERE id=? AND tenant_id=?', [now,id,t]);
+        else if (et==='user_style_profiles') exec('UPDATE user_style_profiles SET deleted=1,sync_version=? WHERE user_id=? AND tenant_id=?', [now,id,t]);
       }
     }
 

@@ -232,6 +232,7 @@ class BackupManager @Inject constructor(
         scenarioDao.getScenariosByTenantSync(tenantId).forEach { scenarioDao.deleteById(it.id) }
         replyHistoryDao.getRepliesByTenantSync(tenantId).forEach { replyHistoryDao.deleteById(it.id) }
         messageBlacklistDao.getByTenantSync(tenantId).forEach { messageBlacklistDao.deleteById(it.id) }
+        userStyleProfileDao.getProfileByTenantIdSync(tenantId)?.let { userStyleProfileDao.deleteProfile(it) }
 
         // 写入备份数据
         for (map in content.keywordRules) {

@@ -329,6 +329,9 @@ class SyncManager @Inject constructor(
                 "scenarios" -> ids.forEach { scenarioDao.deleteById(it.toLong()) }
                 "reply_history" -> ids.forEach { replyHistoryDao.deleteById(it.toLong()) }
                 "message_blacklist" -> ids.forEach { messageBlacklistDao.deleteById(it.toLong()) }
+                "user_style_profiles" -> ids.forEach { id ->
+                    userStyleProfileDao.getProfileByUserIdSync(id)?.let { userStyleProfileDao.deleteProfile(it) }
+                }
             }
         }
     }
