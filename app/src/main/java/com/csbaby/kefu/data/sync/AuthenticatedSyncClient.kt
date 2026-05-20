@@ -22,12 +22,13 @@ class AuthenticatedSyncClient(
 
     init {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.BASIC
         }
 
         val authInterceptor = Interceptor { chain ->
             val original = chain.request()
             val token = authManager.currentAuthState?.accessToken
+            Log.d("AuthInterceptor", "url=${original.url}, hasToken=${token != null}")
             val request = if (token != null) {
                 original.newBuilder()
                     .header("Authorization", "Bearer $token")
@@ -40,8 +41,10 @@ class AuthenticatedSyncClient(
 
         val unauthorizedInterceptor = Interceptor { chain ->
             val response = chain.proceed(chain.request())
+            Log.d("AuthInterceptor", "responseCode=${response.code}, url=${response.request.url}")
             if (response.code == 401) {
                 val currentAuth = authManager.currentAuthState
+                Log.d("AuthInterceptor", "401 received, hasAuth=${currentAuth != null}, isRefreshing=$isRefreshing")
                 if (currentAuth != null && !isRefreshing) {
                     synchronized(this) {
                         if (!isRefreshing) {

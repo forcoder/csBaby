@@ -63,10 +63,13 @@ class SyncManager @Inject constructor(
     // ========== 认证 ==========
 
     suspend fun login(email: String, password: String): Result<SyncAuthState> {
-        Log.d("SyncManager", "login() 开始: email=$email")
+        Log.d("SyncManager", "login() 开始: email=$email, passwordLength=${password.length}")
         _syncState.value = SyncState.Syncing("正在登录...")
         return try {
-            val response = syncApiService.login(LoginRequest(email, password))
+            Log.d("SyncManager", "login() 调用 syncApiService.login, baseUrl=${BuildConfig.SYNC_BASE_URL}")
+            val request = LoginRequest(email, password)
+            Log.d("SyncManager", "login() request: email=${request.email}, passwordLength=${request.password.length}")
+            val response = syncApiService.login(request)
             Log.d("SyncManager", "login() 响应: isSuccess=${response.isSuccess}, msg=${response.message}")
             if (response.isSuccess && response.data != null) {
                 val auth = SyncAuthState(
