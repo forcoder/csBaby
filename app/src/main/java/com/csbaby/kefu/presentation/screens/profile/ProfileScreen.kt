@@ -34,14 +34,18 @@ fun ProfileScreen(
             )
         }
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
             // Style Learning Card - 可折叠，默认收起
             var expanded by remember { mutableStateOf(false) }
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -181,6 +185,7 @@ fun ProfileScreen(
                         }
                     }
                 }
+            }
             }
         }
     }
