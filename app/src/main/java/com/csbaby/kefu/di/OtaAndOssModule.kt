@@ -29,29 +29,6 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object OtaAndOssModule {
 
-    /**
-     * 为 OTA/Backup API 创建独立的 Retrofit 实例，使用同步服务器 base URL。
-     * 不能复用 NetworkModule 提供的 Retrofit（其 base URL 是 OpenAI）。
-     */
-    @Provides
-    @Singleton
-    fun provideSyncRetrofit(@ApplicationContext context: Context): Retrofit {
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
-        }
-        val client = OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .build()
-        return Retrofit.Builder()
-            .baseUrl(BuildConfig.SYNC_BASE_URL)
-            .client(client)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-    }
-
     @Provides
     @Singleton
     fun provideSyncApiService(retrofit: Retrofit, authManager: AuthManager): SyncApiService {
@@ -64,10 +41,15 @@ object OtaAndOssModule {
             }
             chain.proceed(request)
         }
-        val authenticatedClient = retrofit.newBuilder()
-            .addInterceptor(authInterceptor)
-            .build()
-        return authenticatedClient.create(SyncApiService::class.java)
+        // 创建带认证拦截器的 OkHttpClient
+        val client = retrofit.callFactory().let { factory ->
+            if (factory is OkHttpClient) {
+                factory.newBuilder().addInterceptor(authInterceptor).build()
+            } else {
+                OkHttpClient.Builder().addInterceptor(authInterceptor).build()
+            }
+        }
+        return retrofit.newBuilder().client(client).build().create(SyncApiService::class.java)
     }
 
     @Provides
