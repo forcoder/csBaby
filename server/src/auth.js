@@ -13,8 +13,8 @@ function genAccess(userId, tenantId) {
 
 function genRefresh(userId, tenantId) {
   const token = jwt.sign({ userId, tenantId, type: 'refresh', id: uuidv4() }, JWT_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
-  exec('INSERT OR REPLACE INTO refresh_tokens (token, user_id, tenant_id, expires_at) VALUES (?, ?, ?, ?)',
-    [token, userId, tenantId, Date.now() + REFRESH_TOKEN_EXPIRY * 1000]);
+  exec('INSERT OR REPLACE INTO refresh_tokens (token, user_id, tenant_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)',
+    [token, userId, tenantId, Date.now() + REFRESH_TOKEN_EXPIRY * 1000, Date.now()]);
   return token;
 }
 

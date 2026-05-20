@@ -28,8 +28,8 @@ async function getDb() {
 
 function initSchema(db) {
   db.run(`
-    CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, display_name TEXT NOT NULL, tenant_id TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000));
-    CREATE TABLE IF NOT EXISTS refresh_tokens (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, tenant_id TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000));
+    CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, display_name TEXT NOT NULL, tenant_id TEXT NOT NULL, created_at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS refresh_tokens (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, tenant_id TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS keyword_rules (id INTEGER PRIMARY KEY AUTOINCREMENT, keyword TEXT NOT NULL, match_type TEXT NOT NULL DEFAULT 'CONTAINS', reply_template TEXT NOT NULL, category TEXT NOT NULL DEFAULT '', target_type TEXT NOT NULL DEFAULT 'ALL', target_names_json TEXT NOT NULL DEFAULT '[]', priority INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, tenant_id TEXT NOT NULL, sync_version INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS ai_model_configs (id INTEGER PRIMARY KEY AUTOINCREMENT, model_type TEXT NOT NULL, model_name TEXT NOT NULL, api_key TEXT NOT NULL DEFAULT '', api_endpoint TEXT NOT NULL DEFAULT '', temperature REAL NOT NULL DEFAULT 0.7, max_tokens INTEGER NOT NULL DEFAULT 1000, is_default INTEGER NOT NULL DEFAULT 0, is_enabled INTEGER NOT NULL DEFAULT 1, monthly_cost REAL NOT NULL DEFAULT 0, last_used INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, tenant_id TEXT NOT NULL, sync_version INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS user_style_profiles (user_id TEXT PRIMARY KEY, formality_level REAL NOT NULL DEFAULT 0.5, enthusiasm_level REAL NOT NULL DEFAULT 0.5, professionalism_level REAL NOT NULL DEFAULT 0.5, word_count_preference INTEGER NOT NULL DEFAULT 50, common_phrases TEXT NOT NULL DEFAULT '', avoid_phrases TEXT NOT NULL DEFAULT '', learning_samples INTEGER NOT NULL DEFAULT 0, accuracy_score REAL NOT NULL DEFAULT 0, last_trained INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, tenant_id TEXT NOT NULL, sync_version INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0);
@@ -44,7 +44,7 @@ function initSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_rh_tenant ON reply_history(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_mb_tenant ON message_blacklist(tenant_id);
 
-    // OTA 版本管理
+    -- OTA 版本管理
     CREATE TABLE IF NOT EXISTS ota_versions (
       version_code INTEGER PRIMARY KEY,
       version_name TEXT NOT NULL,
@@ -60,7 +60,7 @@ function initSchema(db) {
       created_at INTEGER NOT NULL
     );
 
-    // 数据备份记录
+    -- 数据备份记录
     CREATE TABLE IF NOT EXISTS backup_records (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tenant_id TEXT NOT NULL,
