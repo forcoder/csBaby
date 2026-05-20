@@ -2,7 +2,8 @@ package com.csbaby.kefu.presentation.screens.profile
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -33,166 +34,150 @@ fun ProfileScreen(
             )
         }
     ) { padding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = padding.calculateTopPadding()),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 16.dp,
-                bottom = 16.dp + padding.calculateBottomPadding()
-            ),
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Style Learning Card - 可折叠，默认收起
-            item {
-                var expanded by remember { mutableStateOf(false) }
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { expanded = !expanded },
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = stringResource(R.string.style_learning),
-                                style = MaterialTheme.typography.titleMedium
+            var expanded by remember { mutableStateOf(false) }
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { expanded = !expanded },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.style_learning),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Icon(
+                            imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (expanded) "收起" else "展开"
+                        )
+                    }
+                    if (expanded) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "学习样本: ${uiState.learningSamples}个",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        if (uiState.learningSamples > 0) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = uiState.accuracyScore,
+                                modifier = Modifier.fillMaxWidth()
                             )
-                            Icon(
-                                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = if (expanded) "收起" else "展开"
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "准确率: ${(uiState.accuracyScore * 100).toInt()}%",
+                                style = MaterialTheme.typography.bodySmall
                             )
                         }
-                        if (expanded) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "学习样本: ${uiState.learningSamples}个",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            if (uiState.learningSamples > 0) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                LinearProgressIndicator(
-                                    progress = uiState.accuracyScore,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "准确率: ${(uiState.accuracyScore * 100).toInt()}%",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            StyleSlider(
-                                label = stringResource(R.string.formality),
-                                value = uiState.formalityLevel,
-                                onValueChange = { viewModel.updateFormality(it) }
-                            )
-                            StyleSlider(
-                                label = stringResource(R.string.enthusiasm),
-                                value = uiState.enthusiasmLevel,
-                                onValueChange = { viewModel.updateEnthusiasm(it) }
-                            )
-                            StyleSlider(
-                                label = stringResource(R.string.professionalism),
-                                value = uiState.professionalismLevel,
-                                onValueChange = { viewModel.updateProfessionalism(it) }
-                            )
-                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        StyleSlider(
+                            label = stringResource(R.string.formality),
+                            value = uiState.formalityLevel,
+                            onValueChange = { viewModel.updateFormality(it) }
+                        )
+                        StyleSlider(
+                            label = stringResource(R.string.enthusiasm),
+                            value = uiState.enthusiasmLevel,
+                            onValueChange = { viewModel.updateEnthusiasm(it) }
+                        )
+                        StyleSlider(
+                            label = stringResource(R.string.professionalism),
+                            value = uiState.professionalismLevel,
+                            onValueChange = { viewModel.updateProfessionalism(it) }
+                        )
                     }
                 }
             }
 
             // Settings Card
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "设置",
-                            style = MaterialTheme.typography.titleMedium
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "设置",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("启用风格学习")
+                        Switch(
+                            checked = uiState.styleLearningEnabled,
+                            onCheckedChange = { viewModel.toggleStyleLearning(it) }
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("启用风格学习")
-                            Switch(
-                                checked = uiState.styleLearningEnabled,
-                                onCheckedChange = { viewModel.toggleStyleLearning(it) }
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("自动发送")
-                            Switch(
-                                checked = uiState.autoSendEnabled,
-                                onCheckedChange = { viewModel.toggleAutoSend(it) }
-                            )
-                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("自动发送")
+                        Switch(
+                            checked = uiState.autoSendEnabled,
+                            onCheckedChange = { viewModel.toggleAutoSend(it) }
+                        )
                     }
                 }
             }
 
             // Cloud Sync Card
-            item {
-                SyncSettingsCard(
-                    syncState = uiState.syncState,
-                    isLoggedIn = uiState.isLoggedIn,
-                    currentTenantId = uiState.currentTenantId,
-                    pendingSyncCount = uiState.pendingSyncCount,
-                    lastSyncTime = uiState.lastSyncTime,
-                    onLogin = { email, password -> viewModel.login(email, password) },
-                    onRegister = { email, password, name -> viewModel.register(email, password, name) },
-                    onSync = { viewModel.syncNow() },
-                    onLogout = { viewModel.logout() }
-                )
-            }
+            SyncSettingsCard(
+                syncState = uiState.syncState,
+                isLoggedIn = uiState.isLoggedIn,
+                currentTenantId = uiState.currentTenantId,
+                pendingSyncCount = uiState.pendingSyncCount,
+                lastSyncTime = uiState.lastSyncTime,
+                onLogin = { email, password -> viewModel.login(email, password) },
+                onRegister = { email, password, name -> viewModel.register(email, password, name) },
+                onSync = { viewModel.syncNow() },
+                onLogout = { viewModel.logout() }
+            )
 
             // OTA Update Card
-            item {
-                OtaUpdateCard(
-                    viewModel = viewModel,
-                    uiState = uiState
-                )
-            }
+            OtaUpdateCard(
+                viewModel = viewModel,
+                uiState = uiState
+            )
 
             // Data Backup & Restore Card
-            item {
-                BackupCard(
-                    backupStatus = uiState.backupStatus,
-                    backupMessage = uiState.backupMessage,
-                    backupRecords = uiState.backupRecords,
-                    onUploadBackup = { viewModel.uploadBackup() },
-                    onFetchBackupList = { viewModel.fetchBackupList() },
-                    onRestoreBackup = { viewModel.restoreBackup(it) },
-                    onDeleteBackup = { viewModel.deleteBackup(it) },
-                    onClearStatus = { viewModel.clearBackupStatus() }
-                )
-            }
+            BackupCard(
+                backupStatus = uiState.backupStatus,
+                backupMessage = uiState.backupMessage,
+                backupRecords = uiState.backupRecords,
+                onUploadBackup = { viewModel.uploadBackup() },
+                onFetchBackupList = { viewModel.fetchBackupList() },
+                onRestoreBackup = { viewModel.restoreBackup(it) },
+                onDeleteBackup = { viewModel.deleteBackup(it) },
+                onClearStatus = { viewModel.clearBackupStatus() }
+            )
 
             // Common Phrases
             if (uiState.commonPhrases.isNotEmpty()) {
-                item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp)) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "常用短语",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        uiState.commonPhrases.take(5).forEach { phrase ->
                             Text(
-                                text = "常用短语",
-                                style = MaterialTheme.typography.titleMedium
+                                text = "• $phrase",
+                                style = MaterialTheme.typography.bodyMedium
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            uiState.commonPhrases.take(5).forEach { phrase ->
-                                Text(
-                                    text = "• $phrase",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
                         }
                     }
                 }
