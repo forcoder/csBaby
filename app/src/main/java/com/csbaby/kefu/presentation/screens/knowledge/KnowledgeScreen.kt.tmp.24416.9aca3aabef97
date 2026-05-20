@@ -444,8 +444,7 @@ fun RuleEditDialog(
                     onValueChange = { priority = it },
                     label = { Text(stringResource(R.string.priority)) },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    supportingText = { Text("0-999，数字越大优先级越高") }
+                    singleLine = true
                 )
 
                 var propertyScopeExpanded by remember { mutableStateOf(false) }
@@ -500,9 +499,6 @@ fun RuleEditDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    val trimmedKeyword = keyword.trim()
-                    val trimmedReply = replyTemplate.trim()
-                    if (trimmedKeyword.isBlank() || trimmedReply.isBlank()) return@TextButton
                     val targetNames = targetNamesText
                         .split(Regex("[,，\n]"))
                         .map { it.trim() }
@@ -516,9 +512,9 @@ fun RuleEditDialog(
 
                     val newRule = KeywordRule(
                         id = rule?.id ?: 0,
-                        keyword = trimmedKeyword,
+                        keyword = keyword.trim(),
                         matchType = matchType,
-                        replyTemplate = trimmedReply,
+                        replyTemplate = replyTemplate.trim(),
                         category = category.trim(),
                         targetType = resolvedTargetType,
                         targetNames = if (resolvedTargetType == RuleTargetType.ALL) emptyList() else targetNames,
@@ -529,8 +525,7 @@ fun RuleEditDialog(
                     )
 
                     onSave(newRule)
-                },
-                enabled = keyword.trim().isNotBlank() && replyTemplate.trim().isNotBlank()
+                }
             ) {
                 Text(stringResource(R.string.save))
             }

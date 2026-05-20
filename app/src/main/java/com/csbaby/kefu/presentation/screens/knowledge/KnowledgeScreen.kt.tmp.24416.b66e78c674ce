@@ -441,7 +441,10 @@ fun RuleEditDialog(
 
                 OutlinedTextField(
                     value = priority,
-                    onValueChange = { priority = it },
+                    onValueFilter = { newVal ->
+                        val filtered = newVal.toIntOrNull()
+                        if (filtered == null || (filtered in 0..999)) newVal else priority
+                    },
                     label = { Text(stringResource(R.string.priority)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,

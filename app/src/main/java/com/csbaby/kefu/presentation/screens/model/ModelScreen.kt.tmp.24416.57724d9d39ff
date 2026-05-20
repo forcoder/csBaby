@@ -16,8 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.csbaby.kefu.R
@@ -51,38 +49,22 @@ fun ModelScreen(
             }
         }
     ) { padding ->
-        if (uiState.models.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Settings, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(48.dp))
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("暂无 AI 模型", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("点击右下角 + 添加模型", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(items = uiState.models, key = { it.id }) { model ->
-                    ModelItem(
-                        model = model,
-                        testResult = uiState.testResults[model.id],
-                        onEdit = { editingModel = model },
-                        onDelete = { viewModel.deleteModel(model.id) },
-                        onSetDefault = { viewModel.setDefaultModel(model.id) },
-                        onTest = { viewModel.testConnection(model.id) }
-                    )
-                }
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(items = uiState.models, key = { it.id }) { model ->
+                ModelItem(
+                    model = model,
+                    testResult = uiState.testResults[model.id],
+                    onEdit = { editingModel = model },
+                    onDelete = { viewModel.deleteModel(model.id) },
+                    onSetDefault = { viewModel.setDefaultModel(model.id) },
+                    onTest = { viewModel.testConnection(model.id) }
+                )
             }
         }
     }
@@ -323,22 +305,19 @@ fun ModelEditDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    val temp = (temperature.toFloatOrNull() ?: 0.7f).coerceIn(0f, 2f)
-                    val tokens = (maxTokens.toIntOrNull() ?: 1000).coerceIn(1, 32768)
                     val newModel = AIModelConfig(
                         id = model?.id ?: 0,
                         modelType = modelType,
-                        modelName = modelName.trim(),
+                        modelName = modelName,
                         apiKey = apiKey,
-                        apiEndpoint = apiEndpoint.trim(),
-                        temperature = temp,
-                        maxTokens = tokens,
+                        apiEndpoint = apiEndpoint,
+                        temperature = temperature.toFloatOrNull() ?: 0.7f,
+                        maxTokens = maxTokens.toIntOrNull() ?: 1000,
                         isDefault = isDefault,
                         isEnabled = true
                     )
                     onSave(newModel)
-                },
-                enabled = modelName.trim().isNotBlank() && apiKey.isNotBlank()
+                }
             ) {
                 Text(stringResource(R.string.save))
             }

@@ -71,7 +71,7 @@ class SyncQueue @Inject constructor(
     }
 
     suspend fun clear() {
-        prefs.edit().remove(queueKey).commit()
+        prefs.edit().remove(queueKey).apply()
     }
 
     private fun getQueue(): List<SyncOperation> {

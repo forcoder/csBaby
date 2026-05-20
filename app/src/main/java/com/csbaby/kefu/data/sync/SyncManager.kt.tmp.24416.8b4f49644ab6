@@ -418,7 +418,6 @@ class SyncManager @Inject constructor(
 
     // ========== 写入即同步触发器 ==========
 
-    private val syncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var syncTriggerJob: Job? = null
 
     /**
@@ -428,7 +427,7 @@ class SyncManager @Inject constructor(
     fun triggerSync() {
         val tenantId = _authState.value?.tenantId ?: return
         syncTriggerJob?.cancel()
-        syncTriggerJob = syncScope.launch {
+        syncTriggerJob = CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             kotlinx.coroutines.delay(2000) // 2 秒 debounce
             incrementalSync(tenantId)
         }
