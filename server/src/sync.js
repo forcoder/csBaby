@@ -182,7 +182,37 @@ router.post('/push', async (req, res) => {
 // 冲突解决
 router.post('/resolve', async (req, res) => {
   await getDb();
-  res.json({ code:0, message:'成功', data:{ resolved:true, serverTime:Date.now() } });
+  const t = req.tenantId;
+  const { resolutions } = req.body;
+  if (!resolutions || !Array.isArray(resolutions)) {
+    return res.status(400).json({ code: 400, message: '缺少 resolutions 参数' });
+  }
+  try {
+    exec('BEGIN TRANSACTION');
+    for (const r of resolutions) {
+      const { entityType, entityId, strategy } = r;
+      if (strategy === 'SERVER_WINS') {
+        // 服务端已是最新的，客户端拉取时会覆盖，无需操作
+      } else if (strategy === 'CLIENT_WINS') {
+        // 客户端优先：将 sync_version 设为当前时间戳，下次同步时客户端数据会覆盖服务端
+        const now = Date.now();
+        if (entityType === 'keyword_rule') exec('UPDATE keyword_rules SET sync_version=? WHERE id=? AND tenant_id=?', [now, entityId, t]);
+        else if (entityType === 'ai_model_config') exec('UPDATE ai_model_configs SET sync_version=? WHERE id=? AND tenant_id=?', [now, entityId, t]);
+        else if (entityType === 'style_profile') exec('UPDATE user_style_profiles SET sync_version=? WHERE user_id=? AND tenant_id=?', [now, entityId, t]);
+        else if (entityType === 'app_config') exec('UPDATE app_configs SET sync_version=? WHERE package_name=? AND tenant_id=?', [now, entityId, t]);
+        else if (entityType === 'scenario') exec('UPDATE scenarios SET sync_version=? WHERE id=? AND tenant_id=?', [now, entityId, t]);
+        else if (entityType === 'reply_history') exec('UPDATE reply_history SET sync_version=? WHERE id=? AND tenant_id=?', [now, entityId, t]);
+        else if (entityType === 'message_blacklist') exec('UPDATE message_blacklist SET sync_version=? WHERE id=? AND tenant_id=?', [now, entityId, t]);
+      }
+      // MERGE 策略：客户端应在 push 时重新提交合并后的数据，此处无需操作
+    }
+    exec('COMMIT');
+    res.json({ code: 0, message: '成功', data: { resolved: true, serverTime: Date.now() } });
+  } catch (e) {
+    try { exec('ROLLBACK'); } catch (_) {}
+    console.error('resolve error:', e);
+    res.status(500).json({ code: 500, message: e.message });
+  }
 });
 
 module.exports = router;

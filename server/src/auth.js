@@ -33,6 +33,19 @@ function verifyRefresh(token) {
 
 async function register(email, password, displayName) {
   await getDb();
+  // 验证邮箱格式
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error('INVALID_EMAIL');
+  }
+  // 验证密码强度
+  if (!password || password.length < 6) {
+    throw new Error('WEAK_PASSWORD');
+  }
+  // 验证显示名称
+  if (!displayName || !displayName.trim()) {
+    throw new Error('INVALID_DISPLAY_NAME');
+  }
+
   const existing = queryOne('SELECT id FROM users WHERE email = ?', [email]);
   if (existing) throw new Error('EMAIL_EXISTS');
 
@@ -42,7 +55,7 @@ async function register(email, password, displayName) {
   const now = Date.now();
 
   exec('INSERT INTO users (id, email, password_hash, display_name, tenant_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [userId, email, hash, displayName, tenantId, now]);
+    [userId, email, hash, displayName.trim(), tenantId, now]);
   exec('INSERT OR IGNORE INTO sync_checkpoints (tenant_id) VALUES (?)', [tenantId]);
 
   return {
