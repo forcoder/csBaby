@@ -69,7 +69,8 @@ class SyncManager @Inject constructor(
         return try {
             Log.d("SyncManager", "login() 调用 syncApiService.login, baseUrl=${BuildConfig.SYNC_BASE_URL}")
             val request = LoginRequest(email, password)
-            Log.d("SyncManager", "login() request: email=${request.email}, passwordLength=${request.password.length}")
+            val requestJson = com.google.gson.Gson().toJson(request)
+            Log.d("SyncManager", "login() requestJson: $requestJson")
             val response = syncApiService.login(request)
             Log.d("SyncManager", "login() 响应: isSuccess=${response.isSuccess}, msg=${response.message}")
             if (response.isSuccess && response.data != null) {
