@@ -110,7 +110,15 @@ class KefuApplication : Application(), Configuration.Provider {
                 CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
                     try {
                         val syncManager = entryPoint.syncManager()
-                        Log.d("KefuApp", "DEBUG: 尝试自动登录 test@test.com")
+                        // 先注册新账号
+                        Log.d("KefuApp", "DEBUG: 尝试注册 test@test.com")
+                        val regResult = syncManager.register("test@test.com", "123456", "TestUser")
+                        regResult.fold(
+                            onSuccess = { Log.d("KefuApp", "DEBUG: 注册成功") },
+                            onFailure = { Log.d("KefuApp", "DEBUG: 注册失败(可能已存在): ${it.message}") }
+                        )
+                        // 然后登录
+                        Log.d("KefuApp", "DEBUG: 尝试登录 test@test.com")
                         val result = syncManager.login("test@test.com", "123456")
                         result.fold(
                             onSuccess = { auth ->
