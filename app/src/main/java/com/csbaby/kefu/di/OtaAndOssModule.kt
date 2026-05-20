@@ -4,6 +4,7 @@ import android.content.Context
 import com.csbaby.kefu.BuildConfig
 import com.csbaby.kefu.data.local.dao.*
 import com.csbaby.kefu.data.remote.OtaApiService
+import com.csbaby.kefu.data.remote.SyncApiService
 import com.csbaby.kefu.data.repository.OtaRepository
 import com.csbaby.kefu.data.repository.OtaRepositoryImpl
 import com.csbaby.kefu.data.sync.AuthManager
@@ -16,6 +17,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -48,6 +50,24 @@ object OtaAndOssModule {
             .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideSyncApiService(retrofit: Retrofit, authManager: AuthManager): SyncApiService {
+        val authInterceptor = Interceptor { chain ->
+            val token = authManager.currentAuthState?.accessToken
+            val request = if (token != null) {
+                chain.request().newBuilder().header("Authorization", "Bearer $token").build()
+            } else {
+                chain.request()
+            }
+            chain.proceed(request)
+        }
+        val authenticatedClient = retrofit.newBuilder()
+            .addInterceptor(authInterceptor)
+            .build()
+        return authenticatedClient.create(SyncApiService::class.java)
     }
 
     @Provides
@@ -95,6 +115,7 @@ object OtaAndOssModule {
     fun provideBackupManager(
         @ApplicationContext context: Context,
         authManager: AuthManager,
+        syncApiService: SyncApiService,
         keywordRuleDao: KeywordRuleDao,
         aiModelConfigDao: AIModelConfigDao,
         userStyleProfileDao: UserStyleProfileDao,
@@ -104,7 +125,7 @@ object OtaAndOssModule {
         messageBlacklistDao: MessageBlacklistDao
     ): BackupManager {
         return BackupManager(
-            context, authManager,
+            context, authManager, syncApiService,
             keywordRuleDao, aiModelConfigDao, userStyleProfileDao,
             appConfigDao, scenarioDao, replyHistoryDao, messageBlacklistDao
         )

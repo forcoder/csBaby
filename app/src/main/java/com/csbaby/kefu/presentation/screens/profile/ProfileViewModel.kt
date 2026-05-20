@@ -77,7 +77,6 @@ class ProfileViewModel @Inject constructor(
         observeSyncQueue()
         observeLastSyncTime()
         observeBackupState()
-        backupManager.setApiService(syncManager.syncClient.apiService)
     }
 
     private fun observeSyncState() {

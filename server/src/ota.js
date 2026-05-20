@@ -52,8 +52,11 @@ router.use(authMiddleware);
 router.get('/versions', async (req, res) => {
   try {
     await getDb();
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const offset = parseInt(req.query.offset) || 0;
     const versions = queryAll(
-      'SELECT id,version_code,version_name,channel,is_published,is_force_update,release_date,file_size,created_at FROM ota_versions ORDER BY version_code DESC LIMIT 50'
+      'SELECT id,version_code,version_name,channel,is_published,is_force_update,release_date,file_size,created_at FROM ota_versions ORDER BY version_code DESC LIMIT ? OFFSET ?',
+      [limit, offset]
     );
     res.json({ code: 0, message: '成功', data: versions });
   } catch (e) {

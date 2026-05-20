@@ -32,6 +32,7 @@ import javax.inject.Singleton
 class BackupManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val authManager: AuthManager,
+    private val syncApiService: SyncApiService,
     private val keywordRuleDao: KeywordRuleDao,
     private val aiModelConfigDao: AIModelConfigDao,
     private val userStyleProfileDao: UserStyleProfileDao,
@@ -41,13 +42,6 @@ class BackupManager @Inject constructor(
     private val messageBlacklistDao: MessageBlacklistDao
 ) {
     private val gson = Gson()
-
-    // 通过 SyncApiService 访问备份 API（需要 JWT 认证）
-    private var apiService: SyncApiService? = null
-
-    fun setApiService(service: SyncApiService) {
-        apiService = service
-    }
 
     private val _backupStatus = MutableStateFlow(BackupStatus.IDLE)
     val backupStatus: StateFlow<BackupStatus> = _backupStatus.asStateFlow()
@@ -64,9 +58,7 @@ class BackupManager @Inject constructor(
      * 上传数据备份到服务端
      */
     suspend fun uploadBackup(): Result<BackupRecord> = withContext(Dispatchers.IO) {
-        val api = apiService ?: return@withContext Result.failure(
-            Exception("未登录，无法备份")
-        )
+        val api = syncApiService
 
         try {
             _backupStatus.value = BackupStatus.EXPORTING
@@ -113,9 +105,7 @@ class BackupManager @Inject constructor(
      * 从服务端获取备份列表
      */
     suspend fun fetchBackupList(): Result<List<BackupRecord>> = withContext(Dispatchers.IO) {
-        val api = apiService ?: return@withContext Result.failure(
-            Exception("未登录，无法获取备份列表")
-        )
+        val api = syncApiService
         try {
             val response = api.getBackupList()
             if (response.isSuccess && response.data != null) {
@@ -134,9 +124,7 @@ class BackupManager @Inject constructor(
      * 下载并恢复备份
      */
     suspend fun downloadAndRestore(backupId: Int): Result<Unit> = withContext(Dispatchers.IO) {
-        val api = apiService ?: return@withContext Result.failure(
-            Exception("未登录，无法下载备份")
-        )
+        val api = syncApiService
 
         try {
             _backupStatus.value = BackupStatus.DOWNLOADING
@@ -175,7 +163,7 @@ class BackupManager @Inject constructor(
      * 删除服务端备份
      */
     suspend fun deleteBackup(backupId: Int): Result<Unit> = withContext(Dispatchers.IO) {
-        val api = apiService ?: return@withContext Result.failure(Exception("未登录"))
+        val api = syncApiService
         try {
             val response = api.deleteBackup(backupId)
             if (response.isSuccess) {

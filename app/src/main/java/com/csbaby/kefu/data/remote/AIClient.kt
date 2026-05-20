@@ -52,6 +52,7 @@ class AIClientImpl @Inject constructor(
             }
 
             val request = requestBuilder.build()
+            check(!android.os.Looper.getMainLooper().isCurrentThread()) { "AIClient 必须在非主线程调用" }
             val response = okHttpClient.newCall(request).execute()
             val responseBody = response.body?.string() ?: return Result.failure(Exception("Empty response"))
 
@@ -252,8 +253,13 @@ class AIClientImpl @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Failed to parse response")
-            extractContentFromResponse(responseBody)
+            Timber.e(e, "Failed to parse response, attempting fallback extraction")
+            val fallback = extractContentFromResponse(responseBody)
+            // 如果降级提取仍返回原始 responseBody（说明是无效 JSON），返回错误提示
+            if (fallback == responseBody) {
+                throw Exception("无法解析 AI 响应: ${e.message}")
+            }
+            fallback
         }
     }
 
