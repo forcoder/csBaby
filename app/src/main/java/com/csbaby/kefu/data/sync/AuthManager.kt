@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -73,8 +72,6 @@ class AuthManager @Inject constructor(
         authStore.edit { it.clear() }
         _currentAuth.value = null
     }
-
-    private val authScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** 收到 401 时调用，清除认证状态 */
     fun onUnauthorized() {
