@@ -1,5 +1,6 @@
 package com.csbaby.kefu.data.sync
 
+import com.csbaby.kefu.BuildConfig
 import com.csbaby.kefu.data.local.dao.*
 import com.csbaby.kefu.data.local.entity.MessageBlacklistEntity
 import com.csbaby.kefu.data.remote.SyncMessageBlacklist

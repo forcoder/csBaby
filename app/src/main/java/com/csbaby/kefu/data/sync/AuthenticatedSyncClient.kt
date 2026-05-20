@@ -1,5 +1,6 @@
 package com.csbaby.kefu.data.sync
 
+import android.util.Log
 import com.csbaby.kefu.BuildConfig
 import com.csbaby.kefu.data.model.SyncAuthState
 import com.csbaby.kefu.data.remote.RefreshTokenRequest
