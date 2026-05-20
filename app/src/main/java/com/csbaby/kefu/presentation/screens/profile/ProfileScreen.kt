@@ -46,6 +46,7 @@ fun ProfileScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
             // Style Learning Card
             Card(
@@ -59,7 +60,7 @@ fun ProfileScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     // Learning Progress
                     Text(
@@ -68,7 +69,7 @@ fun ProfileScreen(
                     )
 
                     if (uiState.learningSamples > 0) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         LinearProgressIndicator(
                             progress = uiState.accuracyScore,
                             modifier = Modifier.fillMaxWidth()
@@ -81,9 +82,9 @@ fun ProfileScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // Style Sliders
+                    // Style Sliders - 紧凑布局
                     StyleSlider(
                         label = stringResource(R.string.formality),
                         value = uiState.formalityLevel,
