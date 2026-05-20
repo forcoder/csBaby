@@ -2,7 +2,6 @@ package com.csbaby.kefu.presentation.screens.profile
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -14,14 +13,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.csbaby.kefu.R
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.platform.LocalContext
-import android.net.Uri
-import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,171 +32,146 @@ fun ProfileScreen(
             )
         }
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState())
+                .padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Style Learning Card
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.style_learning),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Learning Progress
-                    Text(
-                        text = "学习样本: ${uiState.learningSamples}个",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-
-                    if (uiState.learningSamples > 0) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        LinearProgressIndicator(
-                            progress = uiState.accuracyScore,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(modifier = Modifier.height(4.dp))
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "准确率: ${(uiState.accuracyScore * 100).toInt()}%",
-                            style = MaterialTheme.typography.bodySmall
+                            text = stringResource(R.string.style_learning),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "学习样本: ${uiState.learningSamples}个",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        if (uiState.learningSamples > 0) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = uiState.accuracyScore,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "准确率: ${(uiState.accuracyScore * 100).toInt()}%",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        StyleSlider(
+                            label = stringResource(R.string.formality),
+                            value = uiState.formalityLevel,
+                            onValueChange = { viewModel.updateFormality(it) }
+                        )
+                        StyleSlider(
+                            label = stringResource(R.string.enthusiasm),
+                            value = uiState.enthusiasmLevel,
+                            onValueChange = { viewModel.updateEnthusiasm(it) }
+                        )
+                        StyleSlider(
+                            label = stringResource(R.string.professionalism),
+                            value = uiState.professionalismLevel,
+                            onValueChange = { viewModel.updateProfessionalism(it) }
                         )
                     }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Style Sliders - 紧凑布局
-                    StyleSlider(
-                        label = stringResource(R.string.formality),
-                        value = uiState.formalityLevel,
-                        onValueChange = { viewModel.updateFormality(it) }
-                    )
-
-                    StyleSlider(
-                        label = stringResource(R.string.enthusiasm),
-                        value = uiState.enthusiasmLevel,
-                        onValueChange = { viewModel.updateEnthusiasm(it) }
-                    )
-
-                    StyleSlider(
-                        label = stringResource(R.string.professionalism),
-                        value = uiState.professionalismLevel,
-                        onValueChange = { viewModel.updateProfessionalism(it) }
-                    )
                 }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
 
             // Settings Card
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "设置",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("启用风格学习")
-                        Switch(
-                            checked = uiState.styleLearningEnabled,
-                            onCheckedChange = { viewModel.toggleStyleLearning(it) }
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "设置",
+                            style = MaterialTheme.typography.titleMedium
                         )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("自动发送")
-                        Switch(
-                            checked = uiState.autoSendEnabled,
-                            onCheckedChange = { viewModel.toggleAutoSend(it) }
-                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("启用风格学习")
+                            Switch(
+                                checked = uiState.styleLearningEnabled,
+                                onCheckedChange = { viewModel.toggleStyleLearning(it) }
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("自动发送")
+                            Switch(
+                                checked = uiState.autoSendEnabled,
+                                onCheckedChange = { viewModel.toggleAutoSend(it) }
+                            )
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
             // Cloud Sync Card
-            SyncSettingsCard(
-                syncState = uiState.syncState,
-                isLoggedIn = uiState.isLoggedIn,
-                currentTenantId = uiState.currentTenantId,
-                pendingSyncCount = uiState.pendingSyncCount,
-                lastSyncTime = uiState.lastSyncTime,
-                onLogin = { email, password -> viewModel.login(email, password) },
-                onRegister = { email, password, name -> viewModel.register(email, password, name) },
-                onSync = { viewModel.syncNow() },
-                onLogout = { viewModel.logout() }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
+            item {
+                SyncSettingsCard(
+                    syncState = uiState.syncState,
+                    isLoggedIn = uiState.isLoggedIn,
+                    currentTenantId = uiState.currentTenantId,
+                    pendingSyncCount = uiState.pendingSyncCount,
+                    lastSyncTime = uiState.lastSyncTime,
+                    onLogin = { email, password -> viewModel.login(email, password) },
+                    onRegister = { email, password, name -> viewModel.register(email, password, name) },
+                    onSync = { viewModel.syncNow() },
+                    onLogout = { viewModel.logout() }
+                )
+            }
 
             // OTA Update Card
-            OtaUpdateCard(
-                viewModel = viewModel,
-                uiState = uiState
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
+            item {
+                OtaUpdateCard(
+                    viewModel = viewModel,
+                    uiState = uiState
+                )
+            }
 
             // Data Backup & Restore Card
-            BackupCard(
-                backupStatus = uiState.backupStatus,
-                backupMessage = uiState.backupMessage,
-                backupRecords = uiState.backupRecords,
-                onUploadBackup = { viewModel.uploadBackup() },
-                onFetchBackupList = { viewModel.fetchBackupList() },
-                onRestoreBackup = { viewModel.restoreBackup(it) },
-                onDeleteBackup = { viewModel.deleteBackup(it) },
-                onClearStatus = { viewModel.clearBackupStatus() }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
+            item {
+                BackupCard(
+                    backupStatus = uiState.backupStatus,
+                    backupMessage = uiState.backupMessage,
+                    backupRecords = uiState.backupRecords,
+                    onUploadBackup = { viewModel.uploadBackup() },
+                    onFetchBackupList = { viewModel.fetchBackupList() },
+                    onRestoreBackup = { viewModel.restoreBackup(it) },
+                    onDeleteBackup = { viewModel.deleteBackup(it) },
+                    onClearStatus = { viewModel.clearBackupStatus() }
+                )
+            }
 
             // Common Phrases
             if (uiState.commonPhrases.isNotEmpty()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = "常用短语",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        uiState.commonPhrases.take(5).forEach { phrase ->
+                item {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                text = "• $phrase",
-                                style = MaterialTheme.typography.bodyMedium
+                                text = "常用短语",
+                                style = MaterialTheme.typography.titleMedium
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            uiState.commonPhrases.take(5).forEach { phrase ->
+                                Text(
+                                    text = "• $phrase",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
                         }
                     }
                 }
@@ -252,10 +218,7 @@ fun OtaUpdateCard(
             }
         )
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            // Header
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -273,8 +236,6 @@ fun OtaUpdateCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                
-                // Status Chip
                 AssistChip(
                     onClick = { },
                     label = { Text(uiState.updateStatus) },
@@ -288,15 +249,12 @@ fun OtaUpdateCard(
                     )
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
-            // Update Info
+
             if (uiState.availableUpdate != null) {
                 val update = uiState.availableUpdate
-                
                 Column {
-                    // Version Info
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -315,18 +273,13 @@ fun OtaUpdateCard(
                             }
                         }
                     }
-                    
                     Spacer(modifier = Modifier.height(4.dp))
-                    
                     Text(
                         text = "大小: ${update.fileSize}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    
                     Spacer(modifier = Modifier.height(8.dp))
-                    
-                    // Release Notes
                     if (update.releaseNotes.isNotBlank()) {
                         Text(
                             text = "更新内容:",
@@ -339,10 +292,7 @@ fun OtaUpdateCard(
                             modifier = Modifier.padding(top = 4.dp)
                         )
                     }
-                    
                     Spacer(modifier = Modifier.height(16.dp))
-                    
-                    // Action Buttons
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -358,7 +308,7 @@ fun OtaUpdateCard(
                             }
                         } else if (uiState.updateStatus.contains("下载完成")) {
                             Button(
-                                onClick = { /* 安装逻辑会在下载完成后自动触发 */ },
+                                onClick = { },
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.primary,
@@ -379,11 +329,10 @@ fun OtaUpdateCard(
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("下载更新")
                             }
-                            
                             OutlinedButton(
                                 onClick = { viewModel.checkForUpdate() },
                                 modifier = Modifier.weight(1f),
-                                enabled = !uiState.updateStatus.contains("检查") && 
+                                enabled = !uiState.updateStatus.contains("检查") &&
                                         !uiState.updateStatus.contains("下载")
                             ) {
                                 Icon(Icons.Default.Refresh, contentDescription = null)
@@ -394,7 +343,6 @@ fun OtaUpdateCard(
                     }
                 }
             } else {
-                // No update available
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.fillMaxWidth()
@@ -416,9 +364,7 @@ fun OtaUpdateCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    
                     Spacer(modifier = Modifier.height(16.dp))
-                    
                     Button(
                         onClick = { viewModel.checkForUpdate() },
                         enabled = !uiState.updateStatus.contains("检查")
@@ -429,8 +375,7 @@ fun OtaUpdateCard(
                     }
                 }
             }
-            
-            // Error Message
+
             uiState.errorMessage?.let { error ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
