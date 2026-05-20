@@ -92,15 +92,17 @@ class KefuApplication : Application(), Configuration.Provider {
             }
 
             // 如果用户已开启悬浮窗图标且有悬浮窗权限，启动时自动显示
-            try {
-                val prefs = entryPoint.preferencesManager()
-                val preferences = prefs.userPreferencesFlow.first()
-                if (preferences.floatingIconEnabled && Settings.canDrawOverlays(this@KefuApplication)) {
-                    Timber.d("悬浮窗图标已开启且有权限，应用启动时自动显示")
-                    FloatingWindowService.showIconOnly(this@KefuApplication)
+            CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+                try {
+                    val prefs = entryPoint.preferencesManager()
+                    val preferences = prefs.userPreferencesFlow.first()
+                    if (preferences.floatingIconEnabled && Settings.canDrawOverlays(this@KefuApplication)) {
+                        Timber.d("悬浮窗图标已开启且有权限，应用启动时自动显示")
+                        FloatingWindowService.showIconOnly(this@KefuApplication)
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to auto-show floating icon on startup")
                 }
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to auto-show floating icon on startup")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Hilt EntryPoint bootstrap failed — app will run without auto-reply", e)

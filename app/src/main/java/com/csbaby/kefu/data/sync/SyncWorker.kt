@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
 class SyncWorker(
     context: Context,
     workerParams: WorkerParameters
-) : CoroutineWorker(applicationContext, workerParams) {
+) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
         val entryPoint = EntryPointAccessors.fromApplication(
