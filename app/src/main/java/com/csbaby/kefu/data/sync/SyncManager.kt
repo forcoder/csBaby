@@ -132,12 +132,60 @@ class SyncManager @Inject constructor(
         }
     }
 
-    /** 应用启动时恢复登录状态 */
+    /** 应用启动时恢复登录状态，并自动触发全量同步（用于卸载重装后数据恢复） */
     suspend fun restoreAuthState() {
         val saved = authManager.getAuthState()
         if (saved != null && !saved.isExpired()) {
             _authState.value = saved
             Timber.d("恢复登录状态: tenant=${saved.tenantId}")
+
+            // 自动触发全量同步以恢复云端数据（首次登录/卸载重装场景）
+            try {
+                val result = fullSync(saved.tenantId)
+                if (result.isSuccess) {
+                    Timber.d("自动全量同步成功: tenant=${saved.tenantId}")
+                } else {
+                    Timber.w("自动全量同步失败: ${result.exceptionOrNull()?.message}")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "自动全量同步异常")
+            }
+        } else if (saved != null && saved.isExpired()) {
+            // Token 已过期，尝试用 refreshToken 刷新
+            Timber.d("Token 已过期，尝试刷新")
+            val refreshed = tryRefreshToken(saved.refreshToken)
+            if (refreshed != null) {
+                _authState.value = refreshed
+                authManager.saveAuthState(refreshed)
+                Timber.d("Token 刷新成功: tenant=${refreshed.tenantId}")
+                try {
+                    fullSync(refreshed.tenantId)
+                } catch (e: Exception) {
+                    Timber.e(e, "Token 刷新后全量同步异常")
+                }
+            } else {
+                Timber.w("Token 刷新失败，清除认证状态")
+                authManager.clearAuthState()
+            }
+        }
+    }
+
+    /** 用 refreshToken 刷新认证状态 */
+    private suspend fun tryRefreshToken(refreshToken: String): SyncAuthState? {
+        return try {
+            val response = syncApiService.refreshToken(RefreshTokenRequest(refreshToken))
+            if (response.isSuccess && response.data != null) {
+                SyncAuthState(
+                    userId = response.data.userId,
+                    tenantId = response.data.tenantId,
+                    accessToken = response.data.accessToken,
+                    refreshToken = response.data.refreshToken,
+                    expiresAt = response.data.expiresAt
+                )
+            } else null
+        } catch (e: Exception) {
+            Timber.e(e, "refreshToken 失败")
+            null
         }
     }
 

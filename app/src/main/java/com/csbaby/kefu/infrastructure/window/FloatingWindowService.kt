@@ -37,25 +37,29 @@ import com.csbaby.kefu.R
 import com.csbaby.kefu.data.local.PreferencesManager
 import com.csbaby.kefu.domain.model.ReplySource
 
+import com.csbaby.kefu.AppEntryPoint
 import com.csbaby.kefu.infrastructure.accessibility.ChatAutomationAccessibilityService
 import com.csbaby.kefu.infrastructure.reply.ReplyOrchestrator
 import com.csbaby.kefu.presentation.MainActivity
-import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-@AndroidEntryPoint
 class FloatingWindowService : Service() {
 
-    @Inject
-    lateinit var replyOrchestrator: ReplyOrchestrator
+    // 手动获取依赖（避免 Service 被系统回收重建时 @AndroidEntryPoint 注入失败）
+    private val replyOrchestrator: ReplyOrchestrator by lazy {
+        EntryPointAccessors.fromApplication(
+            applicationContext,
+            AppEntryPoint::class.java
+        ).replyOrchestrator()
+    }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -92,7 +96,7 @@ class FloatingWindowService : Service() {
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        Log.d(TAG, "FWS.onCreate() OK, replyOrchestrator injected=${::replyOrchestrator.isInitialized}")
+        Log.d(TAG, "FWS.onCreate() OK")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -228,6 +232,12 @@ class FloatingWindowService : Service() {
             Log.e(TAG, "FWS.showFloatingIconOnly: startForeground failed", e)
             Toast.makeText(this, "启动前台服务失败: ${e.message}", Toast.LENGTH_LONG).show()
             stopSelf()
+            return
+        }
+
+        // 如果悬浮窗已存在，不需要重复创建
+        if (floatingView != null) {
+            Log.d(TAG, "FWS.showFloatingIconOnly: view already exists, skip")
             return
         }
 
@@ -1344,6 +1354,7 @@ class FloatingWindowService : Service() {
 
         serviceScope.launch {
             try {
+                // replyOrchestrator 是 lazy 注入，首次访问时初始化
                 val results = replyOrchestrator.searchKnowledgeRules(query)
                 // 切回主线程更新 UI
                 mainHandler.post {

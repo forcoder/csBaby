@@ -154,22 +154,31 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
 
 
     private fun extractMessagingStyleText(extras: Bundle): String {
-        val rawMessages = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            extras.getParcelableArray(Notification.EXTRA_MESSAGES, Bundle::class.java).orEmpty()
-        } else {
-            @Suppress("DEPRECATION")
-            extras.getParcelableArray(Notification.EXTRA_MESSAGES)
-                ?.mapNotNull { it as? Bundle }
-                ?.toTypedArray()
-                .orEmpty()
+        val rawMessages = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                extras.getParcelableArray(Notification.EXTRA_MESSAGES, Bundle::class.java).orEmpty()
+            } else {
+                @Suppress("DEPRECATION")
+                extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+                    ?.mapNotNull { it as? Bundle }
+                    ?.toTypedArray()
+                    .orEmpty()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse EXTRA_MESSAGES", e)
+            emptyArray()
         }
 
         return rawMessages.asSequence()
             .mapNotNull { message ->
-                message.getCharSequence("text")
-                    ?.toString()
-                    ?.trim()
-                    ?.takeIf { it.isNotBlank() }
+                try {
+                    message.getCharSequence("text")
+                        ?.toString()
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                } catch (e: Exception) {
+                    null
+                }
             }
             .lastOrNull()
             .orEmpty()

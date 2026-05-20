@@ -15,13 +15,24 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import com.csbaby.kefu.data.local.PreferencesManager
 import com.csbaby.kefu.infrastructure.notification.NotificationListenerServiceImpl
+import com.csbaby.kefu.infrastructure.window.FloatingWindowService
 import com.csbaby.kefu.presentation.navigation.AppNavigation
 import com.csbaby.kefu.presentation.theme.KefuTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var preferencesManager: PreferencesManager
 
     private var pendingOverlayPermission = false
     private var pendingNotificationPermission = false
@@ -60,7 +71,18 @@ class MainActivity : ComponentActivity() {
         // 检查权限是否已到位，如果之前在等待用户授权，则继续引导
         if (pendingOverlayPermission && Settings.canDrawOverlays(this)) {
             pendingOverlayPermission = false
-            // 悬浮窗权限已授权 → 继续请求通知监听权限
+            // 悬浮窗权限已授权 → 检查用户是否配置了悬浮图标，有则自动显示
+            CoroutineScope(Dispatchers.Main + SupervisorJob()).launch {
+                try {
+                    val prefs = preferencesManager.userPreferencesFlow.first()
+                    if (prefs.floatingIconEnabled) {
+                        FloatingWindowService.showIconOnly(this@MainActivity)
+                    }
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+            // 继续请求通知监听权限
             requestNotificationListenerPermissionIfNeeded()
         } else if (pendingNotificationPermission &&
                    NotificationListenerServiceImpl.isNotificationAccessEnabled(this)) {
