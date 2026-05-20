@@ -165,14 +165,28 @@ class PerformanceMonitor @Inject constructor(
         private val totalTime: AtomicLong = AtomicLong(0),
         private val callCount: AtomicLong = AtomicLong(0)
     ) {
+        companion object {
+            private const val MAX_VALUES = 1000
+        }
+
         fun recordExecutionTime(time: Long) {
-            values.add(time)
+            synchronized(values) {
+                values.add(time)
+                if (values.size > MAX_VALUES) {
+                    values.subList(0, values.size - MAX_VALUES).clear()
+                }
+            }
             totalTime.addAndGet(time)
             callCount.incrementAndGet()
         }
-        
+
         fun recordValue(value: Long) {
-            values.add(value)
+            synchronized(values) {
+                values.add(value)
+                if (values.size > MAX_VALUES) {
+                    values.subList(0, values.size - MAX_VALUES).clear()
+                }
+            }
         }
         
         fun getAverage(): Double {

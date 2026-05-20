@@ -120,7 +120,7 @@ class OtaManager @Inject constructor(
                 request.setRequiresCharging(false)
             }
             
-            downloadId = downloadManager!!.enqueue(request)
+            downloadId = downloadManager?.enqueue(request) ?: return false
             
             // 注册下载完成广播接收器
             registerDownloadReceiver()
@@ -149,31 +149,32 @@ class OtaManager @Inject constructor(
                     val cursor = downloadManager?.query(query)
                     
                     if (cursor?.moveToFirst() == true) {
-                        val status = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS))
-                        
-                        when (status) {
-                            DownloadManager.STATUS_SUCCESSFUL -> {
-                                _updateStatus.value = UpdateStatus.DOWNLOADED
-                                
-                                // 获取下载文件的URI
-                                val uri = cursor.getString(cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI))
-                                if (uri != null) {
-                                    val downloadedFile = File(Uri.parse(uri).path ?: "")
-                                    _availableUpdate.value?.let { update ->
-                                        // 准备安装
-                                        prepareInstallation(downloadedFile)
+                        val statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                        if (statusIdx >= 0) {
+                            val status = cursor.getInt(statusIdx)
+                            when (status) {
+                                DownloadManager.STATUS_SUCCESSFUL -> {
+                                    _updateStatus.value = UpdateStatus.DOWNLOADED
+                                    val uriIdx = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
+                                    if (uriIdx >= 0) {
+                                        val uri = cursor.getString(uriIdx)
+                                        if (uri != null) {
+                                            val downloadedFile = File(Uri.parse(uri).path ?: "")
+                                            _availableUpdate.value?.let { update ->
+                                                prepareInstallation(downloadedFile)
+                                            }
+                                        }
                                     }
                                 }
-                            }
-                            
-                            DownloadManager.STATUS_FAILED -> {
-                                val reason = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_REASON))
-                                _errorMessage.value = "下载失败: ${getDownloadErrorReason(reason)}"
-                                _updateStatus.value = UpdateStatus.FAILED
+                                DownloadManager.STATUS_FAILED -> {
+                                    val reasonIdx = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
+                                    val reason = if (reasonIdx >= 0) cursor.getInt(reasonIdx) else -1
+                                    _errorMessage.value = "下载失败: ${getDownloadErrorReason(reason)}"
+                                    _updateStatus.value = UpdateStatus.FAILED
+                                }
                             }
                         }
                     }
-                    
                     cursor?.close()
                 }
             }

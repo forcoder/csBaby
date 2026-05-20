@@ -48,9 +48,10 @@ class AuthManager @Inject constructor(
 
     val authStateFlow: Flow<SyncAuthState?> = _currentAuth
 
+    private val authScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     init {
-        // 启动时从 DataStore 恢复认证状态
-        runBlocking {
+        authScope.launch {
             val saved = loadFromDataStore()
             _currentAuth.value = saved
         }

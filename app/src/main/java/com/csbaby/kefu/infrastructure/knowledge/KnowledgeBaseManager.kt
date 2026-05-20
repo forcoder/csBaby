@@ -130,8 +130,6 @@ class KnowledgeBaseManager @Inject constructor(
      */
     suspend fun initializeMatcher() {
         withContext(Dispatchers.IO) {
-            // Use first() for one-time initialization instead of collect()
-            // which would listen forever and never complete
             val rules = keywordRuleRepository.getEnabledRules().first()
             keywordMatcher.initialize(rules)
         }

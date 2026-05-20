@@ -2,6 +2,8 @@ package com.csbaby.kefu.infrastructure.knowledge
 
 import com.csbaby.kefu.domain.model.KeywordRule
 import com.csbaby.kefu.domain.model.MatchType
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -13,14 +15,17 @@ class KeywordMatcher @Inject constructor() {
 
     private val trieRoot = TrieNode()
     private var rules: List<KeywordRule> = emptyList()
+    private val trieMutex = Mutex()
 
     /**
      * Initialize the matcher with a list of rules.
      * Rebuilds the Trie tree for efficient matching.
      */
-    fun initialize(rules: List<KeywordRule>) {
-        this.rules = rules
-        rebuildTrie()
+    suspend fun initialize(rules: List<KeywordRule>) {
+        trieMutex.withLock {
+            this.rules = rules
+            rebuildTrie()
+        }
     }
 
     /**
