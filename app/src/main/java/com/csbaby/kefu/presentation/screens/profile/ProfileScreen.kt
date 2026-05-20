@@ -35,51 +35,71 @@ fun ProfileScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
+                .padding(top = padding.calculateTopPadding()),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = 16.dp,
+                bottom = 16.dp + padding.calculateBottomPadding()
+            ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Style Learning Card
+            // Style Learning Card - 可折叠，默认收起
             item {
+                var expanded by remember { mutableStateOf(false) }
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = stringResource(R.string.style_learning),
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "学习样本: ${uiState.learningSamples}个",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        if (uiState.learningSamples > 0) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            LinearProgressIndicator(
-                                progress = uiState.accuracyScore,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { expanded = !expanded },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "准确率: ${(uiState.accuracyScore * 100).toInt()}%",
-                                style = MaterialTheme.typography.bodySmall
+                                text = stringResource(R.string.style_learning),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Icon(
+                                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (expanded) "收起" else "展开"
                             )
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        StyleSlider(
-                            label = stringResource(R.string.formality),
-                            value = uiState.formalityLevel,
-                            onValueChange = { viewModel.updateFormality(it) }
-                        )
-                        StyleSlider(
-                            label = stringResource(R.string.enthusiasm),
-                            value = uiState.enthusiasmLevel,
-                            onValueChange = { viewModel.updateEnthusiasm(it) }
-                        )
-                        StyleSlider(
-                            label = stringResource(R.string.professionalism),
-                            value = uiState.professionalismLevel,
-                            onValueChange = { viewModel.updateProfessionalism(it) }
-                        )
+                        if (expanded) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "学习样本: ${uiState.learningSamples}个",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            if (uiState.learningSamples > 0) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                LinearProgressIndicator(
+                                    progress = uiState.accuracyScore,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "准确率: ${(uiState.accuracyScore * 100).toInt()}%",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            StyleSlider(
+                                label = stringResource(R.string.formality),
+                                value = uiState.formalityLevel,
+                                onValueChange = { viewModel.updateFormality(it) }
+                            )
+                            StyleSlider(
+                                label = stringResource(R.string.enthusiasm),
+                                value = uiState.enthusiasmLevel,
+                                onValueChange = { viewModel.updateEnthusiasm(it) }
+                            )
+                            StyleSlider(
+                                label = stringResource(R.string.professionalism),
+                                value = uiState.professionalismLevel,
+                                onValueChange = { viewModel.updateProfessionalism(it) }
+                            )
+                        }
                     }
                 }
             }
