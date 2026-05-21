@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { getDb, queryAll, queryOne, exec } = require('./db');
+const { getDb, queryAll, queryOne, exec, withTransaction } = require('./db');
 const { authMiddleware } = require('./auth');
 
 const router = Router();
@@ -133,47 +133,46 @@ router.post('/push', async (req, res) => {
   }
 
   try {
-    // 使用事务保证原子性
-    await exec('BEGIN');
-    for (const r of keywordRules)
-      await exec('INSERT INTO keyword_rules (id,keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (id) DO UPDATE SET keyword=$2,match_type=$3,reply_template=$4,category=$5,target_type=$6,target_names_json=$7,priority=$8,enabled=$9,created_at=$10,updated_at=$11,tenant_id=$12,sync_version=$13,deleted=$14',
-        [r.id,r.keyword,r.matchType,r.replyTemplate,r.category,r.targetType,r.targetNamesJson,r.priority,r.enabled?1:0,r.createdAt,r.updatedAt,t,now,r.deleted?1:0]);
-    for (const m of aiModelConfigs)
-      await exec('INSERT INTO ai_model_configs (id,model_type,model_name,api_key,api_endpoint,temperature,max_tokens,is_default,is_enabled,monthly_cost,last_used,created_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT (id) DO UPDATE SET model_type=$2,model_name=$3,api_key=$4,api_endpoint=$5,temperature=$6,max_tokens=$7,is_default=$8,is_enabled=$9,monthly_cost=$10,last_used=$11,created_at=$12,tenant_id=$13,sync_version=$14,deleted=$15',
-        [m.id,m.modelType,m.modelName,m.apiKey,m.apiEndpoint,m.temperature,m.maxTokens,m.isDefault?1:0,m.isEnabled?1:0,m.monthlyCost,m.lastUsed,m.createdAt,t,now,m.deleted?1:0]);
-    if (userStyleProfile)
-      await exec('INSERT INTO user_style_profiles (user_id,formality_level,enthusiasm_level,professionalism_level,word_count_preference,common_phrases,avoid_phrases,learning_samples,accuracy_score,last_trained,created_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (user_id) DO UPDATE SET formality_level=$2,enthusiasm_level=$3,professionalism_level=$4,word_count_preference=$5,common_phrases=$6,avoid_phrases=$7,learning_samples=$8,accuracy_score=$9,last_trained=$10,created_at=$11,tenant_id=$12,sync_version=$13,deleted=$14',
-        [userStyleProfile.userId,userStyleProfile.formalityLevel,userStyleProfile.enthusiasmLevel,userStyleProfile.professionalismLevel,userStyleProfile.wordCountPreference,userStyleProfile.commonPhrases,userStyleProfile.avoidPhrases,userStyleProfile.learningSamples,userStyleProfile.accuracyScore,userStyleProfile.lastTrained,userStyleProfile.createdAt,t,now,userStyleProfile.deleted?1:0]);
-    for (const a of appConfigs)
-      await exec('INSERT INTO app_configs (package_name,app_name,icon_uri,is_monitored,created_at,last_used,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (package_name) DO UPDATE SET app_name=$2,icon_uri=$3,is_monitored=$4,created_at=$5,last_used=$6,tenant_id=$7,sync_version=$8,deleted=$9',
-        [a.packageName,a.appName,a.iconUri||null,a.isMonitored?1:0,a.createdAt,a.lastUsed,t,now,a.deleted?1:0]);
-    for (const s of scenarios)
-      await exec('INSERT INTO scenarios (id,name,type,target_id,description,created_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO UPDATE SET name=$2,type=$3,target_id=$4,description=$5,created_at=$6,tenant_id=$7,sync_version=$8,deleted=$9',
-        [s.id,s.name,s.type,s.targetId||null,s.description||null,s.createdAt,t,now,s.deleted?1:0]);
-    for (const h of replyHistory)
-      await exec('INSERT INTO reply_history (id,source_app,original_message,generated_reply,final_reply,rule_matched_id,model_used_id,style_applied,send_time,modified,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT (id) DO UPDATE SET source_app=$2,original_message=$3,generated_reply=$4,final_reply=$5,rule_matched_id=$6,model_used_id=$7,style_applied=$8,send_time=$9,modified=$10,tenant_id=$11,sync_version=$12,deleted=$13',
-        [h.id,h.sourceApp,h.originalMessage,h.generatedReply,h.finalReply,h.ruleMatchedId||null,h.modelUsedId||null,h.styleApplied?1:0,h.sendTime,h.modified?1:0,t,now,h.deleted?1:0]);
-    for (const b of messageBlacklist)
-      await exec('INSERT INTO message_blacklist (id,type,value,description,package_name,created_at,is_enabled,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (id) DO UPDATE SET type=$2,value=$3,description=$4,package_name=$5,created_at=$6,is_enabled=$7,tenant_id=$8,sync_version=$9,deleted=$10',
-        [b.id,b.type,b.value,b.description,b.package_name||null,b.createdAt,b.isEnabled?1:0,t,now,b.deleted?1:0]);
+    // 使用事务保证原子性（所有写入在同一连接上执行）
+    await withTransaction(async (client) => {
+      for (const r of keywordRules)
+        await client.query('INSERT INTO keyword_rules (id,keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (id) DO UPDATE SET keyword=$2,match_type=$3,reply_template=$4,category=$5,target_type=$6,target_names_json=$7,priority=$8,enabled=$9,created_at=$10,updated_at=$11,tenant_id=$12,sync_version=$13,deleted=$14',
+          [r.id,r.keyword,r.matchType,r.replyTemplate,r.category,r.targetType,r.targetNamesJson,r.priority,r.enabled?1:0,r.createdAt,r.updatedAt,t,now,r.deleted?1:0]);
+      for (const m of aiModelConfigs)
+        await client.query('INSERT INTO ai_model_configs (id,model_type,model_name,api_key,api_endpoint,temperature,max_tokens,is_default,is_enabled,monthly_cost,last_used,created_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT (id) DO UPDATE SET model_type=$2,model_name=$3,api_key=$4,api_endpoint=$5,temperature=$6,max_tokens=$7,is_default=$8,is_enabled=$9,monthly_cost=$10,last_used=$11,created_at=$12,tenant_id=$13,sync_version=$14,deleted=$15',
+          [m.id,m.modelType,m.modelName,m.apiKey,m.apiEndpoint,m.temperature,m.maxTokens,m.isDefault?1:0,m.isEnabled?1:0,m.monthlyCost,m.lastUsed,m.createdAt,t,now,m.deleted?1:0]);
+      if (userStyleProfile)
+        await client.query('INSERT INTO user_style_profiles (user_id,formality_level,enthusiasm_level,professionalism_level,word_count_preference,common_phrases,avoid_phrases,learning_samples,accuracy_score,last_trained,created_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (user_id) DO UPDATE SET formality_level=$2,enthusiasm_level=$3,professionalism_level=$4,word_count_preference=$5,common_phrases=$6,avoid_phrases=$7,learning_samples=$8,accuracy_score=$9,last_trained=$10,created_at=$11,tenant_id=$12,sync_version=$13,deleted=$14',
+          [userStyleProfile.userId,userStyleProfile.formalityLevel,userStyleProfile.enthusiasmLevel,userStyleProfile.professionalismLevel,userStyleProfile.wordCountPreference,userStyleProfile.commonPhrases,userStyleProfile.avoidPhrases,userStyleProfile.learningSamples,userStyleProfile.accuracyScore,userStyleProfile.lastTrained,userStyleProfile.createdAt,t,now,userStyleProfile.deleted?1:0]);
+      for (const a of appConfigs)
+        await client.query('INSERT INTO app_configs (package_name,app_name,icon_uri,is_monitored,created_at,last_used,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (package_name) DO UPDATE SET app_name=$2,icon_uri=$3,is_monitored=$4,created_at=$5,last_used=$6,tenant_id=$7,sync_version=$8,deleted=$9',
+          [a.packageName,a.appName,a.iconUri||null,a.isMonitored?1:0,a.createdAt,a.lastUsed,t,now,a.deleted?1:0]);
+      for (const s of scenarios)
+        await client.query('INSERT INTO scenarios (id,name,type,target_id,description,created_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO UPDATE SET name=$2,type=$3,target_id=$4,description=$5,created_at=$6,tenant_id=$7,sync_version=$8,deleted=$9',
+          [s.id,s.name,s.type,s.targetId||null,s.description||null,s.createdAt,t,now,s.deleted?1:0]);
+      for (const h of replyHistory)
+        await client.query('INSERT INTO reply_history (id,source_app,original_message,generated_reply,final_reply,rule_matched_id,model_used_id,style_applied,send_time,modified,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT (id) DO UPDATE SET source_app=$2,original_message=$3,generated_reply=$4,final_reply=$5,rule_matched_id=$6,model_used_id=$7,style_applied=$8,send_time=$9,modified=$10,tenant_id=$11,sync_version=$12,deleted=$13',
+          [h.id,h.sourceApp,h.originalMessage,h.generatedReply,h.finalReply,h.ruleMatchedId||null,h.modelUsedId||null,h.styleApplied?1:0,h.sendTime,h.modified?1:0,t,now,h.deleted?1:0]);
+      for (const b of messageBlacklist)
+        await client.query('INSERT INTO message_blacklist (id,type,value,description,package_name,created_at,is_enabled,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (id) DO UPDATE SET type=$2,value=$3,description=$4,package_name=$5,created_at=$6,is_enabled=$7,tenant_id=$8,sync_version=$9,deleted=$10',
+          [b.id,b.type,b.value,b.description,b.package_name||null,b.createdAt,b.isEnabled?1:0,t,now,b.deleted?1:0]);
 
-    for (const [et, ids] of Object.entries(deletedIds)) {
-      for (const id of ids) {
-        if (et==='keyword_rules') await exec('UPDATE keyword_rules SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
-        else if (et==='ai_model_configs') await exec('UPDATE ai_model_configs SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
-        else if (et==='app_configs') await exec('UPDATE app_configs SET deleted=1,sync_version=$1 WHERE package_name=$2 AND tenant_id=$3', [now,id,t]);
-        else if (et==='scenarios') await exec('UPDATE scenarios SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
-        else if (et==='reply_history') await exec('UPDATE reply_history SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
-        else if (et==='message_blacklist') await exec('UPDATE message_blacklist SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
-        else if (et==='user_style_profiles') await exec('UPDATE user_style_profiles SET deleted=1,sync_version=$1 WHERE user_id=$2 AND tenant_id=$3', [now,id,t]);
+      for (const [et, ids] of Object.entries(deletedIds)) {
+        for (const id of ids) {
+          if (et==='keyword_rules') await client.query('UPDATE keyword_rules SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
+          else if (et==='ai_model_configs') await client.query('UPDATE ai_model_configs SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
+          else if (et==='app_configs') await client.query('UPDATE app_configs SET deleted=1,sync_version=$1 WHERE package_name=$2 AND tenant_id=$3', [now,id,t]);
+          else if (et==='scenarios') await client.query('UPDATE scenarios SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
+          else if (et==='reply_history') await client.query('UPDATE reply_history SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
+          else if (et==='message_blacklist') await client.query('UPDATE message_blacklist SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
+          else if (et==='user_style_profiles') await client.query('UPDATE user_style_profiles SET deleted=1,sync_version=$1 WHERE user_id=$2 AND tenant_id=$3', [now,id,t]);
+        }
       }
-    }
 
-    await exec('INSERT INTO sync_checkpoints (tenant_id,last_sync_time,is_syncing,last_error) VALUES ($1,$2,0,NULL) ON CONFLICT (tenant_id) DO UPDATE SET last_sync_time=$2,is_syncing=0,last_error=NULL', [t, now]);
-    await exec('COMMIT');
+      await client.query('INSERT INTO sync_checkpoints (tenant_id,last_sync_time,is_syncing,last_error) VALUES ($1,$2,0,NULL) ON CONFLICT (tenant_id) DO UPDATE SET last_sync_time=$2,is_syncing=0,last_error=NULL', [t, now]);
+    });
     res.json({ code:0, message:'成功', data:{ accepted:true, conflicts, newServerVersion:now, serverTime:now } });
   } catch (e) {
-    try { await exec('ROLLBACK'); } catch (_) {}
     console.error('push error:', e);
     res.status(500).json({ code:500, message:e.message });
   }
@@ -188,25 +187,25 @@ router.post('/resolve', async (req, res) => {
     return res.status(400).json({ code: 400, message: '缺少 resolutions 参数' });
   }
   try {
-    await exec('BEGIN TRANSACTION');
-    for (const r of resolutions) {
-      const { entityType, entityId, strategy } = r;
-      if (strategy === 'SERVER_WINS') {
-        // 服务端已是最新的，客户端拉取时会覆盖，无需操作
-      } else if (strategy === 'CLIENT_WINS') {
-        // 客户端优先：将 sync_version 设为当前时间戳，下次同步时客户端数据会覆盖服务端
-        const now = Date.now();
-        if (entityType === 'keyword_rule') await exec('UPDATE keyword_rules SET sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now, entityId, t]);
-        else if (entityType === 'ai_model_config') await exec('UPDATE ai_model_configs SET sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now, entityId, t]);
-        else if (entityType === 'style_profile') await exec('UPDATE user_style_profiles SET sync_version=$1 WHERE user_id=$2 AND tenant_id=$3', [now, entityId, t]);
-        else if (entityType === 'app_config') await exec('UPDATE app_configs SET sync_version=$1 WHERE package_name=$2 AND tenant_id=$3', [now, entityId, t]);
-        else if (entityType === 'scenario') await exec('UPDATE scenarios SET sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now, entityId, t]);
-        else if (entityType === 'reply_history') await exec('UPDATE reply_history SET sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now, entityId, t]);
-        else if (entityType === 'message_blacklist') await exec('UPDATE message_blacklist SET sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now, entityId, t]);
+    await withTransaction(async (client) => {
+      for (const r of resolutions) {
+        const { entityType, entityId, strategy } = r;
+        if (strategy === 'SERVER_WINS') {
+          // 服务端已是最新的，客户端拉取时会覆盖，无需操作
+        } else if (strategy === 'CLIENT_WINS') {
+          // 客户端优先：将 sync_version 设为当前时间戳
+          const now = Date.now();
+          if (entityType === 'keyword_rule') await client.query('UPDATE keyword_rules SET sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now, entityId, t]);
+          else if (entityType === 'ai_model_config') await client.query('UPDATE ai_model_configs SET sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now, entityId, t]);
+          else if (entityType === 'style_profile') await client.query('UPDATE user_style_profiles SET sync_version=$1 WHERE user_id=$2 AND tenant_id=$3', [now, entityId, t]);
+          else if (entityType === 'app_config') await client.query('UPDATE app_configs SET sync_version=$1 WHERE package_name=$2 AND tenant_id=$3', [now, entityId, t]);
+          else if (entityType === 'scenario') await client.query('UPDATE scenarios SET sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now, entityId, t]);
+          else if (entityType === 'reply_history') await client.query('UPDATE reply_history SET sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now, entityId, t]);
+          else if (entityType === 'message_blacklist') await client.query('UPDATE message_blacklist SET sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now, entityId, t]);
+        }
+        // MERGE 策略：客户端应在 push 时重新提交合并后的数据，此处无需操作
       }
-      // MERGE 策略：客户端应在 push 时重新提交合并后的数据，此处无需操作
-    }
-    await exec('COMMIT');
+    });
     res.json({ code: 0, message: '成功', data: { resolved: true, serverTime: Date.now() } });
   } catch (e) {
     try { await exec('ROLLBACK'); } catch (_) {}
