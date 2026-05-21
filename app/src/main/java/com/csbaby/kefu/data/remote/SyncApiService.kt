@@ -19,34 +19,34 @@ interface SyncApiService {
 
     // ========== 认证 ==========
 
-    @POST("api/auth/user/login")
+    @POST("auth/login")
     suspend fun login(@Body request: LoginRequest): ApiResponse<AuthResult>
 
-    @POST("api/auth/user/register")
+    @POST("auth/register")
     suspend fun register(@Body request: RegisterRequest): ApiResponse<AuthResult>
 
-    @POST("api/auth/user/login")
+    @POST("auth/refresh")
     suspend fun refreshToken(@Body request: RefreshTokenRequest): ApiResponse<AuthResult>
 
     // ========== 全量同步（首次登录 / 换手机恢复） ==========
 
-    @GET("api/sync/all")
+    @GET("sync/all")
     suspend fun getAllData(@Query("tenantId") tenantId: String): ApiResponse<SyncAllData>
 
     // ========== 增量同步 ==========
 
-    @GET("api/sync/changes")
+    @GET("sync/changes")
     suspend fun getChanges(
         @Query("tenantId") tenantId: String,
         @Query("since") since: Long
     ): ApiResponse<SyncChanges>
 
-    @POST("api/sync/push")
+    @POST("sync/push")
     suspend fun pushChanges(@Body request: PushChangesRequest): ApiResponse<PushChangesResult>
 
     // ========== 冲突解决 ==========
 
-    @POST("api/sync/resolve")
+    @POST("sync/resolve")
     suspend fun resolveConflict(@Body request: ConflictResolveRequest): ApiResponse<ConflictResolveResult>
 
     // ========== 数据备份 ==========
