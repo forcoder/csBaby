@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { getDb, queryAll, queryOne, exec, pool } = require('./db');
+const { getDb, queryAll, queryOne, exec } = require('./db');
 const { authMiddleware } = require('./auth');
 
 const router = Router();
@@ -97,19 +97,13 @@ router.get('/changes', async (req, res) => {
 
 // 增量：推送变更
 router.post('/push', async (req, res) => {
-  try {
-    const db = await getDb();
-    const t1 = await pool.query('SELECT 1 as test');
-    const t2 = await pool.query('INSERT INTO sync_checkpoints (tenant_id,last_sync_time,is_syncing,last_error) VALUES ($1,$2,0,NULL) ON CONFLICT (tenant_id) DO UPDATE SET last_sync_time=$2,is_syncing=0,last_error=NULL', ['debug-tenant', Date.now()]);
-    return res.status(200).json({ code: 0, message: 'UPSERT OK', rowCount: t2.rowCount });
-  } catch (e) {
-    return res.status(500).json({ code: 500, message: 'error: ' + e.message });
-  }
-
+  await getDb();
+  const t = req.tenantId;
   const { keywordRules=[], aiModelConfigs=[], userStyleProfile, appConfigs=[], scenarios=[], replyHistory=[], messageBlacklist=[], deletedIds={}, baseVersion=0 } = req.body;
   const now = Date.now();
   const conflicts = [];
 
+  // 冲突检测
   for (const r of keywordRules) {
     const e = await queryOne('SELECT sync_version,updated_at FROM keyword_rules WHERE id=$1 AND tenant_id=$2', [r.id, t]);
     if (e && e.sync_version > baseVersion) conflicts.push({ entityType:'keyword_rule', entityId:String(r.id), serverVersion:e.sync_version, serverUpdatedAt:e.updated_at });
@@ -140,7 +134,7 @@ router.post('/push', async (req, res) => {
   }
 
   try {
-    // 逐条执行（每条 INSERT ... ON CONFLICT 是原子操作）
+    // 逐条写入（每条 INSERT ... ON CONFLICT 是原子操作）
     for (const r of keywordRules)
       await exec('INSERT INTO keyword_rules (id,keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (id) DO UPDATE SET keyword=$2,match_type=$3,reply_template=$4,category=$5,target_type=$6,target_names_json=$7,priority=$8,enabled=$9,created_at=$10,updated_at=$11,tenant_id=$12,sync_version=$13,deleted=$14',
         [r.id,r.keyword,r.matchType,r.replyTemplate,r.category,r.targetType,r.targetNamesJson,r.priority,r.enabled?1:0,r.createdAt,r.updatedAt,t,now,r.deleted?1:0]);
@@ -175,13 +169,14 @@ router.post('/push', async (req, res) => {
       }
     }
 
-    // 先尝试 UPDATE，如果不存在则 INSERT
+    // checkpoint
     const existing = await queryOne('SELECT tenant_id FROM sync_checkpoints WHERE tenant_id=$1', [t]);
     if (existing) {
       await exec('UPDATE sync_checkpoints SET last_sync_time=$1,is_syncing=0,last_error=NULL WHERE tenant_id=$2', [now, t]);
     } else {
       await exec('INSERT INTO sync_checkpoints (tenant_id,last_sync_time,is_syncing,last_error) VALUES ($1,$2,0,NULL)', [t, now]);
     }
+
     res.json({ code:0, message:'成功', data:{ accepted:true, conflicts, newServerVersion:now, serverTime:now } });
   } catch (e) {
     console.error('push error:', e.message);
