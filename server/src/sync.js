@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { getDb, queryAll, queryOne, exec } = require('./db');
+const { getDb, queryAll, queryOne, exec, pool } = require('./db');
 const { authMiddleware } = require('./auth');
 
 const router = Router();
@@ -99,6 +99,15 @@ router.get('/changes', async (req, res) => {
 router.post('/push', async (req, res) => {
   await getDb();
   const t = req.tenantId;
+
+  // DEBUG: 测试 pool.query 是否正常
+  try {
+    const testResult = await pool.query('SELECT 1 as test');
+    console.log('pool.query test:', testResult.rows);
+  } catch (e) {
+    console.error('pool.query test failed:', e.message);
+  }
+
   const { keywordRules=[], aiModelConfigs=[], userStyleProfile, appConfigs=[], scenarios=[], replyHistory=[], messageBlacklist=[], deletedIds={}, baseVersion=0 } = req.body;
   const now = Date.now();
   const conflicts = [];
