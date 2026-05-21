@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { getDb, queryAll, queryOne, exec } = require('./db');
+const { getDb, queryAll, queryOne, exec, pool } = require('./db');
 const { authMiddleware } = require('./auth');
 
 const router = Router();
@@ -127,6 +127,8 @@ router.post('/push', async (req, res) => {
   const now = Date.now();
   const conflicts = [];
 
+  console.log('[sync/push] Starting push for tenant:', t, 'rules:', keywordRules.length);
+
   // 冲突检测
   for (const r of keywordRules) {
     const e = await queryOne('SELECT sync_version,updated_at FROM keyword_rules WHERE id=$1 AND tenant_id=$2', [r.id, t]);
@@ -158,6 +160,12 @@ router.post('/push', async (req, res) => {
   }
 
   try {
+    console.log('[sync/push] Before exec calls, checking pool state...');
+
+    // 测试：直接用 pool.query 而不用 exec
+    const testResult = await pool.query('SELECT 1 as val');
+    console.log('[sync/push] Pool query test OK:', testResult.rows[0]);
+
     // 逐条写入（不使用事务，避免连接池问题）
     for (const r of keywordRules) {
       await exec('INSERT INTO keyword_rules (id,keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (id) DO UPDATE SET keyword=EXCLUDED.keyword,match_type=EXCLUDED.match_type,reply_template=EXCLUDED.reply_template,category=EXCLUDED.category,target_type=EXCLUDED.target_type,target_names_json=EXCLUDED.target_names_json,priority=EXCLUDED.priority,enabled=EXCLUDED.enabled,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted',
