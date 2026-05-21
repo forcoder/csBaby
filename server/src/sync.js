@@ -100,7 +100,8 @@ router.post('/push', async (req, res) => {
   try {
     const db = await getDb();
     const t1 = await pool.query('SELECT 1 as test');
-    return res.status(200).json({ code: 0, message: 'pool.query OK', rows: t1.rows });
+    const t2 = await pool.query('UPDATE sync_checkpoints SET last_sync_time=$1 WHERE tenant_id=$2', [Date.now(), 'nonexistent']);
+    return res.status(200).json({ code: 0, message: 'UPDATE OK', rowCount: t2.rowCount });
   } catch (e) {
     return res.status(500).json({ code: 500, message: 'error: ' + e.message });
   }
