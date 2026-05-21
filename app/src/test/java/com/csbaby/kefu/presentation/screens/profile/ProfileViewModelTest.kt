@@ -1,9 +1,9 @@
 package com.csbaby.kefu.presentation.screens.profile
 
-import android.content.Context
 import com.csbaby.kefu.data.local.PreferencesManager
 import com.csbaby.kefu.data.model.BackupStatus
 import com.csbaby.kefu.data.model.SyncAuthState
+import com.csbaby.kefu.data.model.UpdateStatus
 import com.csbaby.kefu.data.sync.AuthManager
 import com.csbaby.kefu.data.sync.SyncManager
 import com.csbaby.kefu.data.sync.SyncState
@@ -61,22 +61,18 @@ class ProfileViewModelTest {
                 currentUserId = "test_user",
                 isFirstLaunch = false,
                 notificationPermissionAsked = false,
-                overlayPermissionAsked = false,
-                semanticSearchEnabled = true,
-                searchMode = "HYBRID",
-                themeMode = "system"
+                overlayPermissionAsked = false
             )
         )
         every { userStyleRepository.getProfile(any()) } returns flowOf(null)
-        every { otaManager.updateStatus } returns MutableStateFlow(com.csbaby.kefu.data.model.UpdateStatus.IDLE)
+        every { otaManager.updateStatus } returns MutableStateFlow(UpdateStatus.IDLE)
         every { otaManager.availableUpdate } returns MutableStateFlow(null)
         every { otaManager.errorMessage } returns MutableStateFlow(null)
-        every { otaManager.downloadProgress } returns MutableStateFlow(0f)
         every { syncManager.syncState } returns MutableStateFlow(SyncState.Idle)
         every { syncManager.lastSyncTime } returns flowOf(0L)
         every { syncManager.isLoggedIn() } returns false
-        every { authManager.authStateFlow } returns MutableStateFlow(null)
-        every { authManager.currentTenantId() } returns null
+        coEvery { authManager.authStateFlow } returns MutableStateFlow(null)
+        coEvery { authManager.currentTenantId() } returns null
         every { backupManager.backupStatus } returns MutableStateFlow(BackupStatus.IDLE)
         every { backupManager.backupMessage } returns MutableStateFlow("")
         every { backupManager.backupRecords } returns MutableStateFlow(emptyList())
@@ -193,7 +189,7 @@ class ProfileViewModelTest {
             learningSamples = 100,
             accuracyScore = 0.85f
         )
-        every { userStyleRepository.getProfile("test_user") } returns flowOf(profile)
+        coEvery { userStyleRepository.getProfile("test_user") } returns flowOf(profile)
 
         val viewModel = createViewModel()
         advanceUntilIdle()
@@ -213,6 +209,8 @@ class ProfileViewModelTest {
         advanceUntilIdle()
 
         viewModel.clearBackupStatus()
+        advanceUntilIdle()
+
         verify { backupManager.clearStatus() }
     }
 
@@ -248,6 +246,8 @@ class ProfileViewModelTest {
         advanceUntilIdle()
 
         viewModel.logout()
+        advanceUntilIdle()
+
         verify { syncManager.logout() }
     }
 
@@ -263,7 +263,7 @@ class ProfileViewModelTest {
 
     @Test
     fun `isLoggedIn reflects auth state`() = runTest {
-        every { authManager.authStateFlow } returns MutableStateFlow(
+        coEvery { authManager.authStateFlow } returns MutableStateFlow(
             SyncAuthState(
                 userId = "test_user",
                 tenantId = "test_tenant",

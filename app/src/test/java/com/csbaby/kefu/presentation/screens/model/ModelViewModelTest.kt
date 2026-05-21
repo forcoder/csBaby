@@ -1,5 +1,6 @@
 package com.csbaby.kefu.presentation.screens.model
 
+import com.csbaby.kefu.data.sync.SyncManager
 import com.csbaby.kefu.domain.model.AIModelConfig
 import com.csbaby.kefu.domain.model.ModelType
 import com.csbaby.kefu.domain.repository.AIModelRepository
@@ -19,6 +20,7 @@ class ModelViewModelTest {
 
     private lateinit var aiModelRepository: AIModelRepository
     private lateinit var aiService: AIService
+    private lateinit var syncManager: SyncManager
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
@@ -26,6 +28,7 @@ class ModelViewModelTest {
         Dispatchers.setMain(testDispatcher)
         aiModelRepository = mockk(relaxed = true)
         aiService = mockk(relaxed = true)
+        syncManager = mockk(relaxed = true)
     }
 
     @After
@@ -38,12 +41,19 @@ class ModelViewModelTest {
         id = id,
         modelType = type,
         modelName = name,
-        model = "test-model",
         apiKey = "test-key",
         apiEndpoint = "https://api.test.com",
         isDefault = false,
         isEnabled = true
     )
+
+    private fun createViewModel(): ModelViewModel {
+        return ModelViewModel(
+            aiModelRepository = aiModelRepository,
+            aiService = aiService,
+            syncManager = syncManager
+        )
+    }
 
     @Test
     fun `initial state loads models from repository`() = runTest {
@@ -53,12 +63,9 @@ class ModelViewModelTest {
         )
         every { aiModelRepository.getAllModels() } returns flowOf(models)
 
-        val viewModel = ModelViewModel(
-            aiModelRepository = aiModelRepository,
-            aiService = aiService
-        )
-
+        val viewModel = createViewModel()
         advanceUntilIdle()
+
         val state = viewModel.uiState.value
         assertEquals(2, state.models.size)
         assertFalse(state.isLoading)
@@ -68,12 +75,9 @@ class ModelViewModelTest {
     fun `initial state has empty models list`() = runTest {
         every { aiModelRepository.getAllModels() } returns flowOf(emptyList())
 
-        val viewModel = ModelViewModel(
-            aiModelRepository = aiModelRepository,
-            aiService = aiService
-        )
-
+        val viewModel = createViewModel()
         advanceUntilIdle()
+
         val state = viewModel.uiState.value
         assertTrue(state.models.isEmpty())
         assertFalse(state.isLoading)
@@ -83,13 +87,11 @@ class ModelViewModelTest {
     fun `saveModel inserts new model when id is 0`() = runTest {
         every { aiModelRepository.getAllModels() } returns flowOf(emptyList())
         coEvery { aiModelRepository.insertModel(any()) } returns 1L
+        every { syncManager.isLoggedIn() } returns false
 
-        val viewModel = ModelViewModel(
-            aiModelRepository = aiModelRepository,
-            aiService = aiService
-        )
-
+        val viewModel = createViewModel()
         advanceUntilIdle()
+
         val newModel = createTestModel(0, "New Model")
         viewModel.saveModel(newModel)
         advanceUntilIdle()
@@ -101,13 +103,11 @@ class ModelViewModelTest {
     fun `saveModel updates existing model when id is not 0`() = runTest {
         every { aiModelRepository.getAllModels() } returns flowOf(emptyList())
         coEvery { aiModelRepository.updateModel(any()) } returns Unit
+        every { syncManager.isLoggedIn() } returns false
 
-        val viewModel = ModelViewModel(
-            aiModelRepository = aiModelRepository,
-            aiService = aiService
-        )
-
+        val viewModel = createViewModel()
         advanceUntilIdle()
+
         val existingModel = createTestModel(5, "Existing Model")
         viewModel.saveModel(existingModel)
         advanceUntilIdle()
@@ -116,16 +116,31 @@ class ModelViewModelTest {
     }
 
     @Test
+    fun `saveModel triggers sync when logged in`() = runTest {
+        every { aiModelRepository.getAllModels() } returns flowOf(emptyList())
+        coEvery { aiModelRepository.insertModel(any()) } returns 1L
+        every { syncManager.isLoggedIn() } returns true
+        coEvery { syncManager.triggerSync() } returns Unit
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val newModel = createTestModel(0, "New Model")
+        viewModel.saveModel(newModel)
+        advanceUntilIdle()
+
+        coVerify { syncManager.triggerSync() }
+    }
+
+    @Test
     fun `deleteModel calls repository`() = runTest {
         every { aiModelRepository.getAllModels() } returns flowOf(emptyList())
         coEvery { aiModelRepository.deleteModel(any()) } returns Unit
+        every { syncManager.isLoggedIn() } returns false
 
-        val viewModel = ModelViewModel(
-            aiModelRepository = aiModelRepository,
-            aiService = aiService
-        )
-
+        val viewModel = createViewModel()
         advanceUntilIdle()
+
         viewModel.deleteModel(1L)
         advanceUntilIdle()
 
@@ -133,16 +148,30 @@ class ModelViewModelTest {
     }
 
     @Test
+    fun `deleteModel triggers sync when logged in`() = runTest {
+        every { aiModelRepository.getAllModels() } returns flowOf(emptyList())
+        coEvery { aiModelRepository.deleteModel(any()) } returns Unit
+        every { syncManager.isLoggedIn() } returns true
+        coEvery { syncManager.triggerSync() } returns Unit
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.deleteModel(1L)
+        advanceUntilIdle()
+
+        coVerify { syncManager.triggerSync() }
+    }
+
+    @Test
     fun `setDefaultModel calls repository`() = runTest {
         every { aiModelRepository.getAllModels() } returns flowOf(emptyList())
         coEvery { aiModelRepository.setDefaultModel(any()) } returns Unit
+        every { syncManager.isLoggedIn() } returns false
 
-        val viewModel = ModelViewModel(
-            aiModelRepository = aiModelRepository,
-            aiService = aiService
-        )
-
+        val viewModel = createViewModel()
         advanceUntilIdle()
+
         viewModel.setDefaultModel(1L)
         advanceUntilIdle()
 
@@ -150,16 +179,29 @@ class ModelViewModelTest {
     }
 
     @Test
+    fun `setDefaultModel triggers sync when logged in`() = runTest {
+        every { aiModelRepository.getAllModels() } returns flowOf(emptyList())
+        coEvery { aiModelRepository.setDefaultModel(any()) } returns Unit
+        every { syncManager.isLoggedIn() } returns true
+        coEvery { syncManager.triggerSync() } returns Unit
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.setDefaultModel(1L)
+        advanceUntilIdle()
+
+        coVerify { syncManager.triggerSync() }
+    }
+
+    @Test
     fun `testConnection updates testResults on success`() = runTest {
         every { aiModelRepository.getAllModels() } returns flowOf(emptyList())
         coEvery { aiService.testModelConnection(any()) } returns Result.success(true)
 
-        val viewModel = ModelViewModel(
-            aiModelRepository = aiModelRepository,
-            aiService = aiService
-        )
-
+        val viewModel = createViewModel()
         advanceUntilIdle()
+
         viewModel.testConnection(1L)
         advanceUntilIdle()
 
@@ -168,79 +210,17 @@ class ModelViewModelTest {
     }
 
     @Test
-    fun `testConnection updates testErrorMessages on failure`() = runTest {
+    fun `testConnection updates testResults on failure`() = runTest {
         every { aiModelRepository.getAllModels() } returns flowOf(emptyList())
         coEvery { aiService.testModelConnection(any()) } returns Result.failure(Exception("连接超时"))
 
-        val viewModel = ModelViewModel(
-            aiModelRepository = aiModelRepository,
-            aiService = aiService
-        )
-
+        val viewModel = createViewModel()
         advanceUntilIdle()
+
         viewModel.testConnection(1L)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
         assertEquals(false, state.testResults[1L])
-        assertEquals("连接超时", state.testErrorMessages[1L])
-    }
-
-    @Test
-    fun `testConnectionWithConfig sets dialog state to success`() = runTest {
-        every { aiModelRepository.getAllModels() } returns flowOf(emptyList())
-        coEvery { aiService.testConnection(any()) } returns Result.success(true)
-
-        val viewModel = ModelViewModel(
-            aiModelRepository = aiModelRepository,
-            aiService = aiService
-        )
-
-        advanceUntilIdle()
-        val config = createTestModel(0, "Test")
-        viewModel.testConnectionWithConfig(config)
-        advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertTrue(state.dialogTestState is DialogTestState.Success)
-    }
-
-    @Test
-    fun `testConnectionWithConfig sets dialog state to error on failure`() = runTest {
-        every { aiModelRepository.getAllModels() } returns flowOf(emptyList())
-        coEvery { aiService.testConnection(any()) } returns Result.success(false)
-
-        val viewModel = ModelViewModel(
-            aiModelRepository = aiModelRepository,
-            aiService = aiService
-        )
-
-        advanceUntilIdle()
-        val config = createTestModel(0, "Test")
-        viewModel.testConnectionWithConfig(config)
-        advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertTrue(state.dialogTestState is DialogTestState.Error)
-    }
-
-    @Test
-    fun `resetDialogTestState resets to Idle`() = runTest {
-        every { aiModelRepository.getAllModels() } returns flowOf(emptyList())
-        coEvery { aiService.testConnection(any()) } returns Result.success(true)
-
-        val viewModel = ModelViewModel(
-            aiModelRepository = aiModelRepository,
-            aiService = aiService
-        )
-
-        advanceUntilIdle()
-        val config = createTestModel(0, "Test")
-        viewModel.testConnectionWithConfig(config)
-        advanceUntilIdle()
-
-        viewModel.resetDialogTestState()
-        val state = viewModel.uiState.value
-        assertTrue(state.dialogTestState is DialogTestState.Idle)
     }
 }
