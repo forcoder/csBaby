@@ -97,7 +97,12 @@ router.get('/changes', async (req, res) => {
 
 // 增量：推送变更
 router.post('/push', async (req, res) => {
-  return res.status(200).json({ code: 0, message: 'push OK (no DB)' });
+  try {
+    const db = await getDb();
+    return res.status(200).json({ code: 0, message: 'getDb OK', dbType: typeof db });
+  } catch (e) {
+    return res.status(500).json({ code: 500, message: 'getDb error: ' + e.message });
+  }
 
   const { keywordRules=[], aiModelConfigs=[], userStyleProfile, appConfigs=[], scenarios=[], replyHistory=[], messageBlacklist=[], deletedIds={}, baseVersion=0 } = req.body;
   const now = Date.now();
