@@ -97,29 +97,14 @@ router.get('/changes', async (req, res) => {
 
 // 增量：推送变更
 router.post('/push', async (req, res) => {
-  await getDb();
+  try {
+    await getDb();
+  } catch (e) {
+    return res.status(500).json({ code: 500, message: 'getDb failed: ' + e.message });
+  }
   const t = req.tenantId;
 
-  // DEBUG: 逐步测试
-  try {
-    const t1 = await pool.query('SELECT 1 as test');
-    console.log('step1 OK');
-  } catch (e) {
-    return res.status(500).json({ code: 500, message: 'step1 failed: ' + e.message });
-  }
-  try {
-    const t2 = await pool.query('SELECT tenant_id FROM sync_checkpoints WHERE tenant_id=$1', ['test']);
-    console.log('step2 OK');
-  } catch (e) {
-    return res.status(500).json({ code: 500, message: 'step2 failed: ' + e.message });
-  }
-  try {
-    const t3 = await pool.query('UPDATE sync_checkpoints SET last_sync_time=$1 WHERE tenant_id=$2', [Date.now(), 'test']);
-    console.log('step3 OK');
-  } catch (e) {
-    return res.status(500).json({ code: 500, message: 'step3 failed: ' + e.message });
-  }
-  return res.status(200).json({ code: 0, message: 'debug OK' });
+  return res.status(200).json({ code: 0, message: 'getDb OK, pool exists: ' + (pool ? 'yes' : 'no') });
 
   const { keywordRules=[], aiModelConfigs=[], userStyleProfile, appConfigs=[], scenarios=[], replyHistory=[], messageBlacklist=[], deletedIds={}, baseVersion=0 } = req.body;
   const now = Date.now();
