@@ -1,20 +1,15 @@
 package com.csbaby.kefu.presentation.screens.profile
 
 import android.content.Context
-import android.net.Uri
-import com.csbaby.kefu.data.local.KefuDatabase
 import com.csbaby.kefu.data.local.PreferencesManager
-import com.csbaby.kefu.data.local.dao.AIModelConfigDao
-import com.csbaby.kefu.data.local.dao.KeywordRuleDao
-import com.csbaby.kefu.data.local.dao.MessageBlacklistDao
-import com.csbaby.kefu.data.model.OtaUpdate
-import com.csbaby.kefu.data.remote.CsbabyApiService
-import com.csbaby.kefu.data.remote.DeviceManager
-import com.csbaby.kefu.data.remote.dto.BackupDto
-import com.csbaby.kefu.data.remote.dto.RuleDto
+import com.csbaby.kefu.data.model.BackupStatus
+import com.csbaby.kefu.data.model.SyncAuthState
+import com.csbaby.kefu.data.sync.AuthManager
+import com.csbaby.kefu.data.sync.SyncManager
+import com.csbaby.kefu.data.sync.SyncState
 import com.csbaby.kefu.domain.model.UserStyleProfile
 import com.csbaby.kefu.domain.repository.UserStyleRepository
-import com.csbaby.kefu.infrastructure.oss.AliyunOssManager
+import com.csbaby.kefu.infrastructure.backup.BackupManager
 import com.csbaby.kefu.infrastructure.ota.OtaManager
 import com.csbaby.kefu.infrastructure.style.StyleLearningEngine
 import io.mockk.*
@@ -31,29 +26,27 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProfileViewModelTest {
 
-    private lateinit var appContext: Context
     private lateinit var preferencesManager: PreferencesManager
     private lateinit var userStyleRepository: UserStyleRepository
     private lateinit var styleLearningEngine: StyleLearningEngine
     private lateinit var otaManager: OtaManager
-    private lateinit var ossManager: AliyunOssManager
-    private lateinit var deviceManager: DeviceManager
-    private lateinit var apiService: CsbabyApiService
-    private lateinit var kefuDatabase: KefuDatabase
+    private lateinit var syncManager: SyncManager
+    private lateinit var authManager: AuthManager
+    private lateinit var backupManager: BackupManager
+
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        appContext = mockk(relaxed = true)
+
         preferencesManager = mockk(relaxed = true)
         userStyleRepository = mockk(relaxed = true)
         styleLearningEngine = mockk(relaxed = true)
         otaManager = mockk(relaxed = true)
-        ossManager = mockk(relaxed = true)
-        deviceManager = mockk(relaxed = true)
-        apiService = mockk(relaxed = true)
-        kefuDatabase = mockk(relaxed = true)
+        syncManager = mockk(relaxed = true)
+        authManager = mockk(relaxed = true)
+        backupManager = mockk(relaxed = true)
 
         // Default stubs
         every { preferencesManager.userPreferencesFlow } returns flowOf(
@@ -79,6 +72,15 @@ class ProfileViewModelTest {
         every { otaManager.availableUpdate } returns MutableStateFlow(null)
         every { otaManager.errorMessage } returns MutableStateFlow(null)
         every { otaManager.downloadProgress } returns MutableStateFlow(0f)
+        every { syncManager.syncState } returns MutableStateFlow(SyncState.Idle)
+        every { syncManager.lastSyncTime } returns flowOf(0L)
+        every { syncManager.isLoggedIn() } returns false
+        every { authManager.authStateFlow } returns MutableStateFlow(null)
+        every { authManager.currentTenantId() } returns null
+        every { backupManager.backupStatus } returns MutableStateFlow(BackupStatus.IDLE)
+        every { backupManager.backupMessage } returns MutableStateFlow("")
+        every { backupManager.backupRecords } returns MutableStateFlow(emptyList())
+        every { backupManager.clearStatus() } just Runs
     }
 
     @After
@@ -89,15 +91,13 @@ class ProfileViewModelTest {
 
     private fun createViewModel(): ProfileViewModel {
         return ProfileViewModel(
-            appContext = appContext,
             preferencesManager = preferencesManager,
             userStyleRepository = userStyleRepository,
             styleLearningEngine = styleLearningEngine,
             otaManager = otaManager,
-            ossManager = ossManager,
-            deviceManager = deviceManager,
-            apiService = apiService,
-            kefuDatabase = kefuDatabase
+            syncManager = syncManager,
+            authManager = authManager,
+            backupManager = backupManager
         )
     }
 
@@ -109,7 +109,6 @@ class ProfileViewModelTest {
         val state = viewModel.uiState.value
         assertTrue(state.styleLearningEnabled)
         assertFalse(state.autoSendEnabled)
-        assertEquals("system", state.themeMode)
     }
 
     @Test
@@ -183,20 +182,6 @@ class ProfileViewModelTest {
     }
 
     @Test
-    fun `updateThemeMode calls preferencesManager`() = runTest {
-        coEvery { preferencesManager.updateThemeMode(any()) } returns Unit
-
-        val viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.updateThemeMode("dark")
-        advanceUntilIdle()
-
-        coVerify { preferencesManager.updateThemeMode("dark") }
-        assertEquals("dark", viewModel.uiState.value.themeMode)
-    }
-
-    @Test
     fun `user style profile updates UI state`() = runTest {
         val profile = UserStyleProfile(
             userId = "test_user",
@@ -223,45 +208,87 @@ class ProfileViewModelTest {
     }
 
     @Test
-    fun `clearBackupMessage clears message`() = runTest {
+    fun `clearBackupStatus calls backupManager`() = runTest {
         val viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.clearBackupMessage()
-        assertNull(viewModel.uiState.value.backupMessage)
+        viewModel.clearBackupStatus()
+        verify { backupManager.clearStatus() }
     }
 
     @Test
-    fun `clearUploadStatus clears status`() = runTest {
+    fun `uploadBackup calls backupManager`() = runTest {
+        coEvery { backupManager.uploadBackup() } returns mockk()
+
         val viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.clearUploadStatus()
-        assertEquals("", viewModel.uiState.value.uploadStatus)
+        viewModel.uploadBackup()
+        advanceUntilIdle()
+
+        coVerify { backupManager.uploadBackup() }
     }
 
     @Test
-    fun `cancelUpload resets upload state`() = runTest {
+    fun `fetchBackupList calls backupManager`() = runTest {
+        coEvery { backupManager.fetchBackupList() } returns mockk()
+
         val viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.cancelUpload()
-        val state = viewModel.uiState.value
-        assertFalse(state.isUploading)
-        assertEquals(0f, state.uploadProgress)
-        assertEquals("上传已取消", state.uploadStatus)
+        viewModel.fetchBackupList()
+        advanceUntilIdle()
+
+        coVerify { backupManager.fetchBackupList() }
     }
 
     @Test
-    fun `setForceUpdate updates version list`() = runTest {
+    fun `logout calls syncManager`() = runTest {
         val viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.setForceUpdate(2, true)
+        viewModel.logout()
+        verify { syncManager.logout() }
+    }
+
+    @Test
+    fun `syncState reflects syncManager state`() = runTest {
+        every { syncManager.syncState } returns MutableStateFlow(SyncState.Syncing("同步中"))
+
+        val viewModel = createViewModel()
         advanceUntilIdle()
 
-        val version = viewModel.uiState.value.ossVersionList.find { it.versionCode == 2 }
-        // Version list may be empty since we didn't load it; just verify no crash
-        // The method updates the list if present
+        assertTrue(viewModel.uiState.value.syncState is SyncState.Syncing)
+    }
+
+    @Test
+    fun `isLoggedIn reflects auth state`() = runTest {
+        every { authManager.authStateFlow } returns MutableStateFlow(
+            SyncAuthState(
+                userId = "test_user",
+                tenantId = "test_tenant",
+                accessToken = "test_token",
+                refreshToken = "",
+                expiresAt = System.currentTimeMillis() + 86400000
+            )
+        )
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isLoggedIn)
+        assertEquals("test_tenant", viewModel.uiState.value.currentTenantId)
+    }
+
+    @Test
+    fun `backupStatus reflects backupManager state`() = runTest {
+        every { backupManager.backupStatus } returns MutableStateFlow(BackupStatus.UPLOADING)
+        every { backupManager.backupMessage } returns MutableStateFlow("正在上传...")
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals(BackupStatus.UPLOADING, viewModel.uiState.value.backupStatus)
+        assertEquals("正在上传...", viewModel.uiState.value.backupMessage)
     }
 }
