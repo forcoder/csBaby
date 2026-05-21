@@ -314,4 +314,4 @@ async function withTransaction(fn) {
   }
 }
 
-module.exports = { getDb, exec, queryAll, queryOne, pool };
+module.exports = { getDb, exec, queryAll, queryOne, pool, withTransaction };
