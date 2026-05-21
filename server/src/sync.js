@@ -49,6 +49,30 @@ function toBlacklist(b) {
     tenantId:b.tenant_id, syncVersion:b.sync_version, deleted:!!b.deleted };
 }
 
+// 调试：测试简单 SQL 操作
+router.get('/debug-sql', async (req, res) => {
+  await getDb();
+  const results = {};
+  try {
+    results.step1 = (await queryOne('SELECT 1 as val')).val;
+  } catch (e) { results.err1 = e.message; }
+  try {
+    const r = await exec('UPDATE sync_checkpoints SET last_sync_time=$1 WHERE tenant_id=$2', [Date.now(), req.tenantId]);
+    results.step2 = r;
+  } catch (e) { results.err2 = e.message; }
+  try {
+    await exec('INSERT INTO keyword_rules (keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
+      ['debug','CONTAINS','debug','debug','ALL','[]',0,1,Date.now(),Date.now(),req.tenantId,Date.now(),0]);
+    results.step3 = 'ok';
+  } catch (e) { results.err3 = e.message; }
+  try {
+    const r = await exec('INSERT INTO sync_checkpoints (tenant_id,last_sync_time,is_syncing,last_error) VALUES ($1,$2,0,NULL) ON CONFLICT (tenant_id) DO UPDATE SET last_sync_time=$2',
+      [req.tenantId, Date.now()]);
+    results.step4 = r;
+  } catch (e) { results.err4 = e.message; }
+  res.json({ code:0, data:results });
+});
+
 // 全量同步
 router.get('/all', async (req, res) => {
   await getDb();
