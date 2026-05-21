@@ -63,19 +63,19 @@ class SyncManager @Inject constructor(
 
     // ========== 认证 ==========
 
-    suspend fun login(email: String, password: String): Result<SyncAuthState> {
-        Log.d("SyncManager", "login() 开始: email=$email")
+    suspend fun login(phone: String, password: String): Result<SyncAuthState> {
+        Log.d("SyncManager", "login() 开始: phone=$phone")
         _syncState.value = SyncState.Syncing("正在登录...")
         return try {
             Log.d("SyncManager", "login() 调用 syncApiService.login, baseUrl=${BuildConfig.SYNC_BASE_URL}")
-            val request = LoginRequest(email, password)
+            val request = LoginRequest(phone, password)
             val response = syncApiService.login(request)
             Log.d("SyncManager", "login() 响应: isSuccess=${response.isSuccess}, msg=${response.message}")
             if (response.isSuccess && response.data != null) {
                 val auth = SyncAuthState.fromLoginResponse(
                     userId = response.data.userId,
-                    tenantId = response.data.tenantId,
-                    token = response.data.accessToken,
+                    tenantId = response.data.tenantId.ifEmpty { response.data.userId },
+                    token = response.data.effectiveAccessToken(),
                     refreshToken = response.data.refreshToken,
                     expiresAt = response.data.expiresAt
                 )
@@ -96,15 +96,15 @@ class SyncManager @Inject constructor(
         }
     }
 
-    suspend fun register(email: String, password: String, displayName: String): Result<SyncAuthState> {
+    suspend fun register(phone: String, password: String, name: String): Result<SyncAuthState> {
         _syncState.value = SyncState.Syncing("正在注册...")
         return try {
-            val response = syncApiService.register(RegisterRequest(email, password, displayName))
+            val response = syncApiService.register(RegisterRequest(phone, password, name))
             if (response.isSuccess && response.data != null) {
                 val auth = SyncAuthState.fromLoginResponse(
                     userId = response.data.userId,
-                    tenantId = response.data.tenantId,
-                    token = response.data.accessToken,
+                    tenantId = response.data.tenantId.ifEmpty { response.data.userId },
+                    token = response.data.effectiveAccessToken(),
                     refreshToken = response.data.refreshToken,
                     expiresAt = response.data.expiresAt
                 )

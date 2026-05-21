@@ -19,34 +19,34 @@ interface SyncApiService {
 
     // ========== 认证 ==========
 
-    @POST("auth/login")
+    @POST("api/auth/user/login")
     suspend fun login(@Body request: LoginRequest): ApiResponse<AuthResult>
 
-    @POST("auth/register")
+    @POST("api/auth/user/register")
     suspend fun register(@Body request: RegisterRequest): ApiResponse<AuthResult>
 
-    @POST("auth/refresh")
+    @POST("api/auth/refresh")
     suspend fun refreshToken(@Body request: RefreshTokenRequest): ApiResponse<AuthResult>
 
     // ========== 全量同步（首次登录 / 换手机恢复） ==========
 
-    @GET("sync/all")
+    @GET("api/sync/all")
     suspend fun getAllData(@Query("tenantId") tenantId: String): ApiResponse<SyncAllData>
 
     // ========== 增量同步 ==========
 
-    @GET("sync/changes")
+    @GET("api/sync/changes")
     suspend fun getChanges(
         @Query("tenantId") tenantId: String,
         @Query("since") since: Long
     ): ApiResponse<SyncChanges>
 
-    @POST("sync/push")
+    @POST("api/sync/push")
     suspend fun pushChanges(@Body request: PushChangesRequest): ApiResponse<PushChangesResult>
 
     // ========== 冲突解决 ==========
 
-    @POST("sync/resolve")
+    @POST("api/sync/resolve")
     suspend fun resolveConflict(@Body request: ConflictResolveRequest): ApiResponse<ConflictResolveResult>
 
     // ========== 数据备份 ==========
@@ -66,27 +66,31 @@ interface SyncApiService {
 
 // ========== 请求/响应数据模型 ==========
 
-// 登录请求 (邮箱+密码)
-data class LoginRequest(val email: String, val password: String)
+// 登录请求 (手机号+密码)
+data class LoginRequest(val phone: String, val password: String)
 
 // 注册请求
 data class RegisterRequest(
-    val email: String,
+    val phone: String,
     val password: String,
-    val displayName: String = ""
+    val name: String = ""
 )
 
 // Token刷新请求
 data class RefreshTokenRequest(val refreshToken: String)
 
-// 认证结果 (匹配 Node.js 后端响应)
+// 认证结果
 data class AuthResult(
-    val userId: String,
-    val tenantId: String,
-    val accessToken: String,
+    val userId: String = "",
+    val token: String = "",
+    val expiresIn: Long = 0L,
+    val tenantId: String = "",
+    val accessToken: String = "",
     val refreshToken: String = "",
     val expiresAt: Long = 0L
-)
+) {
+    fun effectiveAccessToken(): String = accessToken.ifEmpty { token }
+}
 
 data class SyncAllData(
     val keywordRules: List<SyncKeywordRule>,
