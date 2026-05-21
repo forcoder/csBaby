@@ -100,8 +100,8 @@ router.post('/push', async (req, res) => {
   try {
     const db = await getDb();
     const t1 = await pool.query('SELECT 1 as test');
-    const t2 = await pool.query('UPDATE sync_checkpoints SET last_sync_time=$1 WHERE tenant_id=$2', [Date.now(), 'nonexistent']);
-    return res.status(200).json({ code: 0, message: 'UPDATE OK', rowCount: t2.rowCount });
+    const t2 = await pool.query('INSERT INTO sync_checkpoints (tenant_id,last_sync_time,is_syncing,last_error) VALUES ($1,$2,0,NULL) ON CONFLICT (tenant_id) DO UPDATE SET last_sync_time=$2,is_syncing=0,last_error=NULL', ['debug-tenant', Date.now()]);
+    return res.status(200).json({ code: 0, message: 'UPSERT OK', rowCount: t2.rowCount });
   } catch (e) {
     return res.status(500).json({ code: 500, message: 'error: ' + e.message });
   }
