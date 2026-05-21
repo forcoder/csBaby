@@ -248,13 +248,34 @@ async function initSchema(client) {
   await client.query(`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id)`);
 }
 
+// 安全地转义 SQL 值（用于简单查询协议）
+function escapeSql(val) {
+  if (val === null || val === undefined) return 'NULL';
+  if (typeof val === 'number') return String(val);
+  if (typeof val === 'boolean') return val ? '1' : '0';
+  // 字符串：转义单引号
+  return `'${String(val).replace(/'/g, "''")}'`;
+}
+
+// 将参数化 SQL 中的 $N 替换为转义后的值（用于简单查询协议）
+function interpolate(sql, params) {
+  let i = 0;
+  return sql.replace(/\$(\d+)/g, (_, n) => {
+    const idx = parseInt(n, 10) - 1;
+    return idx < params.length ? escapeSql(params[idx]) : _;
+  });
+}
+
 // 执行 SQL（INSERT/UPDATE/DELETE）
+// 使用简单查询协议（无参数绑定）以避免 PgBouncer 事务模式下扩展查询协议的问题
 async function exec(sql, params = []) {
   try {
-    const result = await pool.query(sql, params);
+    // 如果有参数，手动替换 $N 占位符（简单查询协议）
+    const finalSql = params.length > 0 ? interpolate(sql, params) : sql;
+    const result = await pool.query(finalSql);
     return { changes: result.rowCount, lastInsertRowid: result.rows[0]?.id || 0 };
   } catch (e) {
-    console.error('exec error:', e.message, 'SQL:', sql.slice(0, 200), 'Params:', JSON.stringify(params).slice(0, 200));
+    console.error('exec error:', e.message, 'SQL:', (sql || '').slice(0, 200), 'Params:', JSON.stringify(params || []).slice(0, 200));
     throw e;
   }
 }
@@ -262,10 +283,11 @@ async function exec(sql, params = []) {
 // 查询多条记录
 async function queryAll(sql, params = []) {
   try {
-    const result = await pool.query(sql, params);
+    // SELECT 查询继续使用参数化查询（兼容性更好）
+    const result = params.length > 0 ? await pool.query(sql, params) : await pool.query(sql);
     return result.rows;
   } catch (e) {
-    console.error('queryAll error:', e.message, 'SQL:', sql.slice(0, 200));
+    console.error('queryAll error:', e.message, 'SQL:', (sql || '').slice(0, 200));
     throw e;
   }
 }
