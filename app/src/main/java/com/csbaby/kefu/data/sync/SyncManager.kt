@@ -63,23 +63,19 @@ class SyncManager @Inject constructor(
 
     // ========== 认证 ==========
 
-    suspend fun login(email: String, password: String): Result<SyncAuthState> {
-        Log.d("SyncManager", "login() 开始: email=$email, passwordLength=${password.length}")
+    suspend fun login(phone: String, password: String): Result<SyncAuthState> {
+        Log.d("SyncManager", "login() 开始: phone=$phone")
         _syncState.value = SyncState.Syncing("正在登录...")
         return try {
             Log.d("SyncManager", "login() 调用 syncApiService.login, baseUrl=${BuildConfig.SYNC_BASE_URL}")
-            val request = LoginRequest(email, password)
-            val requestJson = com.google.gson.Gson().toJson(request)
-            Log.d("SyncManager", "login() requestJson: $requestJson")
+            val request = LoginRequest(phone, password)
             val response = syncApiService.login(request)
             Log.d("SyncManager", "login() 响应: isSuccess=${response.isSuccess}, msg=${response.message}")
             if (response.isSuccess && response.data != null) {
-                val auth = SyncAuthState(
+                val auth = SyncAuthState.fromLoginResponse(
                     userId = response.data.userId,
-                    tenantId = response.data.tenantId,
-                    accessToken = response.data.accessToken,
-                    refreshToken = response.data.refreshToken,
-                    expiresAt = response.data.expiresAt
+                    token = response.data.token,
+                    expiresIn = response.data.expiresIn
                 )
                 _authState.value = auth
                 authManager.saveAuthState(auth)
@@ -98,17 +94,15 @@ class SyncManager @Inject constructor(
         }
     }
 
-    suspend fun register(email: String, password: String, displayName: String): Result<SyncAuthState> {
+    suspend fun register(phone: String, password: String, name: String): Result<SyncAuthState> {
         _syncState.value = SyncState.Syncing("正在注册...")
         return try {
-            val response = syncApiService.register(RegisterRequest(email, password, displayName))
+            val response = syncApiService.register(RegisterRequest(phone, password, name))
             if (response.isSuccess && response.data != null) {
-                val auth = SyncAuthState(
+                val auth = SyncAuthState.fromLoginResponse(
                     userId = response.data.userId,
-                    tenantId = response.data.tenantId,
-                    accessToken = response.data.accessToken,
-                    refreshToken = response.data.refreshToken,
-                    expiresAt = response.data.expiresAt
+                    token = response.data.token,
+                    expiresIn = response.data.expiresIn
                 )
                 _authState.value = auth
                 authManager.saveAuthState(auth)
@@ -177,21 +171,10 @@ class SyncManager @Inject constructor(
 
     /** 用 refreshToken 刷新认证状态 */
     private suspend fun tryRefreshToken(refreshToken: String): SyncAuthState? {
-        return try {
-            val response = syncApiService.refreshToken(RefreshTokenRequest(refreshToken))
-            if (response.isSuccess && response.data != null) {
-                SyncAuthState(
-                    userId = response.data.userId,
-                    tenantId = response.data.tenantId,
-                    accessToken = response.data.accessToken,
-                    refreshToken = response.data.refreshToken,
-                    expiresAt = response.data.expiresAt
-                )
-            } else null
-        } catch (e: Exception) {
-            Timber.e(e, "refreshToken 失败")
-            null
-        }
+        // 简化版：无需refreshToken机制，直接返回null触发重新登录
+        // 简化版token有效期30天，过期后用户需要重新登录
+        Timber.d("Token刷新: 简化版无需刷新，过期后用户需重新登录")
+        return null
     }
 
     // ========== 全量同步（首次登录 / 换手机恢复） ==========

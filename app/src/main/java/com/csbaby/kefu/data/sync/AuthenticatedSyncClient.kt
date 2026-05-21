@@ -91,29 +91,8 @@ class AuthenticatedSyncClient(
     }
 
     private fun refreshTokenBlocking(refreshToken: String): SyncAuthState? {
-        return try {
-            val tempClient = OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
-                .build()
-            val tempRetrofit = Retrofit.Builder()
-                .baseUrl(BuildConfig.SYNC_BASE_URL)
-                .client(tempClient)
-                .addConverterFactory(GsonConverterFactory.create())
-                .build()
-            val tempApi = tempRetrofit.create(SyncApiService::class.java)
-            val response = runBlocking { tempApi.refreshToken(RefreshTokenRequest(refreshToken)) }
-            if (response.isSuccess && response.data != null) {
-                SyncAuthState(
-                    userId = response.data.userId,
-                    tenantId = response.data.tenantId,
-                    accessToken = response.data.accessToken,
-                    refreshToken = response.data.refreshToken,
-                    expiresAt = response.data.expiresAt
-                )
-            } else null
-        } catch (_: Exception) {
-            null
-        }
+        // 简化版：无需refreshToken机制，直接使用原有token
+        // 如果token过期，用户需要重新登录
+        return authManager.currentAuthState
     }
 }
