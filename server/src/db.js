@@ -13,6 +13,11 @@ const pool = new Pool({
 
 let dbReady = null;
 
+// 捕获连接池级别的错误
+pool.on('error', (e) => {
+  console.error('pg pool error:', e.message);
+});
+
 async function getDb() {
   if (dbReady) return dbReady;
   dbReady = (async () => {
@@ -245,14 +250,24 @@ async function initSchema(client) {
 
 // 执行 SQL（INSERT/UPDATE/DELETE）
 async function exec(sql, params = []) {
-  const result = await pool.query(sql, params);
-  return { changes: result.rowCount, lastInsertRowid: result.rows[0]?.id || 0 };
+  try {
+    const result = await pool.query(sql, params);
+    return { changes: result.rowCount, lastInsertRowid: result.rows[0]?.id || 0 };
+  } catch (e) {
+    console.error('exec error:', e.message, 'SQL:', sql.slice(0, 200), 'Params:', JSON.stringify(params).slice(0, 200));
+    throw e;
+  }
 }
 
 // 查询多条记录
 async function queryAll(sql, params = []) {
-  const result = await pool.query(sql, params);
-  return result.rows;
+  try {
+    const result = await pool.query(sql, params);
+    return result.rows;
+  } catch (e) {
+    console.error('queryAll error:', e.message, 'SQL:', sql.slice(0, 200));
+    throw e;
+  }
 }
 
 // 查询单条记录
