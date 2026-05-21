@@ -99,9 +99,10 @@ router.get('/changes', async (req, res) => {
 router.post('/push', async (req, res) => {
   try {
     const db = await getDb();
-    return res.status(200).json({ code: 0, message: 'getDb OK', dbType: typeof db });
+    const t1 = await pool.query('SELECT 1 as test');
+    return res.status(200).json({ code: 0, message: 'pool.query OK', rows: t1.rows });
   } catch (e) {
-    return res.status(500).json({ code: 500, message: 'getDb error: ' + e.message });
+    return res.status(500).json({ code: 500, message: 'error: ' + e.message });
   }
 
   const { keywordRules=[], aiModelConfigs=[], userStyleProfile, appConfigs=[], scenarios=[], replyHistory=[], messageBlacklist=[], deletedIds={}, baseVersion=0 } = req.body;
