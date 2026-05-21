@@ -245,24 +245,14 @@ async function initSchema(client) {
 
 // 执行 SQL（INSERT/UPDATE/DELETE）
 async function exec(sql, params = []) {
-  const client = await pool.connect();
-  try {
-    const result = await client.query(sql, params);
-    return { changes: result.rowCount, lastInsertRowid: result.rows[0]?.id || 0 };
-  } finally {
-    client.release();
-  }
+  const result = await pool.query(sql, params);
+  return { changes: result.rowCount, lastInsertRowid: result.rows[0]?.id || 0 };
 }
 
 // 查询多条记录
 async function queryAll(sql, params = []) {
-  const client = await pool.connect();
-  try {
-    const result = await client.query(sql, params);
-    return result.rows;
-  } finally {
-    client.release();
-  }
+  const result = await pool.query(sql, params);
+  return result.rows;
 }
 
 // 查询单条记录
@@ -287,10 +277,4 @@ async function withTransaction(fn) {
   }
 }
 
-// 使用 pool.query 执行单条 SQL（自动管理连接，自动提交）
-async function query(sql, params = []) {
-  const result = await pool.query(sql, params);
-  return result;
-}
-
-module.exports = { getDb, exec, queryAll, queryOne, withTransaction, query, pool };
+module.exports = { getDb, exec, queryAll, queryOne, pool };
