@@ -287,4 +287,10 @@ async function withTransaction(fn) {
   }
 }
 
-module.exports = { getDb, exec, queryAll, queryOne, withTransaction, pool };
+// 使用 pool.query 执行单条 SQL（自动管理连接，自动提交）
+async function query(sql, params = []) {
+  const result = await pool.query(sql, params);
+  return result;
+}
+
+module.exports = { getDb, exec, queryAll, queryOne, withTransaction, query, pool };
