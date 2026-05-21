@@ -66,24 +66,26 @@ interface SyncApiService {
 
 // ========== 请求/响应数据模型 ==========
 
-// 登录请求 (手机号+密码)
-data class LoginRequest(val phone: String, val password: String)
+// 登录请求 (邮箱+密码)
+data class LoginRequest(val email: String, val password: String)
 
 // 注册请求
 data class RegisterRequest(
-    val phone: String,
+    val email: String,
     val password: String,
-    val name: String = ""
+    val displayName: String = ""
 )
 
-// Token刷新请求 (简化版：重新登录即可刷新)
+// Token刷新请求
 data class RefreshTokenRequest(val refreshToken: String)
 
-// 认证结果
+// 认证结果 (匹配 Node.js 后端响应)
 data class AuthResult(
     val userId: String,
-    val token: String,
-    val expiresIn: Long = 0L
+    val tenantId: String,
+    val accessToken: String,
+    val refreshToken: String = "",
+    val expiresAt: Long = 0L
 )
 
 data class SyncAllData(
