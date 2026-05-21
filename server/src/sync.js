@@ -196,7 +196,7 @@ router.post('/push', async (req, res) => {
     res.json({ code:0, message:'成功', data:{ accepted:true, conflicts, newServerVersion:now, serverTime:now } });
   } catch (e) {
     console.error('push error at step:', _step, '-', e.message, 'STACK:', e.stack);
-    res.status(500).json({ code:500, message:e.message });
+    res.status(500).json({ code:500, message:'step:' + _step + ' ' + e.message });
   }
 });
 

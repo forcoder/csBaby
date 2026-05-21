@@ -26,22 +26,22 @@ router.post('/upload', async (req, res) => {
     const dataSize = Buffer.byteLength(dataJson, 'utf8');
 
     // 限制单用户最多 5 份备份
-    const existing = queryAll(
-      'SELECT id FROM backup_records WHERE tenant_id=? ORDER BY created_at ASC',
+    const existing = await queryAll(
+      'SELECT id FROM backup_records WHERE tenant_id=$1 ORDER BY created_at ASC',
       [t]
     );
     if (existing.length >= 5) {
       // 删除最旧的
-      exec('DELETE FROM backup_records WHERE id=?', [existing[0].id]);
+      await exec('DELETE FROM backup_records WHERE id=$1', [existing[0].id]);
     }
 
-    exec(
-      'INSERT INTO backup_records (tenant_id,device_name,app_version,data_json,data_size,checksum,created_at) VALUES (?,?,?,?,?,?,?)',
+    await exec(
+      'INSERT INTO backup_records (tenant_id,device_name,app_version,data_json,data_size,checksum,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)',
       [t, deviceName || '未知设备', appVersion || '', dataJson, dataSize || 0, checksum || '', now]
     );
 
-    const record = queryOne(
-      'SELECT id,device_name,app_version,data_size,checksum,created_at FROM backup_records WHERE tenant_id=? ORDER BY created_at DESC LIMIT 1',
+    const record = await queryOne(
+      'SELECT id,device_name,app_version,data_size,checksum,created_at FROM backup_records WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 1',
       [t]
     );
 
@@ -70,10 +70,10 @@ router.get('/list', async (req, res) => {
     await getDb();
     const t = req.tenantId;
 
-    const records = queryAll(
-      'SELECT id,device_name,app_version,data_size,checksum,created_at FROM backup_records WHERE tenant_id=? ORDER BY created_at DESC',
+    const records = (await queryAll(
+      'SELECT id,device_name,app_version,data_size,checksum,created_at FROM backup_records WHERE tenant_id=$1 ORDER BY created_at DESC',
       [t]
-    ).map(r => ({
+    )).map(r => ({
       id: r.id,
       deviceName: r.device_name,
       appVersion: r.app_version,
@@ -97,8 +97,8 @@ router.get('/download/:id', async (req, res) => {
     const t = req.tenantId;
     const id = parseInt(req.params.id);
 
-    const record = queryOne(
-      'SELECT * FROM backup_records WHERE id=? AND tenant_id=?',
+    const record = await queryOne(
+      'SELECT * FROM backup_records WHERE id=$1 AND tenant_id=$2',
       [id, t]
     );
 
@@ -116,7 +116,7 @@ router.get('/download/:id', async (req, res) => {
         data: raw,
         checksum: record.checksum,
         createdAt: record.created_at,
-        dataSize: record.data_size
+        dataSize: record.dataSize
       }
     });
   } catch (e) {
@@ -134,7 +134,7 @@ router.delete('/:id', async (req, res) => {
     const t = req.tenantId;
     const id = parseInt(req.params.id);
 
-    exec('DELETE FROM backup_records WHERE id=? AND tenant_id=?', [id, t]);
+    await exec('DELETE FROM backup_records WHERE id=$1 AND tenant_id=$2', [id, t]);
 
     res.json({ code: 0, message: '备份已删除' });
   } catch (e) {
