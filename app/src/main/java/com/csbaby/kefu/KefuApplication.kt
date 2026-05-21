@@ -105,19 +105,12 @@ class KefuApplication : Application(), Configuration.Provider {
                 }
             }
 
-            // DEBUG: 自动登录测试账号，验证 API 连通性
-            if (BuildConfig.DEBUG) {
+            // DEBUG: 自动登录测试账号（仅在本地调试时手动开启）
+            // 默认关闭，避免每次启动都产生网络请求和测试数据
+            if (BuildConfig.DEBUG && false) {
                 CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
                     try {
                         val syncManager = entryPoint.syncManager()
-                        // 先注册新账号
-                        Log.d("KefuApp", "DEBUG: 尝试注册 test@test.com")
-                        val regResult = syncManager.register("test@test.com", "123456", "TestUser")
-                        regResult.fold(
-                            onSuccess = { Log.d("KefuApp", "DEBUG: 注册成功") },
-                            onFailure = { Log.d("KefuApp", "DEBUG: 注册失败(可能已存在): ${it.message}") }
-                        )
-                        // 然后登录
                         Log.d("KefuApp", "DEBUG: 尝试登录 test@test.com")
                         val result = syncManager.login("test@test.com", "123456")
                         result.fold(

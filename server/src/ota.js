@@ -11,8 +11,8 @@ router.get('/check', async (req, res) => {
     const currentVersion = parseInt(req.query.versionCode) || 0;
     const channel = req.query.channel || 'default';
 
-    const latest = queryOne(
-      'SELECT * FROM ota_versions WHERE channel=? AND is_published=1 ORDER BY version_code DESC LIMIT 1',
+    const latest = await queryOne(
+      'SELECT * FROM ota_versions WHERE channel=$1 AND is_published=1 ORDER BY version_code DESC LIMIT 1',
       [channel]
     );
 
@@ -41,7 +41,7 @@ router.get('/check', async (req, res) => {
     });
   } catch (e) {
     console.error('OTA check error:', e);
-    res.status(500). json({ code: 500, message: e.message });
+    res.status(500).json({ code: 500, message: e.message });
   }
 });
 
@@ -54,8 +54,8 @@ router.get('/versions', async (req, res) => {
     await getDb();
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     const offset = parseInt(req.query.offset) || 0;
-    const versions = queryAll(
-      'SELECT id,version_code,version_name,channel,is_published,is_force_update,release_date,file_size,created_at FROM ota_versions ORDER BY version_code DESC LIMIT ? OFFSET ?',
+    const versions = await queryAll(
+      'SELECT id,version_code,version_name,channel,is_published,is_force_update,release_date,file_size,created_at FROM ota_versions ORDER BY version_code DESC LIMIT $1 OFFSET $2',
       [limit, offset]
     );
     res.json({ code: 0, message: '成功', data: versions });
@@ -86,8 +86,8 @@ router.post('/versions', adminMiddleware, async (req, res) => {
     }
 
     const now = Date.now();
-    exec(
-      'INSERT OR REPLACE INTO ota_versions (version_code,version_name,download_url,file_size,md5,release_notes,channel,is_force_update,min_required_version,is_published,release_date,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+    await exec(
+      'INSERT INTO ota_versions (version_code,version_name,download_url,file_size,md5,release_notes,channel,is_force_update,min_required_version,is_published,release_date,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT (version_code) DO UPDATE SET version_name=$2,download_url=$3,file_size=$4,md5=$5,release_notes=$6,channel=$7,is_force_update=$8,min_required_version=$9,is_published=$10,release_date=$11,created_at=$12',
       [versionCode, versionName, downloadUrl, fileSize || 0, md5 || '', notes, channel || 'default', isForceUpdate ? 1 : 0, minRequiredVersion || 1, 1, now, now]
     );
 
@@ -103,7 +103,7 @@ router.delete('/versions/:versionCode', adminMiddleware, async (req, res) => {
   try {
     await getDb();
     const vc = parseInt(req.params.versionCode);
-    exec('UPDATE ota_versions SET is_published=0 WHERE version_code=?', [vc]);
+    await exec('UPDATE ota_versions SET is_published=0 WHERE version_code=$1', [vc]);
     res.json({ code: 0, message: '版本已下架' });
   } catch (e) {
     res.status(500).json({ code: 500, message: e.message });
