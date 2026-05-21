@@ -168,7 +168,13 @@ router.post('/push', async (req, res) => {
       }
     }
 
-    await query('INSERT INTO sync_checkpoints (tenant_id,last_sync_time,is_syncing,last_error) VALUES ($1,$2,0,NULL) ON CONFLICT (tenant_id) DO UPDATE SET last_sync_time=$2,is_syncing=0,last_error=NULL', [t, now]);
+    // 先尝试 UPDATE，如果不存在则 INSERT
+    const existing = await queryOne('SELECT tenant_id FROM sync_checkpoints WHERE tenant_id=$1', [t]);
+    if (existing) {
+      await exec('UPDATE sync_checkpoints SET last_sync_time=$1,is_syncing=0,last_error=NULL WHERE tenant_id=$2', [now, t]);
+    } else {
+      await exec('INSERT INTO sync_checkpoints (tenant_id,last_sync_time,is_syncing,last_error) VALUES ($1,$2,0,NULL)', [t, now]);
+    }
     res.json({ code:0, message:'成功', data:{ accepted:true, conflicts, newServerVersion:now, serverTime:now } });
   } catch (e) {
     console.error('push error:', e.message);
