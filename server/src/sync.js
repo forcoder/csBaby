@@ -103,9 +103,10 @@ router.post('/push', async (req, res) => {
   // DEBUG: 测试 pool.query 是否正常
   try {
     const testResult = await pool.query('SELECT 1 as test');
-    console.log('pool.query test:', testResult.rows);
+    console.log('pool.query test OK:', testResult.rows);
   } catch (e) {
     console.error('pool.query test failed:', e.message);
+    return res.status(500).json({ code: 500, message: 'DB test failed: ' + e.message });
   }
 
   const { keywordRules=[], aiModelConfigs=[], userStyleProfile, appConfigs=[], scenarios=[], replyHistory=[], messageBlacklist=[], deletedIds={}, baseVersion=0 } = req.body;
