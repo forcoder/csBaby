@@ -19,34 +19,34 @@ interface SyncApiService {
 
     // ========== 认证 ==========
 
-    @POST("api/auth/user/login")
-    suspend fun login(@Body request: LoginRequest): ApiResponse<AuthResult>
-
-    @POST("api/auth/user/register")
+    @POST("auth/register")
     suspend fun register(@Body request: RegisterRequest): ApiResponse<AuthResult>
 
-    @POST("api/auth/refresh")
+    @POST("auth/login")
+    suspend fun login(@Body request: LoginRequest): ApiResponse<AuthResult>
+
+    @POST("auth/refresh")
     suspend fun refreshToken(@Body request: RefreshTokenRequest): ApiResponse<AuthResult>
 
     // ========== 全量同步（首次登录 / 换手机恢复） ==========
 
-    @GET("api/sync/all")
+    @GET("sync/all")
     suspend fun getAllData(@Query("tenantId") tenantId: String): ApiResponse<SyncAllData>
 
     // ========== 增量同步 ==========
 
-    @GET("api/sync/changes")
+    @GET("sync/changes")
     suspend fun getChanges(
         @Query("tenantId") tenantId: String,
         @Query("since") since: Long
     ): ApiResponse<SyncChanges>
 
-    @POST("api/sync/push")
+    @POST("sync/push")
     suspend fun pushChanges(@Body request: PushChangesRequest): ApiResponse<PushChangesResult>
 
     // ========== 冲突解决 ==========
 
-    @POST("api/sync/resolve")
+    @POST("sync/resolve")
     suspend fun resolveConflict(@Body request: ConflictResolveRequest): ApiResponse<ConflictResolveResult>
 
     // ========== 数据备份 ==========
@@ -66,28 +66,28 @@ interface SyncApiService {
 
 // ========== 请求/响应数据模型 ==========
 
-// 登录请求 (手机号+密码)
-data class LoginRequest(val phone: String, val password: String)
+// 登录请求 (邮箱+密码 - 匹配 Node.js Express 后端)
+data class LoginRequest(val email: String, val password: String)
 
 // 注册请求
 data class RegisterRequest(
-    val phone: String,
+    val email: String,
     val password: String,
-    val name: String = ""
+    val displayName: String = ""
 )
 
 // Token刷新请求
 data class RefreshTokenRequest(val refreshToken: String)
 
-// 认证结果
+// 认证结果 (匹配 Node.js Express 后端响应格式)
 data class AuthResult(
     val userId: String = "",
-    val token: String = "",
-    val expiresIn: Long = 0L,
     val tenantId: String = "",
     val accessToken: String = "",
     val refreshToken: String = "",
-    val expiresAt: Long = 0L
+    val expiresAt: Long = 0L,
+    val token: String = "",  // 兼容 token 字段
+    val expiresIn: Long = 0L
 ) {
     fun effectiveAccessToken(): String = accessToken.ifEmpty { token }
 }
