@@ -16,7 +16,12 @@ app.use(express.json({ limit: '10mb' }));
 
 // 健康检查
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.0' });
+  res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.0', deployId: 'DEPLOY-123456789' });
+});
+
+// 唯一测试端点 - 用于验证最新部署
+app.get('/test-unique-abc123', (req, res) => {
+  res.json({ code: 0, message: 'Unique endpoint works!', timestamp: Date.now() });
 });
 
 // 直接在 index.js 中的测试端点 - 不需要任何外部模块
