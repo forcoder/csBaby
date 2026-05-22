@@ -121,6 +121,7 @@ router.get('/changes', async (req, res) => {
 
 // 增量：推送变更
 router.post('/push', async (req, res) => {
+  console.log('[sync/push v3] Starting - using await getDb() and req.tenantId');
   await getDb();
   const t = req.tenantId;
   const { keywordRules=[], aiModelConfigs=[], userStyleProfile, appConfigs=[], scenarios=[], replyHistory=[], messageBlacklist=[], deletedIds={}, baseVersion=0 } = req.body;
