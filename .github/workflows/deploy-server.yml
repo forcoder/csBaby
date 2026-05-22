@@ -66,39 +66,29 @@ jobs:
 
       - name: 触发 Render 部署
         env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
-          SERVICE_ID="srv-d85hdj3bc2fs73bqqeg0"
-
-          echo "=== 触发部署 ==="
+          echo "=== 触发 Render 部署 ==="
           echo "Commit: $GITHUB_SHA"
 
-          # 触发部署
-          RESPONSE=$(curl -s -X POST \
-            -H "Authorization: Bearer $RENDER_API_KEY" \
-            -H "Accept: application/json" \
-            "https://api.render.com/v1/services/$SERVICE_ID/deploys")
+          # 使用部署钩子 URL 触发部署（不需要 API key）
+          if [ -n "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "使用部署钩子触发..."
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$RENDER_DEPLOY_HOOK_URL")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -n -1)
+            echo "HTTP Code: $HTTP_CODE"
+            echo "Response: $BODY"
 
-          echo "Response: $RESPONSE"
-
-          DEPLOY_ID=$(echo "$RESPONSE" | node -e "
-            let d=''; process.stdin.on('data',c=>d+=c);
-            process.stdin.on('end',()=>{
-              try {
-                const j=JSON.parse(d);
-                console.log(j.id || '');
-              } catch(e) {console.log('');}
-            });
-          ")
-
-          echo "Deploy ID: $DEPLOY_ID"
-
-          if [ -z "$DEPLOY_ID" ]; then
-            echo "❌ 部署触发失败"
+            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "204" ]; then
+              echo "✅ 部署已成功触发"
+            else
+              echo "⚠️ 部署触发响应: $HTTP_CODE"
+            fi
+          else
+            echo "❌ RENDER_DEPLOY_HOOK_URL 未设置"
             exit 1
           fi
-
-          echo "✅ 部署已触发"
 
       - name: 等待构建完成
         run: |
