@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { getDb, queryAll, queryOne, exec } = require('./db');
+const { getDb, queryAll, queryOne, exec, withTransaction, pool } = require('./db');
 const { authMiddleware } = require('./auth');
 
 const router = Router();
@@ -121,7 +121,7 @@ router.get('/changes', async (req, res) => {
 
 // 增量：推送变更
 router.post('/push', async (req, res) => {
-  console.log('[sync/push v5] Starting - no pool import from db');
+  console.log('[sync/push v6] Using pool.query directly');
   await getDb();
   const t = req.tenantId;
   const { keywordRules=[], aiModelConfigs=[], userStyleProfile, appConfigs=[], scenarios=[], replyHistory=[], messageBlacklist=[], deletedIds={}, baseVersion=0 } = req.body;
@@ -130,52 +130,66 @@ router.post('/push', async (req, res) => {
 
   console.log('[sync/push] Tenant:', t, 'rules:', keywordRules.length);
 
-  // 跳过冲突检测，直接写入
+  // 使用 pool.query 直接执行参数化 SQL
   try {
-    // 逐条写入（不使用事务）
     for (const r of keywordRules) {
-      await exec('INSERT INTO keyword_rules (id,keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (id) DO UPDATE SET keyword=EXCLUDED.keyword,match_type=EXCLUDED.match_type,reply_template=EXCLUDED.reply_template,category=EXCLUDED.category,target_type=EXCLUDED.target_type,target_names_json=EXCLUDED.target_names_json,priority=EXCLUDED.priority,enabled=EXCLUDED.enabled,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted',
-        [r.id,r.keyword,r.matchType,r.replyTemplate,r.category,r.targetType,r.targetNamesJson,r.priority,r.enabled?1:0,r.createdAt,r.updatedAt,t,now,r.deleted?1:0]);
+      await pool.query(
+        `INSERT INTO keyword_rules (id,keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (id) DO UPDATE SET keyword=EXCLUDED.keyword,match_type=EXCLUDED.match_type,reply_template=EXCLUDED.reply_template,category=EXCLUDED.category,target_type=EXCLUDED.target_type,target_names_json=EXCLUDED.target_names_json,priority=EXCLUDED.priority,enabled=EXCLUDED.enabled,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted`,
+        [r.id,r.keyword,r.matchType,r.replyTemplate,r.category,r.targetType,r.targetNamesJson,r.priority,r.enabled?1:0,r.createdAt,r.updatedAt,t,now,r.deleted?1:0]
+      );
     }
     for (const m of aiModelConfigs) {
-      await exec('INSERT INTO ai_model_configs (id,model_type,model_name,api_key,api_endpoint,temperature,max_tokens,is_default,is_enabled,monthly_cost,last_used,created_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT (id) DO UPDATE SET model_type=EXCLUDED.model_type,model_name=EXCLUDED.model_name,api_key=EXCLUDED.api_key,api_endpoint=EXCLUDED.api_endpoint,temperature=EXCLUDED.temperature,max_tokens=EXCLUDED.max_tokens,is_default=EXCLUDED.is_default,is_enabled=EXCLUDED.is_enabled,monthly_cost=EXCLUDED.monthly_cost,last_used=EXCLUDED.last_used,created_at=EXCLUDED.created_at,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted',
-        [m.id,m.modelType,m.modelName,m.apiKey,m.apiEndpoint,m.temperature,m.maxTokens,m.isDefault?1:0,m.isEnabled?1:0,m.monthlyCost,m.lastUsed,m.createdAt,t,now,m.deleted?1:0]);
+      await pool.query(
+        `INSERT INTO ai_model_configs (id,model_type,model_name,api_key,api_endpoint,temperature,max_tokens,is_default,is_enabled,monthly_cost,last_used,created_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT (id) DO UPDATE SET model_type=EXCLUDED.model_type,model_name=EXCLUDED.model_name,api_key=EXCLUDED.api_key,api_endpoint=EXCLUDED.api_endpoint,temperature=EXCLUDED.temperature,max_tokens=EXCLUDED.max_tokens,is_default=EXCLUDED.is_default,is_enabled=EXCLUDED.is_enabled,monthly_cost=EXCLUDED.monthly_cost,last_used=EXCLUDED.last_used,created_at=EXCLUDED.created_at,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted`,
+        [m.id,m.modelType,m.modelName,m.apiKey,m.apiEndpoint,m.temperature,m.maxTokens,m.isDefault?1:0,m.isEnabled?1:0,m.monthlyCost,m.lastUsed,m.createdAt,t,now,m.deleted?1:0]
+      );
     }
-    if (userStyleProfile)
-      await exec('INSERT INTO user_style_profiles (user_id,formality_level,enthusiasm_level,professionalism_level,word_count_preference,common_phrases,avoid_phrases,learning_samples,accuracy_score,last_trained,created_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (user_id) DO UPDATE SET formality_level=EXCLUDED.formality_level,enthusiasm_level=EXCLUDED.enthusiasm_level,professionalism_level=EXCLUDED.professionalism_level,word_count_preference=EXCLUDED.word_count_preference,common_phrases=EXCLUDED.common_phrases,avoid_phrases=EXCLUDED.avoid_phrases,learning_samples=EXCLUDED.learning_samples,accuracy_score=EXCLUDED.accuracy_score,last_trained=EXCLUDED.last_trained,created_at=EXCLUDED.created_at,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted',
-        [userStyleProfile.userId,userStyleProfile.formalityLevel,userStyleProfile.enthusiasmLevel,userStyleProfile.professionalismLevel,userStyleProfile.wordCountPreference,userStyleProfile.commonPhrases,userStyleProfile.avoidPhrases,userStyleProfile.learningSamples,userStyleProfile.accuracyScore,userStyleProfile.lastTrained,userStyleProfile.createdAt,t,now,userStyleProfile.deleted?1:0]);
+    if (userStyleProfile) {
+      await pool.query(
+        `INSERT INTO user_style_profiles (user_id,formality_level,enthusiasm_level,professionalism_level,word_count_preference,common_phrases,avoid_phrases,learning_samples,accuracy_score,last_trained,created_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (user_id) DO UPDATE SET formality_level=EXCLUDED.formality_level,enthusiasm_level=EXCLUDED.enthusiasm_level,professionalism_level=EXCLUDED.professionalism_level,word_count_preference=EXCLUDED.word_count_preference,common_phrases=EXCLUDED.common_phrases,avoid_phrases=EXCLUDED.avoid_phrases,learning_samples=EXCLUDED.learning_samples,accuracy_score=EXCLUDED.accuracy_score,last_trained=EXCLUDED.last_trained,created_at=EXCLUDED.created_at,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted`,
+        [userStyleProfile.userId,userStyleProfile.formalityLevel,userStyleProfile.enthusiasmLevel,userStyleProfile.professionalismLevel,userStyleProfile.wordCountPreference,userStyleProfile.commonPhrases,userStyleProfile.avoidPhrases,userStyleProfile.learningSamples,userStyleProfile.accuracyScore,userStyleProfile.lastTrained,userStyleProfile.createdAt,t,now,userStyleProfile.deleted?1:0]
+      );
+    }
     for (const a of appConfigs) {
-      await exec('INSERT INTO app_configs (package_name,app_name,icon_uri,is_monitored,created_at,last_used,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (package_name) DO UPDATE SET app_name=EXCLUDED.app_name,icon_uri=EXCLUDED.icon_uri,is_monitored=EXCLUDED.is_monitored,created_at=EXCLUDED.created_at,last_used=EXCLUDED.last_used,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted',
-        [a.packageName,a.appName,a.iconUri||null,a.isMonitored?1:0,a.createdAt,a.lastUsed,t,now,a.deleted?1:0]);
+      await pool.query(
+        `INSERT INTO app_configs (package_name,app_name,icon_uri,is_monitored,created_at,last_used,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (package_name) DO UPDATE SET app_name=EXCLUDED.app_name,icon_uri=EXCLUDED.icon_uri,is_monitored=EXCLUDED.is_monitored,created_at=EXCLUDED.created_at,last_used=EXCLUDED.last_used,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted`,
+        [a.packageName,a.appName,a.iconUri||null,a.isMonitored?1:0,a.createdAt,a.lastUsed,t,now,a.deleted?1:0]
+      );
     }
     for (const s of scenarios) {
-      await exec('INSERT INTO scenarios (id,name,type,target_id,description,created_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,type=EXCLUDED.type,target_id=EXCLUDED.target_id,description=EXCLUDED.description,created_at=EXCLUDED.created_at,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted',
-        [s.id,s.name,s.type,s.targetId||null,s.description||null,s.createdAt,t,now,s.deleted?1:0]);
+      await pool.query(
+        `INSERT INTO scenarios (id,name,type,target_id,description,created_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,type=EXCLUDED.type,target_id=EXCLUDED.target_id,description=EXCLUDED.description,created_at=EXCLUDED.created_at,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted`,
+        [s.id,s.name,s.type,s.targetId||null,s.description||null,s.createdAt,t,now,s.deleted?1:0]
+      );
     }
     for (const h of replyHistory) {
-      await exec('INSERT INTO reply_history (id,source_app,original_message,generated_reply,final_reply,rule_matched_id,model_used_id,style_applied,send_time,modified,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT (id) DO UPDATE SET source_app=EXCLUDED.source_app,original_message=EXCLUDED.original_message,generated_reply=EXCLUDED.generated_reply,final_reply=EXCLUDED.final_reply,rule_matched_id=EXCLUDED.rule_matched_id,model_used_id=EXCLUDED.model_used_id,style_applied=EXCLUDED.style_applied,send_time=EXCLUDED.send_time,modified=EXCLUDED.modified,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted',
-        [h.id,h.sourceApp,h.originalMessage,h.generatedReply,h.finalReply,h.ruleMatchedId||null,h.modelUsedId||null,h.styleApplied?1:0,h.sendTime,h.modified?1:0,t,now,h.deleted?1:0]);
+      await pool.query(
+        `INSERT INTO reply_history (id,source_app,original_message,generated_reply,final_reply,rule_matched_id,model_used_id,style_applied,send_time,modified,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT (id) DO UPDATE SET source_app=EXCLUDED.source_app,original_message=EXCLUDED.original_message,generated_reply=EXCLUDED.generated_reply,final_reply=EXCLUDED.final_reply,rule_matched_id=EXCLUDED.rule_matched_id,model_used_id=EXCLUDED.model_used_id,style_applied=EXCLUDED.style_applied,send_time=EXCLUDED.send_time,modified=EXCLUDED.modified,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted`,
+        [h.id,h.sourceApp,h.originalMessage,h.generatedReply,h.finalReply,h.ruleMatchedId||null,h.modelUsedId||null,h.styleApplied?1:0,h.sendTime,h.modified?1:0,t,now,h.deleted?1:0]
+      );
     }
     for (const b of messageBlacklist) {
-      await exec('INSERT INTO message_blacklist (id,type,value,description,package_name,created_at,is_enabled,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (id) DO UPDATE SET type=EXCLUDED.type,value=EXCLUDED.value,description=EXCLUDED.description,package_name=EXCLUDED.package_name,created_at=EXCLUDED.created_at,is_enabled=EXCLUDED.is_enabled,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted',
-        [b.id,b.type,b.value,b.description,b.packageName||null,b.createdAt,b.isEnabled?1:0,t,now,b.deleted?1:0]);
+      await pool.query(
+        `INSERT INTO message_blacklist (id,type,value,description,package_name,created_at,is_enabled,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (id) DO UPDATE SET type=EXCLUDED.type,value=EXCLUDED.value,description=EXCLUDED.description,package_name=EXCLUDED.package_name,created_at=EXCLUDED.created_at,is_enabled=EXCLUDED.is_enabled,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted`,
+        [b.id,b.type,b.value,b.description,b.packageName||null,b.createdAt,b.isEnabled?1:0,t,now,b.deleted?1:0]
+      );
     }
 
     // 处理删除
     for (const [et, ids] of Object.entries(deletedIds)) {
       for (const id of ids) {
-        if (et==='keyword_rules') await exec('UPDATE keyword_rules SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
-        else if (et==='ai_model_configs') await exec('UPDATE ai_model_configs SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
-        else if (et==='app_configs') await exec('UPDATE app_configs SET deleted=1,sync_version=$1 WHERE package_name=$2 AND tenant_id=$3', [now,id,t]);
-        else if (et==='scenarios') await exec('UPDATE scenarios SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
-        else if (et==='reply_history') await exec('UPDATE reply_history SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
-        else if (et==='message_blacklist') await exec('UPDATE message_blacklist SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
-        else if (et==='user_style_profiles') await exec('UPDATE user_style_profiles SET deleted=1,sync_version=$1 WHERE user_id=$2 AND tenant_id=$3', [now,id,t]);
+        if (et==='keyword_rules') await pool.query('UPDATE keyword_rules SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
+        else if (et==='ai_model_configs') await pool.query('UPDATE ai_model_configs SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
+        else if (et==='app_configs') await pool.query('UPDATE app_configs SET deleted=1,sync_version=$1 WHERE package_name=$2 AND tenant_id=$3', [now,id,t]);
+        else if (et==='scenarios') await pool.query('UPDATE scenarios SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
+        else if (et==='reply_history') await pool.query('UPDATE reply_history SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
+        else if (et==='message_blacklist') await pool.query('UPDATE message_blacklist SET deleted=1,sync_version=$1 WHERE id=$2 AND tenant_id=$3', [now,id,t]);
+        else if (et==='user_style_profiles') await pool.query('UPDATE user_style_profiles SET deleted=1,sync_version=$1 WHERE user_id=$2 AND tenant_id=$3', [now,id,t]);
       }
     }
 
     // checkpoint
-    await exec('INSERT INTO sync_checkpoints (tenant_id,last_sync_time,is_syncing,last_error) VALUES ($1,$2,0,NULL) ON CONFLICT (tenant_id) DO UPDATE SET last_sync_time=$2,is_syncing=0,last_error=NULL', [t, now]);
+    await pool.query('INSERT INTO sync_checkpoints (tenant_id,last_sync_time,is_syncing,last_error) VALUES ($1,$2,0,NULL) ON CONFLICT (tenant_id) DO UPDATE SET last_sync_time=$2,is_syncing=0,last_error=NULL', [t, now]);
 
     res.json({ code:0, message:'成功', data:{ accepted:true, conflicts, newServerVersion:now, serverTime:now } });
   } catch (e) {
