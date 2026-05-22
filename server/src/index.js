@@ -15,12 +15,12 @@ app.use(express.json({ limit: '10mb' }));
 
 // 健康检查
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.0' });
+  res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.0', deploy: 'e6f79d5-test-' + Date.now() });
 });
 
 // 测试端点 - 不需要认证
 app.get('/test-no-auth', (req, res) => {
-  res.json({ code: 0, message: 'test endpoint working', ts: Date.now() });
+  res.json({ code: 0, message: 'test endpoint working-' + Date.now(), deploy: 'e6f79d5' });
 });
 
 app.use('/sync', syncRouter);
