@@ -1,6 +1,6 @@
 {
   "name": "csbaby-sync-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "客服小秘云端同步服务端",
   "main": "src/index.js",
   "scripts": {
