@@ -13,7 +13,7 @@ services:
     env: node
     plan: free
     rootDir: server
-    buildCommand: npm install && npm test
+    buildCommand: npm install && npm test && echo "Deploy: $(date)"
     startCommand: npm start
     healthCheckPath: /
     envVars:
