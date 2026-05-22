@@ -12,8 +12,10 @@ services:
     name: csbaby-sync-server
     env: node
     plan: free
-    buildCommand: cd server && npm install
+    rootDir: server
+    buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /
     envVars:
       - key: NODE_ENV
         value: production
