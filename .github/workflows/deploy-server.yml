@@ -64,49 +64,98 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 触发 Render 部署（使用 Deploy Hook）
+      - name: 触发 Render 部署（使用 API）
         env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          echo "=== 使用 Deploy Hook 触发部署 ==="
+          SERVICE_ID="srv-d85hdj3bc2fs73bqqeg0"
 
-          # 触发部署（Deploy Hook 会等待部署完成）
-          HOOK_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$RENDER_DEPLOY_HOOK_URL")
+          echo "=== 使用 Render API 触发部署 ==="
+          echo "Service ID: $SERVICE_ID"
 
-          HTTP=$(echo "$HOOK_RESPONSE" | tail -1)
-          BODY=$(echo "$HOOK_RESPONSE" | head -c 500)
+          # 触发部署
+          DEPLOY=$(curl -s -X POST \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Accept: application/json" \
+            "https://api.render.com/v1/services/$SERVICE_ID/deploys")
 
-          echo "Hook HTTP: $HTTP"
-          echo "Hook Response: $BODY"
+          echo "Deploy Response: $DEPLOY"
 
-          if [ "$HTTP" = "200" ]; then
-            echo "✅ Deploy Hook 成功触发"
+          DEPLOY_ID=$(echo "$DEPLOY" | node -e "
+            let d=''; process.stdin.on('data',c=>d+=c);
+            process.stdin.on('end',()=>{
+              try {
+                const j=JSON.parse(d);
+                console.log(j.id || '');
+              } catch(e) {console.log('');}
+            });
+          ")
+
+          echo "Deploy ID: $DEPLOY_ID"
+
+          if [ -n "$DEPLOY_ID" ]; then
+            echo "✅ 部署已触发 (ID: $DEPLOY_ID)"
           else
-            echo "❌ Deploy Hook 失败"
+            echo "❌ 部署触发失败"
+            echo "$DEPLOY"
             exit 1
           fi
 
-      - name: 等待服务启动
+          # 保存 deploy ID 供后续使用
+          echo "$DEPLOY_ID" > deploy_id.txt
+
+      - name: 等待部署完成
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          echo "等待 120 秒让服务启动..."
-          sleep 120
+          DEPLOY_ID=$(cat deploy_id.txt)
+          echo "等待部署 $DEPLOY_ID 完成..."
+
+          for i in $(seq 1 30); do
+            sleep 20
+
+            STATUS=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
+              "https://api.render.com/v1/deploys/$DEPLOY_ID" | node -e "
+                let d=''; process.stdin.on('data',c=>d+=c);
+                process.stdin.on('end',()=>{
+                  try {
+                    const j=JSON.parse(d);
+                    console.log(j.status || 'unknown');
+                  } catch(e) {console.log('error');}
+                });
+              ")
+
+            echo "Attempt $i: $STATUS"
+
+            if [ "$STATUS" = "live" ]; then
+              echo "✅ 部署完成！"
+              exit 0
+            elif [ "$STATUS" = "failed" ]; then
+              echo "❌ 部署失败"
+              exit 1
+            fi
+
+            [ $i -lt 30 ]
+          done
+
+          echo "⚠️ 部署超时"
+          exit 1
+
+      - name: 验证部署
+        run: |
+          echo "等待服务启动..."
 
           for i in $(seq 1 10); do
             RESPONSE=$(curl -s "https://csbaby-sync-server.onrender.com/")
-            CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              --connect-timeout 10 \
-              "https://csbaby-sync-server.onrender.com/" 2>/dev/null)
-
             VERSION=$(echo "$RESPONSE" | grep -o '"version":"[^"]*"' 2>/dev/null | cut -d'"' -f4)
-            echo "Attempt $i: HTTP $CODE, Version: $VERSION"
+            echo "Attempt $i: Version=$VERSION"
 
-            if [ "$CODE" = "200" ] && [ -n "$VERSION" ]; then
-              echo "✅ 服务健康！"
+            if [ -n "$VERSION" ] && [ "$VERSION" != "1.0.0" ]; then
+              echo "✅ 新版本已部署: $VERSION"
               exit 0
             fi
 
-            [ $i -lt 10 ] && sleep 20
+            [ $i -lt 10 ] && sleep 15
           done
 
-          echo "⚠️ 健康检查失败"
-          exit 1
+          echo "⚠️ 验证失败，仍为旧版本 1.0.0"
