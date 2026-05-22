@@ -3,6 +3,7 @@ const cors = require('cors');
 const { register, login, refreshTokens, authMiddleware } = require('./auth');
 const syncRouter = require('./sync');
 const syncSimpleRouter = require('./sync-simple');
+const syncStandaloneRouter = require('./sync-standalone');
 const otaRouter = require('./ota');
 const backupRouter = require('./backup');
 const { getDb } = require('./db');
@@ -113,8 +114,8 @@ app.get('/test-batch', async (req, res) => {
   }
 });
 
-app.use('/sync', syncRouter);
 app.use('/sync-simple', syncSimpleRouter);
+app.use('/sync-standalone', syncStandaloneRouter);
 
 // 认证路由
 app.post('/auth/register', async (req, res) => {
