@@ -18,6 +18,11 @@ app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.0' });
 });
 
+// 测试端点 - 不需要认证
+app.get('/test-no-auth', (req, res) => {
+  res.json({ code: 0, message: 'test endpoint working', ts: Date.now() });
+});
+
 app.use('/sync', syncRouter);
 app.use('/sync-simple', syncSimpleRouter);
 
