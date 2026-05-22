@@ -23,7 +23,12 @@ async function getDb() {
   dbReady = (async () => {
     const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       await initSchema(client);
+      await client.query('COMMIT');
+    } catch (e) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+      throw e;
     } finally {
       client.release();
     }

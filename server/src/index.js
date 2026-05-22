@@ -16,12 +16,35 @@ app.use(express.json({ limit: '10mb' }));
 
 // 健康检查
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.0', deployId: 'DEPLOY-123456789' });
+  res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.2', buildTime: new Date().toISOString() });
 });
 
-// 唯一测试端点 - 用于验证最新部署
-app.get('/test-unique-abc123', (req, res) => {
-  res.json({ code: 0, message: 'Unique endpoint works!', timestamp: Date.now() });
+// Debug endpoint
+app.get('/debug-pool', async (req, res) => {
+  const { pool } = require('./db');
+  try {
+    const result = await pool.query('SELECT 1 as val');
+    res.json({ code: 0, message: 'pool works', data: result.rows[0] });
+  } catch (e) {
+    res.status(500).json({ code: 500, message: e.message });
+  }
+});
+
+// Debug: test simple INSERT
+app.get('/debug-insert', async (req, res) => {
+  const { pool } = require('./db');
+  try {
+    await pool.query('BEGIN');
+    await pool.query(
+      'INSERT INTO keyword_rules (keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
+      ['debug-insert', 'CONTAINS', 'test', 'test', 'ALL', '[]', 0, 1, Date.now(), Date.now(), 'fc0807c8-38ff-4c34-8fc2-b61dd1ce582d', Date.now(), 0]
+    );
+    await pool.query('COMMIT');
+    res.json({ code: 0, message: 'debug insert success' });
+  } catch (e) {
+    try { await pool.query('ROLLBACK'); } catch (_) {}
+    res.status(500).json({ code: 500, message: e.message });
+  }
 });
 
 // 直接在 index.js 中的测试端点 - 不需要任何外部模块
