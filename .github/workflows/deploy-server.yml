@@ -98,6 +98,20 @@ jobs:
           echo "Service ID: $SERVICE_ID"
           echo "Service ID length: ${#SERVICE_ID}"
 
+          # 打印所有服务名用于调试
+          echo "=== 所有服务 ==="
+          echo "$SERVICES" | node -e "
+            let d=''; process.stdin.on('data',c=>d+=c);
+            process.stdin.on('end',()=>{
+              try {
+                const j=JSON.parse(d);
+                if(Array.isArray(j)){
+                  j.forEach(s=>console.log('-',s.service.name,'->',s.service.id));
+                }
+              } catch(e){console.log('Parse error:',e.message)}
+            });
+          "
+
           # 3. 清理 Render 缓存并触发重新部署
           echo "触发强制重新部署..."
           DEPLOY=$(curl -s -w "\n%{http_code}" \
