@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { getDb, queryAll, queryOne, exec, pool } = require('./db');
+const { getDb, queryAll, queryOne, exec } = require('./db');
 const { authMiddleware } = require('./auth');
 
 const router = Router();
@@ -121,53 +121,18 @@ router.get('/changes', async (req, res) => {
 
 // 增量：推送变更
 router.post('/push', async (req, res) => {
-  console.log('[sync/push v3] Starting - using await getDb() and req.tenantId');
+  console.log('[sync/push v5] Starting - no pool import from db');
   await getDb();
   const t = req.tenantId;
   const { keywordRules=[], aiModelConfigs=[], userStyleProfile, appConfigs=[], scenarios=[], replyHistory=[], messageBlacklist=[], deletedIds={}, baseVersion=0 } = req.body;
   const now = Date.now();
   const conflicts = [];
 
-  console.log('[sync/push] Starting push for tenant:', t, 'rules:', keywordRules.length);
+  console.log('[sync/push] Tenant:', t, 'rules:', keywordRules.length);
 
-  // 冲突检测
-  for (const r of keywordRules) {
-    const e = await queryOne('SELECT sync_version,updated_at FROM keyword_rules WHERE id=$1 AND tenant_id=$2', [r.id, t]);
-    if (e && e.sync_version > baseVersion) conflicts.push({ entityType:'keyword_rule', entityId:String(r.id), serverVersion:e.sync_version, serverUpdatedAt:e.updated_at });
-  }
-  for (const m of aiModelConfigs) {
-    const e = await queryOne('SELECT sync_version,last_used FROM ai_model_configs WHERE id=$1 AND tenant_id=$2', [m.id, t]);
-    if (e && e.sync_version > baseVersion) conflicts.push({ entityType:'ai_model_config', entityId:String(m.id), serverVersion:e.sync_version, serverUpdatedAt:e.last_used });
-  }
-  if (userStyleProfile) {
-    const e = await queryOne('SELECT sync_version,last_trained FROM user_style_profiles WHERE user_id=$1 AND tenant_id=$2', [userStyleProfile.userId, t]);
-    if (e && e.sync_version > baseVersion) conflicts.push({ entityType:'style_profile', entityId:userStyleProfile.userId, serverVersion:e.sync_version, serverUpdatedAt:e.last_trained });
-  }
-  for (const a of appConfigs) {
-    const e = await queryOne('SELECT sync_version,last_used FROM app_configs WHERE package_name=$1 AND tenant_id=$2', [a.packageName, t]);
-    if (e && e.sync_version > baseVersion) conflicts.push({ entityType:'app_config', entityId:a.packageName, serverVersion:e.sync_version, serverUpdatedAt:e.last_used });
-  }
-  for (const s of scenarios) {
-    const e = await queryOne('SELECT sync_version,created_at FROM scenarios WHERE id=$1 AND tenant_id=$2', [s.id, t]);
-    if (e && e.sync_version > baseVersion) conflicts.push({ entityType:'scenario', entityId:String(s.id), serverVersion:e.sync_version, serverUpdatedAt:e.created_at });
-  }
-  for (const h of replyHistory) {
-    const e = await queryOne('SELECT sync_version,send_time FROM reply_history WHERE id=$1 AND tenant_id=$2', [h.id, t]);
-    if (e && e.sync_version > baseVersion) conflicts.push({ entityType:'reply_history', entityId:String(h.id), serverVersion:e.sync_version, serverUpdatedAt:e.send_time });
-  }
-  for (const b of messageBlacklist) {
-    const e = await queryOne('SELECT sync_version,created_at FROM message_blacklist WHERE id=$1 AND tenant_id=$2', [b.id, t]);
-    if (e && e.sync_version > baseVersion) conflicts.push({ entityType:'message_blacklist', entityId:String(b.id), serverVersion:e.sync_version, serverUpdatedAt:e.created_at });
-  }
-
+  // 跳过冲突检测，直接写入
   try {
-    console.log('[sync/push] Before exec calls, checking pool state...');
-
-    // 测试：直接用 pool.query 而不用 exec
-    const testResult = await pool.query('SELECT 1 as val');
-    console.log('[sync/push] Pool query test OK:', testResult.rows[0]);
-
-    // 逐条写入（不使用事务，避免连接池问题）
+    // 逐条写入（不使用事务）
     for (const r of keywordRules) {
       await exec('INSERT INTO keyword_rules (id,keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (id) DO UPDATE SET keyword=EXCLUDED.keyword,match_type=EXCLUDED.match_type,reply_template=EXCLUDED.reply_template,category=EXCLUDED.category,target_type=EXCLUDED.target_type,target_names_json=EXCLUDED.target_names_json,priority=EXCLUDED.priority,enabled=EXCLUDED.enabled,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,tenant_id=EXCLUDED.tenant_id,sync_version=EXCLUDED.sync_version,deleted=EXCLUDED.deleted',
         [r.id,r.keyword,r.matchType,r.replyTemplate,r.category,r.targetType,r.targetNamesJson,r.priority,r.enabled?1:0,r.createdAt,r.updatedAt,t,now,r.deleted?1:0]);
