@@ -103,6 +103,8 @@ jobs:
             -X POST \
             -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": true}' \
             "https://api.render.com/v1/services/$SERVICE_ID/deploys")
 
           HTTP=$(echo "$DEPLOY" | tail -1)
