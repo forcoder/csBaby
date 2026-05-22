@@ -64,15 +64,33 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
+      - name: 检查并启用 Auto-Deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          SERVICE_ID="srv-d85hdj3bc2fs73bqqeg0"
+
+          echo "检查服务信息..."
+          SERVICE=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
+            "https://api.render.com/v1/services/$SERVICE_ID")
+
+          echo "服务响应: $SERVICE"
+
+          # 启用 auto-deploy
+          echo "启用 auto-deploy for main branch..."
+          PATCH_RESULT=$(curl -s -w "\n%{http_code}" -X PATCH \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"autoDeployEnabled": true, "branch": "main"}' \
+            "https://api.render.com/v1/services/$SERVICE_ID")
+
+          echo "PATCH result: $PATCH_RESULT"
+
       - name: 触发 Render 部署（使用 Deploy Hook）
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
           echo "使用 Deploy Hook 触发部署..."
-          echo "Hook URL: $RENDER_DEPLOY_HOOK_URL"
-
-          # 测试 Hook URL 是否可访问
-          echo "测试 Hook URL..."
           HOOK_TEST=$(curl -s -w "\n%{http_code}" -X POST "$RENDER_DEPLOY_HOOK_URL")
           HTTP=$(echo "$HOOK_TEST" | tail -1)
           echo "Hook Response HTTP: $HTTP"
