@@ -16,7 +16,7 @@ app.use(express.json({ limit: '10mb' }));
 
 // 健康检查
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.2', buildTime: new Date().toISOString() });
+  res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.3' });
 });
 
 // Debug endpoint
