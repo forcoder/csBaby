@@ -96,6 +96,7 @@ jobs:
           fi
 
           echo "Service ID: $SERVICE_ID"
+          echo "Service ID length: ${#SERVICE_ID}"
 
           # 3. 清理 Render 缓存并触发重新部署
           echo "触发强制重新部署..."
