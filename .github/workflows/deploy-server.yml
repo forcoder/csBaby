@@ -68,7 +68,6 @@ jobs:
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          set -e
           SERVICE_ID="srv-d85hdj3bc2fs73bqqeg0"
 
           echo "=== 当前版本信息 ==="
@@ -95,8 +94,7 @@ jobs:
           echo "=== 触发部署 ==="
           DEPLOY=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Authorization: Bearer $RENDER_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"clearCache\": false}" \
+            -H "Accept: application/json" \
             "https://api.render.com/v1/services/$SERVICE_ID/deploys")
 
           HTTP=$(echo "$DEPLOY" | tail -1)
