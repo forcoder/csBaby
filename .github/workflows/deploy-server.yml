@@ -97,7 +97,8 @@ jobs:
 
           echo "Service ID: $SERVICE_ID"
 
-          # 3. 触发重新部署（Render 会自动 git pull + build + start）
+          # 3. 清理 Render 缓存并触发重新部署
+          echo "触发强制重新部署..."
           DEPLOY=$(curl -s -w "\n%{http_code}" \
             -X POST \
             -H "Authorization: Bearer $RENDER_API_KEY" \

@@ -50,6 +50,69 @@ app.post('/direct-push', async (req, res) => {
   }
 });
 
+// 测试端点 - 使用纯文本 SQL（无参数）
+app.get('/test-exec', async (req, res) => {
+  console.log('[test-exec] Starting...');
+  const { exec } = require('./db');
+
+  try {
+    await exec(
+      "INSERT INTO keyword_rules (keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ('test-exec','CONTAINS','hello','test','ALL','[]',0,1," + Date.now() + "," + Date.now() + ",'fc0807c8-38ff-4c34-8fc2-b61dd1ce582d'," + Date.now() + ",0)"
+    );
+    res.json({ code: 0, message: 'success' });
+  } catch (e) {
+    console.error('[test-exec] Error:', e.message);
+    res.status(500).json({ code: 500, message: e.message });
+  }
+});
+
+// 测试端点 - 使用 pool.query 直接
+app.get('/test-pool', async (req, res) => {
+  console.log('[test-pool] Starting...');
+  const { pool } = require('./db');
+
+  try {
+    const now = Date.now();
+    const tenantId = 'fc0807c8-38ff-4c34-8fc2-b61dd1ce582d';
+    const r = await pool.query(
+      'INSERT INTO keyword_rules (keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id',
+      ['test-pool', 'CONTAINS', 'hello', 'test', 'ALL', '[]', 0, 1, now, now, tenantId, now, 0]
+    );
+    res.json({ code: 0, message: 'success', data: r.rows[0] });
+  } catch (e) {
+    console.error('[test-pool] Error:', e.message);
+    res.status(500).json({ code: 500, message: e.message });
+  }
+});
+
+// 测试端点 - 多条 INSERT
+app.get('/test-batch', async (req, res) => {
+  console.log('[test-batch] Starting...');
+  const { pool } = require('./db');
+
+  try {
+    const now = Date.now();
+    const tenantId = 'fc0807c8-38ff-4c34-8fc2-b61dd1ce582d';
+
+    // 先 INSERT 一条
+    await pool.query(
+      'INSERT INTO keyword_rules (keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
+      ['batch-1', 'CONTAINS', 'test1', 'test', 'ALL', '[]', 0, 1, now, now, tenantId, now, 0]
+    );
+
+    // 再 UPDATE 一条
+    await pool.query(
+      'UPDATE keyword_rules SET keyword=$1 WHERE id=1',
+      ['updated-via-pool']
+    );
+
+    res.json({ code: 0, message: 'batch success' });
+  } catch (e) {
+    console.error('[test-batch] Error:', e.message);
+    res.status(500).json({ code: 500, message: e.message });
+  }
+});
+
 app.use('/sync', syncRouter);
 app.use('/sync-simple', syncSimpleRouter);
 
@@ -93,7 +156,7 @@ app.post('/auth/refresh', (req, res) => {
   }
 });
 
-// 同步路由
+// 同步路由（仅在此处注册一次）
 app.use('/sync', syncRouter);
 
 // OTA 更新路由（/api/v1/ota）
