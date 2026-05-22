@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { register, login, refreshTokens, authMiddleware } = require('./auth');
 const syncRouter = require('./sync');
+const syncSimpleRouter = require('./sync-simple');
 const otaRouter = require('./ota');
 const backupRouter = require('./backup');
 const { getDb } = require('./db');
@@ -16,6 +17,9 @@ app.use(express.json({ limit: '10mb' }));
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.0' });
 });
+
+app.use('/sync', syncRouter);
+app.use('/sync-simple', syncSimpleRouter);
 
 // 认证路由
 app.post('/auth/register', async (req, res) => {
@@ -58,7 +62,6 @@ app.post('/auth/refresh', (req, res) => {
 });
 
 // 同步路由
-app.use('/sync', syncRouter);
 
 // OTA 更新路由（/api/v1/ota）
 app.use('/api/v1/ota', otaRouter);
