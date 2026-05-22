@@ -133,16 +133,14 @@ jobs:
           echo "=== 服务详细信息 ==="
           SERVICE_DETAILS=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
             "https://api.render.com/v1/services/$SERVICE_ID")
+          echo "Raw response: $SERVICE_DETAILS"
           echo "$SERVICE_DETAILS" | node -e "
             let d=''; process.stdin.on('data',c=>d+=c);
             process.stdin.on('end',()=>{
               try {
                 const j=JSON.parse(d);
-                console.log('Service Name:', j.service?.name);
-                console.log('Auto Deploy:', j.service?.autoDeployEnabled);
-                console.log('Branch:', j.service?.branch);
-                console.log('Commit SHA:', j.service?.commitSHA);
-                console.log('Deploy Status:', j.service?.deployStatus);
+                console.log('Response keys:', Object.keys(j));
+                console.log('Service:', JSON.stringify(j, null, 2).slice(0, 2000));
               } catch(e){console.log('Parse error:',e.message)}
             });
           "
