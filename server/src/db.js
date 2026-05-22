@@ -276,7 +276,19 @@ function interpolate(sql, params) {
 async function exec(sql, params = []) {
   try {
     // 如果有参数，手动替换 $N 占位符（简单查询协议）
-    const finalSql = params.length > 0 ? interpolate(sql, params) : sql;
+    let finalSql = sql;
+    if (params.length > 0) {
+      // 预编译所有参数
+      const compiled = [];
+      for (let i = 0; i < params.length; i++) {
+        compiled.push(escapeSql(params[i]));
+      }
+      // 替换所有 $N 占位符（1-indexed）
+      finalSql = sql.replace(/\$(\d+)/g, (match, n) => {
+        const idx = parseInt(n, 10) - 1;
+        return idx < compiled.length ? compiled[idx] : match;
+      });
+    }
     const result = await pool.query(finalSql);
     return { changes: result.rowCount, lastInsertRowid: result.rows[0]?.id || 0 };
   } catch (e) {
