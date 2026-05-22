@@ -64,94 +64,26 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 触发 Render 部署
+      - name: 触发 Render 部署（使用 Deploy Hook）
         env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
-          set -e
+          echo "使用 Deploy Hook 触发部署..."
+          echo "Hook URL: $RENDER_DEPLOY_HOOK_URL"
 
-          # 1. 获取已有服务列表
-          SERVICES=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
-            "https://api.render.com/v1/services?limit=50")
+          # 测试 Hook URL 是否可访问
+          echo "测试 Hook URL..."
+          HOOK_TEST=$(curl -s -w "\n%{http_code}" -X POST "$RENDER_DEPLOY_HOOK_URL")
+          HTTP=$(echo "$HOOK_TEST" | tail -1)
+          echo "Hook Response HTTP: $HTTP"
+          echo "Hook Response body: $HOOK_TEST"
 
-          # 2. 查找 csbaby-sync-server
-          SERVICE_ID=$(echo "$SERVICES" | node -e "
-            let d=''; process.stdin.on('data',c=>d+=c);
-            process.stdin.on('end',()=>{
-              try {
-                const j=JSON.parse(d);
-                if(Array.isArray(j)){
-                  const svc=j.find(s=>s.service.name==='csbaby-sync-server');
-                  if(svc){console.log(svc.service.id);return;}
-                }
-                console.log('NOT_FOUND');
-              } catch(e){console.log('NOT_FOUND');}
-            });
-          ")
-
-          if [ "$SERVICE_ID" = "NOT_FOUND" ]; then
-            echo "服务不存在，首次部署需要手动在 Render 创建服务"
-            echo "或使用 workflow_dispatch 触发带创建逻辑的部署"
+          if [ "$HTTP" = "200" ] || [ "$HTTP" = "201" ] || [ "$HTTP" = "202" ]; then
+            echo "✅ Deploy Hook 触发成功"
+          else
+            echo "❌ Deploy Hook 触发失败"
             exit 1
           fi
-
-          echo "Service ID: $SERVICE_ID"
-          echo "Service ID length: ${#SERVICE_ID}"
-
-          # 打印所有服务名用于调试
-          echo "=== 所有服务 ==="
-          echo "$SERVICES" | node -e "
-            let d=''; process.stdin.on('data',c=>d+=c);
-            process.stdin.on('end',()=>{
-              try {
-                const j=JSON.parse(d);
-                if(Array.isArray(j)){
-                  j.forEach(s=>console.log('-',s.service.name,'->',s.service.id));
-                }
-              } catch(e){console.log('Parse error:',e.message)}
-            });
-          "
-
-          # 3. 清理 Render 缓存并触发重新部署
-          echo "触发强制重新部署..."
-          DEPLOY=$(curl -s -w "\n%{http_code}" \
-            -X POST \
-            -H "Authorization: Bearer $RENDER_API_KEY" \
-            -H "Accept: application/json" \
-            "https://api.render.com/v1/services/$SERVICE_ID/deploys")
-
-          HTTP=$(echo "$DEPLOY" | tail -1)
-          echo "Deploy HTTP: $HTTP"
-
-          [ "$HTTP" = "201" ] || [ "$HTTP" = "200" ] || [ "$HTTP" = "202" ] \
-            && echo "✅ 部署已触发" || { echo "❌ 部署触发失败"; exit 1; }
-
-          # 保存服务 ID 到文件供调试
-          echo "$SERVICE_ID" > service_id.txt
-
-          # 打印服务详细信息
-          echo "=== 服务详细信息 ==="
-          SERVICE_DETAILS=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
-            "https://api.render.com/v1/services/$SERVICE_ID")
-          echo "Raw response: $SERVICE_DETAILS"
-          echo "$SERVICE_DETAILS" | node -e "
-            let d=''; process.stdin.on('data',c=>d+=c);
-            process.stdin.on('end',()=>{
-              try {
-                const j=JSON.parse(d);
-                console.log('Response keys:', Object.keys(j));
-                console.log('Service:', JSON.stringify(j, null, 2).slice(0, 2000));
-              } catch(e){console.log('Parse error:',e.message)}
-            });
-          "
-
-      - name: 上传服务ID
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: render-service-id
-          path: service_id.txt
-          retention-days: 1
 
       - name: 等待部署完成（健康检查）
         run: |
