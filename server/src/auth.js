@@ -108,4 +108,4 @@ function authMiddleware(req, res, next) {
   next();
 }
 
-module.exports = { register, login, refreshTokens, authMiddleware };
+module.exports = { register, login, refreshTokens, authMiddleware, verifyAccess };
