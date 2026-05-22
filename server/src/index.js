@@ -15,12 +15,39 @@ app.use(express.json({ limit: '10mb' }));
 
 // 健康检查
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.0', deploy: 'e6f79d5-test-' + Date.now() });
+  res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.0' });
 });
 
-// 测试端点 - 不需要认证
-app.get('/test-no-auth', (req, res) => {
-  res.json({ code: 0, message: 'test endpoint working-' + Date.now(), deploy: 'e6f79d5' });
+// 直接在 index.js 中的测试端点 - 不需要任何外部模块
+app.post('/direct-push', async (req, res) => {
+  console.log('[direct-push] Starting...');
+  const t = req.body.tenantId || req.query.tenantId;
+  const { keywordRules = [] } = req.body;
+
+  if (!t) {
+    return res.status(400).json({ code: 400, message: '缺少 tenantId' });
+  }
+
+  const now = Date.now();
+  const { getDb, exec } = require('./db');
+
+  try {
+    await getDb();
+    console.log('[direct-push] DB initialized, inserting', keywordRules.length, 'rules');
+
+    for (const r of keywordRules) {
+      await exec(
+        'INSERT INTO keyword_rules (id,keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)',
+        [r.id || Date.now(), r.keyword || 'test', r.matchType || 'CONTAINS', r.replyTemplate || 'reply', r.category || '', r.targetType || 'ALL', r.targetNamesJson || '[]', r.priority || 0, r.enabled !== false ? 1 : 0, now, now, t, now, 0]
+      );
+    }
+
+    console.log('[direct-push] Success!');
+    res.json({ code: 0, message: '成功', data: { accepted: true } });
+  } catch (e) {
+    console.error('[direct-push] Error:', e.message);
+    res.status(500).json({ code: 500, message: e.message });
+  }
 });
 
 app.use('/sync', syncRouter);
