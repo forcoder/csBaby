@@ -62,6 +62,7 @@ app.post('/auth/refresh', (req, res) => {
 });
 
 // 同步路由
+app.use('/sync', syncRouter);
 
 // OTA 更新路由（/api/v1/ota）
 app.use('/api/v1/ota', otaRouter);
