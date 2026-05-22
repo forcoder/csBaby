@@ -12,3 +12,4 @@ services:
         generateValue: true
       - key: PORT
         value: 8080
+# Force redeploy trigger - this line ensures rebuild
