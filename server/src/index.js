@@ -1,14 +1,10 @@
-// Marker: 1779429850
-// Marker: 1779429728
 const express = require('express');
 const cors = require('cors');
 const { register, login, refreshTokens, authMiddleware } = require('./auth');
 const syncRouter = require('./sync');
-const syncSimpleRouter = require('./sync-simple');
-const syncStandaloneRouter = require('./sync-standalone');
 const otaRouter = require('./ota');
 const backupRouter = require('./backup');
-const { getDb } = require('./db');
+const { getDb, getPool } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -16,132 +12,32 @@ const PORT = process.env.PORT || 8080;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// 健康检查
 app.get('/', (req, res) => {
-  // Marker: 1779429800
-res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.99', ts: Date.now() });
+  res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.100', ts: Date.now() });
 });
 
-// Debug endpoint
-app.get('/debug-pool', async (req, res) => {
-  const { getPool } = require('./db');
+// 最简单的测试
+app.get('/test-select', async (req, res) => {
   try {
-    const pool = getPool();
     const result = await getPool().query('SELECT 1 as val');
-    res.json({ code: 0, message: 'pool works', data: result.rows[0] });
+    res.json({ code: 0, data: result.rows[0] });
   } catch (e) {
     res.status(500).json({ code: 500, message: e.message });
   }
 });
 
-// Debug: simple init
-app.get('/debug-insert', async (req, res) => {
-  const { getDb } = require('./db');
-  try {
-    await getDb();
-    res.json({ code: 0, message: 'db ok' });
-  } catch (e) {
-    res.status(500).json({ code: 500, message: e.message });
-  }
-});
-
-// 直接在 index.js 中的测试端点 - 不需要任何外部模块
-app.post('/direct-push', async (req, res) => {
-  console.log('[direct-push] Starting...');
-  const t = req.body.tenantId || req.query.tenantId;
-  const { keywordRules = [] } = req.body;
-
-  if (!t) {
-    return res.status(400).json({ code: 400, message: '缺少 tenantId' });
-  }
-
-  const now = Date.now();
-  const { getDb, exec } = require('./db');
-
-  try {
-    await getDb();
-    console.log('[direct-push] DB initialized, inserting', keywordRules.length, 'rules');
-
-    for (const r of keywordRules) {
-      await exec(
-        'INSERT INTO keyword_rules (id,keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)',
-        [r.id || Date.now(), r.keyword || 'test', r.matchType || 'CONTAINS', r.replyTemplate || 'reply', r.category || '', r.targetType || 'ALL', r.targetNamesJson || '[]', r.priority || 0, r.enabled !== false ? 1 : 0, now, now, t, now, 0]
-      );
-    }
-
-    console.log('[direct-push] Success!');
-    res.json({ code: 0, message: '成功', data: { accepted: true } });
-  } catch (e) {
-    console.error('[direct-push] Error:', e.message);
-    res.status(500).json({ code: 500, message: e.message });
-  }
-});
-
-// 测试端点 - 使用纯文本 SQL（无参数）
-app.get('/test-exec', async (req, res) => {
-  console.log('[test-exec] Starting...');
-  const { exec } = require('./db');
-
-  try {
-    await exec(
-      "INSERT INTO keyword_rules (keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ('test-exec','CONTAINS','hello','test','ALL','[]',0,1," + Date.now() + "," + Date.now() + ",'fc0807c8-38ff-4c34-8fc2-b61dd1ce582d'," + Date.now() + ",0)"
-    );
-    res.json({ code: 0, message: 'success' });
-  } catch (e) {
-    console.error('[test-exec] Error:', e.message);
-    res.status(500).json({ code: 500, message: e.message });
-  }
-});
-
-// 测试端点 - 使用 getPool().query 直接
-app.get('/test-pool', async (req, res) => {
-  console.log('[test-pool] Starting...');
-  const { getPool } = require('./db');
-
+app.post('/test-insert', async (req, res) => {
   try {
     const now = Date.now();
-    const tenantId = 'fc0807c8-38ff-4c34-8fc2-b61dd1ce582d';
     const r = await getPool().query(
-      'INSERT INTO keyword_rules (keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id',
-      ['test-pool', 'CONTAINS', 'hello', 'test', 'ALL', '[]', 0, 1, now, now, tenantId, now, 0]
-    );
-    res.json({ code: 0, message: 'success', data: r.rows[0] });
-  } catch (e) {
-    console.error('[test-pool] Error:', e.message);
-    res.status(500).json({ code: 500, message: e.message });
-  }
-});
-
-// 测试端点 - 多条 INSERT
-app.get('/test-batch', async (req, res) => {
-  console.log('[test-batch] Starting...');
-  const { getPool } = require('./db');
-
-  try {
-    const now = Date.now();
-    const tenantId = 'fc0807c8-38ff-4c34-8fc2-b61dd1ce582d';
-
-    // 先 INSERT 一条
-    await getPool().query(
       'INSERT INTO keyword_rules (keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
-      ['batch-1', 'CONTAINS', 'test1', 'test', 'ALL', '[]', 0, 1, now, now, tenantId, now, 0]
+      ['test-direct', 'CONTAINS', 'hello', 'test', 'ALL', '[]', 0, 1, now, now, 'fc0807c8-38ff-4c34-8fc2-b61dd1ce582d', now, 0]
     );
-
-    // 再 UPDATE 一条
-    await getPool().query(
-      'UPDATE keyword_rules SET keyword=$1 WHERE id=1',
-      ['updated-via-pool']
-    );
-
-    res.json({ code: 0, message: 'batch success' });
+    res.json({ code: 0, message: 'insert ok', rowCount: r.rowCount });
   } catch (e) {
-    console.error('[test-batch] Error:', e.message);
-    res.status(500).json({ code: 500, message: e.message });
+    res.status(500).json({ code: 500, message: e.message, code2: e.code });
   }
 });
-
-app.use('/sync-simple', syncSimpleRouter);
-app.use('/sync-standalone', syncStandaloneRouter);
 
 // 认证路由
 app.post('/auth/register', async (req, res) => {
@@ -183,27 +79,21 @@ app.post('/auth/refresh', (req, res) => {
   }
 });
 
-// 同步路由（仅在此处注册一次）
+// 同步路由
 app.use('/sync', syncRouter);
 
-// OTA 更新路由（/api/v1/ota）
+// OTA 更新路由
 app.use('/api/v1/ota', otaRouter);
 
-// 数据备份路由（/api/v1/backup）
+// 数据备份路由
 app.use('/api/v1/backup', backupRouter);
 
 // 等待数据库初始化后启动
 getDb().then(() => {
   app.listen(PORT, () => {
-    console.log(`客服小秘同步服务端已启动，端口: ${PORT}`);
+    console.log(`Server started on port ${PORT}`);
   });
 }).catch(e => {
-  console.error('数据库初始化失败:', e);
+  console.error('DB init failed:', e);
   process.exit(1);
 });
-// v1.2.0 - 2026年05月18日 20:11:54
-// test comment
-// Marker: 1779419728
-// marker: 1779450665
-// deploy test: 1779452664
-Force redeploy 1779454941
