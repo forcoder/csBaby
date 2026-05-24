@@ -24,11 +24,15 @@ async function getDb() {
   dbReady = (async () => {
     const client = await pool.connect();
     try {
+      // 简单验证连接
+      await client.query('SELECT 1');
       await client.query('BEGIN');
       await initSchema(client);
       await client.query('COMMIT');
     } catch (e) {
       try { await client.query('ROLLBACK'); } catch (_) {}
+      // 连接问题，清理缓存重试
+      dbReady = null;
       throw e;
     } finally {
       client.release();
