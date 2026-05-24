@@ -143,10 +143,19 @@ fun ProfileScreen(
                     currentTenantId = uiState.currentTenantId,
                     pendingSyncCount = uiState.pendingSyncCount,
                     lastSyncTime = uiState.lastSyncTime,
+                    syncStats = uiState.syncStats,
+                    backupStatus = uiState.backupStatus,
+                    backupMessage = uiState.backupMessage,
+                    backupRecords = uiState.backupRecords,
                     onLogin = { email, password -> viewModel.login(email, password) },
                     onRegister = { email, password, name -> viewModel.register(email, password, name) },
                     onSync = { viewModel.syncNow() },
-                    onLogout = { viewModel.logout() }
+                    onLogout = { viewModel.logout() },
+                    onUploadBackup = { viewModel.uploadBackup() },
+                    onFetchBackupList = { viewModel.fetchBackupList() },
+                    onRestoreBackup = { viewModel.restoreBackup(it) },
+                    onDeleteBackup = { viewModel.deleteBackup(it) },
+                    onClearBackupStatus = { viewModel.clearBackupStatus() }
                 )
             }
 
@@ -155,20 +164,6 @@ fun ProfileScreen(
                 OtaUpdateCard(
                     viewModel = viewModel,
                     uiState = uiState
-                )
-            }
-
-            // Data Backup & Restore Card
-            item {
-                BackupCard(
-                    backupStatus = uiState.backupStatus,
-                    backupMessage = uiState.backupMessage,
-                    backupRecords = uiState.backupRecords,
-                    onUploadBackup = { viewModel.uploadBackup() },
-                    onFetchBackupList = { viewModel.fetchBackupList() },
-                    onRestoreBackup = { viewModel.restoreBackup(it) },
-                    onDeleteBackup = { viewModel.deleteBackup(it) },
-                    onClearStatus = { viewModel.clearBackupStatus() }
                 )
             }
 
