@@ -84,7 +84,13 @@ class ProfileViewModel @Inject constructor(
     private fun observeSyncState() {
         viewModelScope.launch {
             syncManager.syncState.collect { state ->
-                _uiState.update { it.copy(syncState = state) }
+                _uiState.update {
+                    it.copy(
+                        syncState = state,
+                        // 从成功状态中提取统计信息
+                        syncStats = if (state is SyncState.Success) state.stats else it.syncStats
+                    )
+                }
             }
         }
     }
@@ -290,16 +296,7 @@ class ProfileViewModel @Inject constructor(
     fun syncNow() {
         viewModelScope.launch {
             val tenantId = authManager.currentTenantId() ?: return@launch
-            val result = syncManager.incrementalSync(tenantId)
-            if (result.isSuccess) {
-                // 同步成功后更新统计信息
-                val tenant = authManager.currentTenantId()
-                if (tenant != null) {
-                    syncManager.getLastSyncStats()?.let { stats ->
-                        _uiState.update { it.copy(syncStats = stats) }
-                    }
-                }
-            }
+            syncManager.incrementalSync(tenantId)
         }
     }
 
@@ -339,6 +336,7 @@ class ProfileViewModel @Inject constructor(
      */
     fun fetchBackupList() {
         viewModelScope.launch {
+            backupManager.clearStatus()
             backupManager.fetchBackupList()
         }
     }

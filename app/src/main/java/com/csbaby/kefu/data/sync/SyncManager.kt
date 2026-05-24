@@ -266,7 +266,7 @@ class SyncManager @Inject constructor(
 
             val stats = _lastSyncStats
             if (stats.isNotEmpty()) {
-                _syncState.value = SyncState.Success("同步完成 ($stats)")
+                _syncState.value = SyncState.Success("同步完成", stats)
             } else {
                 _syncState.value = SyncState.Success("同步完成")
             }
@@ -639,5 +639,5 @@ sealed class SyncState {
     object Idle : SyncState()
     data class Syncing(val message: String) : SyncState()
     data class Error(val message: String) : SyncState()
-    data class Success(val message: String) : SyncState()
+    data class Success(val message: String, val stats: String = "") : SyncState()
 }
