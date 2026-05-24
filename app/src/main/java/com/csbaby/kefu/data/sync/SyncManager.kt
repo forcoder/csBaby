@@ -85,8 +85,6 @@ class SyncManager @Inject constructor(
                 )
                 _authState.value = auth
                 authManager.saveAuthState(auth)
-                // 迁移本地数据到真实租户
-                migrateLocalData(auth.tenantId)
                 _syncState.value = SyncState.Success("登录成功")
                 Timber.d("登录成功: tenant=${auth.tenantId}, user=${auth.userId}")
                 Result.success(auth)
@@ -204,62 +202,6 @@ class SyncManager @Inject constructor(
             Timber.e(e, "Token刷新异常")
             null
         }
-    }
-
-    // ========== 本地数据迁移（default_tenant → 真实租户） ==========
-
-    /**
-     * 将本地 default_tenant 的数据迁移到真实租户。
-     * 解决卸载重装后本地数据 tenantId 不正确的问题。
-     */
-    private suspend fun migrateLocalData(tenantId: String) {
-        if (tenantId == DEFAULT_TENANT_ID) return
-
-        Timber.d("开始迁移本地数据: default_tenant -> $tenantId")
-
-        val rules = keywordRuleDao.getRulesByTenantSync(DEFAULT_TENANT_ID)
-        if (rules.isNotEmpty()) {
-            rules.forEach { rule ->
-                keywordRuleDao.insertRule(rule.copy(tenantId = tenantId, syncVersion = 0L))
-            }
-            Timber.d("迁移 $tenantId/${rules.size} 条知识库规则")
-        }
-
-        val models = aiModelConfigDao.getModelsByTenantSync(DEFAULT_TENANT_ID)
-        if (models.isNotEmpty()) {
-            models.forEach { model ->
-                aiModelConfigDao.insertModel(model.copy(tenantId = tenantId, syncVersion = 0L))
-            }
-            Timber.d("迁移 $tenantId/${models.size} 条 AI 模型配置")
-        }
-
-        val profiles = userStyleProfileDao.getProfileByTenantIdSync(DEFAULT_TENANT_ID)
-        profiles?.let {
-            userStyleProfileDao.insertProfile(it.copy(tenantId = tenantId, syncVersion = 0L))
-            Timber.d("迁移 $tenantId 风格画像")
-        }
-
-        val apps = appConfigDao.getAppsByTenantSync(DEFAULT_TENANT_ID)
-        if (apps.isNotEmpty()) {
-            apps.forEach { app ->
-                appConfigDao.insertApp(app.copy(tenantId = tenantId, syncVersion = 0L))
-            }
-            Timber.d("迁移 $tenantId/${apps.size} 条应用配置")
-        }
-
-        val scenarios = scenarioDao.getScenariosByTenantSync(DEFAULT_TENANT_ID)
-        if (scenarios.isNotEmpty()) {
-            scenarios.forEach { scenario ->
-                scenarioDao.insertScenario(scenario.copy(tenantId = tenantId, syncVersion = 0L))
-            }
-            Timber.d("迁移 $tenantId/${scenarios.size} 条场景")
-        }
-
-        Timber.d("本地数据迁移完成")
-    }
-
-    companion object {
-        const val DEFAULT_TENANT_ID = "default_tenant"
     }
 
     // ========== 全量同步（首次登录 / 换手机恢复） ==========

@@ -272,11 +272,19 @@ function interpolate(sql, params) {
 }
 
 // 执行 SQL（INSERT/UPDATE/DELETE）
-// 使用标准参数化查询
+// 使用标准参数化查询，并验证连接状态
 async function exec(sql, params = []) {
   try {
-    const result = await pool.query(sql, params);
-    return { changes: result.rowCount, lastInsertRowid: result.rows[0]?.id || 0 };
+    // 确保连接池有效
+    const client = await pool.connect();
+    try {
+      // 验证连接状态
+      await client.query('SELECT 1');
+      const result = await client.query(sql, params);
+      return { changes: result.rowCount, lastInsertRowid: result.rows[0]?.id || 0 };
+    } finally {
+      client.release();
+    }
   } catch (e) {
     console.error('exec error:', e.message, 'SQL:', (sql || '').slice(0, 200), 'Params:', JSON.stringify(params || []).slice(0, 200));
     throw e;
@@ -286,9 +294,16 @@ async function exec(sql, params = []) {
 // 查询多条记录
 async function queryAll(sql, params = []) {
   try {
-    // SELECT 查询继续使用参数化查询（兼容性更好）
-    const result = params.length > 0 ? await pool.query(sql, params) : await pool.query(sql);
-    return result.rows;
+    // 确保连接池有效
+    const client = await pool.connect();
+    try {
+      // 验证连接状态
+      await client.query('SELECT 1');
+      const result = params.length > 0 ? await client.query(sql, params) : await client.query(sql);
+      return result.rows;
+    } finally {
+      client.release();
+    }
   } catch (e) {
     console.error('queryAll error:', e.message, 'SQL:', (sql || '').slice(0, 200));
     throw e;
