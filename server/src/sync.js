@@ -121,8 +121,14 @@ router.get('/changes', async (req, res) => {
 
 // 增量：推送变更
 router.post('/push', async (req, res) => {
-  console.log('[sync/push v10] Using parameterized queries with connection validation');
-  await getDb();
+  console.log('[sync/push v11] Starting...');
+  try {
+    await getDb();
+    console.log('[sync/push] getDb OK');
+  } catch (e) {
+    console.error('[sync/push] getDb ERROR:', e.message);
+    return res.status(500).json({ code: 500, message: '数据库初始化失败: ' + e.message });
+  }
   const t = req.tenantId;
   const { keywordRules=[], aiModelConfigs=[], userStyleProfile, appConfigs=[], scenarios=[], replyHistory=[], messageBlacklist=[], deletedIds={}, baseVersion=0 } = req.body;
   const now = Date.now();
@@ -131,9 +137,10 @@ router.post('/push', async (req, res) => {
 
   console.log('[sync/push] Tenant:', t, 'rules:', keywordRules.length);
 
-  // 使用参数化查询
   try {
-    for (const r of keywordRules) {
+    // Test: can we do a simple SELECT?
+    const testResult = await queryOne('SELECT 1 as val');
+    console.log('[sync/push] SELECT test:', testResult);
       const result = await exec(
         `INSERT INTO keyword_rules (id,keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)

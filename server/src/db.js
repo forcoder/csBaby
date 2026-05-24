@@ -24,12 +24,13 @@ async function getDb() {
     const pool = getPool();
     try {
       // Test connection first
-      await pool.query('SELECT 1');
-      console.log('[getDb] Connection OK, init schema...');
+      const testResult = await pool.query('SELECT 1 as val');
+      console.log('[getDb] Connection test OK:', testResult.rows[0]);
       await initSchema(pool);
       console.log('[getDb] Schema init OK');
     } catch (e) {
-      console.error('getDb init error:', e.message);
+      console.error('[getDb] init error:', e.message);
+      // Don't cache the error - allow retry
       dbReady = null;
       throw e;
     }

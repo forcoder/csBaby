@@ -17,26 +17,34 @@ app.get('/', (req, res) => {
 });
 
 // 最简单的测试
-app.get('/test-select', async (req, res) => {
+app.get('/diagnose', async (req, res) => {
+  const { getPool, exec, queryAll } = require('./db');
+  const results = {};
   try {
-    const result = await getPool().query('SELECT 1 as val');
-    res.json({ code: 0, data: result.rows[0] });
+    const pool = getPool();
+    results.poolCreated = true;
+    try {
+      const r1 = await pool.query('SELECT 1 as val');
+      results.select1 = r1.rows[0];
+    } catch (e) { results.select1Err = e.message; }
+    try {
+      const now = Date.now();
+      const r2 = await pool.query('INSERT INTO keyword_rules (keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)', ['diag-test', 'CONTAINS', 'test', 'test', 'ALL', '[]', 0, 1, now, now, 'fc0807c8-38ff-4c34-8fc2-b61dd1ce582d', now, 0]);
+      results.insert = { rowCount: r2.rowCount };
+    } catch (e) { results.insertErr = e.message; }
+    try {
+      const r3 = await queryAll('SELECT COUNT(*) as cnt FROM keyword_rules WHERE keyword=$1', ['diag-test']);
+      results.countAfterInsert = r3[0];
+    } catch (e) { results.countErr = e.message; }
+    try {
+      await exec('DELETE FROM keyword_rules WHERE keyword=$1', ['diag-test']);
+      results.deleteExec = 'ok';
+    } catch (e) { results.deleteErr = e.message; }
   } catch (e) {
-    res.status(500).json({ code: 500, message: e.message });
+    results.fatalErr = e.message;
   }
+  res.json({ code: 0, data: results });
 });
-
-app.post('/test-insert', async (req, res) => {
-  try {
-    const now = Date.now();
-    const r = await getPool().query(
-      'INSERT INTO keyword_rules (keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
-      ['test-direct', 'CONTAINS', 'hello', 'test', 'ALL', '[]', 0, 1, now, now, 'fc0807c8-38ff-4c34-8fc2-b61dd1ce582d', now, 0]
-    );
-    res.json({ code: 0, message: 'insert ok', rowCount: r.rowCount });
-  } catch (e) {
-    res.status(500).json({ code: 500, message: e.message, code2: e.code });
-  }
 });
 
 // 认证路由
