@@ -12,6 +12,9 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
+// 强制重连机制
+let poolVersion = 0;
+
 let dbReady = null;
 
 // 捕获连接池级别的错误
@@ -280,7 +283,6 @@ function interpolate(sql, params) {
 // 使用标准参数化查询，检测并恢复失效连接
 async function exec(sql, params = []) {
   try {
-    // 验证连接有效性
     const client = await pool.connect();
     try {
       const result = await client.query(sql, params);
@@ -289,10 +291,10 @@ async function exec(sql, params = []) {
       client.release();
     }
   } catch (e) {
-    // 检测连接问题，清理缓存
-    if (e.message.includes('cannot commit') || e.message.includes('connection') || e.code === 'ECONNREFUSED') {
-      console.error('Connection error detected, clearing pool cache');
-      pool.totalCount = 0;
+    // 检测连接问题，强制重连
+    if (e.message.includes('cannot commit') || e.message.includes('connection') || e.code === 'ECONNREFUSED' || e.code === 'ETIMEDOUT') {
+      console.error('Connection error detected, forcing reconnect');
+      poolVersion++;
     }
     console.error('exec error:', e.message, 'SQL:', (sql || '').slice(0, 200), 'Params:', JSON.stringify(params || []).slice(0, 200));
     throw e;
