@@ -24,28 +24,23 @@ res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.99', ts: D
 
 // Debug endpoint
 app.get('/debug-pool', async (req, res) => {
-  const { pool } = require('./db');
+  const { getPool } = require('./db');
   try {
-    const result = await pool.query('SELECT 1 as val');
+    const pool = getPool();
+    const result = await getPool().query('SELECT 1 as val');
     res.json({ code: 0, message: 'pool works', data: result.rows[0] });
   } catch (e) {
     res.status(500).json({ code: 500, message: e.message });
   }
 });
 
-// Debug: test simple INSERT
+// Debug: simple init
 app.get('/debug-insert', async (req, res) => {
-  const { pool } = require('./db');
+  const { getDb } = require('./db');
   try {
-    await pool.query('BEGIN');
-    await pool.query(
-      'INSERT INTO keyword_rules (keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
-      ['debug-insert', 'CONTAINS', 'test', 'test', 'ALL', '[]', 0, 1, Date.now(), Date.now(), 'fc0807c8-38ff-4c34-8fc2-b61dd1ce582d', Date.now(), 0]
-    );
-    await pool.query('COMMIT');
-    res.json({ code: 0, message: 'debug insert success' });
+    await getDb();
+    res.json({ code: 0, message: 'db ok' });
   } catch (e) {
-    try { await pool.query('ROLLBACK'); } catch (_) {}
     res.status(500).json({ code: 500, message: e.message });
   }
 });
@@ -98,15 +93,15 @@ app.get('/test-exec', async (req, res) => {
   }
 });
 
-// 测试端点 - 使用 pool.query 直接
+// 测试端点 - 使用 getPool().query 直接
 app.get('/test-pool', async (req, res) => {
   console.log('[test-pool] Starting...');
-  const { pool } = require('./db');
+  const { getPool } = require('./db');
 
   try {
     const now = Date.now();
     const tenantId = 'fc0807c8-38ff-4c34-8fc2-b61dd1ce582d';
-    const r = await pool.query(
+    const r = await getPool().query(
       'INSERT INTO keyword_rules (keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id',
       ['test-pool', 'CONTAINS', 'hello', 'test', 'ALL', '[]', 0, 1, now, now, tenantId, now, 0]
     );
@@ -120,20 +115,20 @@ app.get('/test-pool', async (req, res) => {
 // 测试端点 - 多条 INSERT
 app.get('/test-batch', async (req, res) => {
   console.log('[test-batch] Starting...');
-  const { pool } = require('./db');
+  const { getPool } = require('./db');
 
   try {
     const now = Date.now();
     const tenantId = 'fc0807c8-38ff-4c34-8fc2-b61dd1ce582d';
 
     // 先 INSERT 一条
-    await pool.query(
+    await getPool().query(
       'INSERT INTO keyword_rules (keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
       ['batch-1', 'CONTAINS', 'test1', 'test', 'ALL', '[]', 0, 1, now, now, tenantId, now, 0]
     );
 
     // 再 UPDATE 一条
-    await pool.query(
+    await getPool().query(
       'UPDATE keyword_rules SET keyword=$1 WHERE id=1',
       ['updated-via-pool']
     );
