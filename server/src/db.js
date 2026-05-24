@@ -34,20 +34,13 @@ async function getDb() {
   dbReady = (async () => {
     const client = await getPool().connect();
     try {
-      // 简单验证连接
-      await client.query('SELECT 1');
-      await client.query('BEGIN');
       await initSchema(client);
-      await client.query('COMMIT');
     } catch (e) {
-      try { await client.query('ROLLBACK'); } catch (_) {}
-      // 连接问题，清理缓存重试
-      dbReady = null;
-      throw e;
+      console.error('getDb init error:', e.message);
     } finally {
       client.release();
     }
-    return pool;
+    return getPool();
   })();
   return dbReady;
 }
