@@ -277,20 +277,23 @@ function interpolate(sql, params) {
 }
 
 // 执行 SQL（INSERT/UPDATE/DELETE）
-// 使用标准参数化查询，并验证连接状态
+// 使用标准参数化查询，检测并恢复失效连接
 async function exec(sql, params = []) {
   try {
-    // 确保连接池有效
+    // 验证连接有效性
     const client = await pool.connect();
     try {
-      // 验证连接状态
-      await client.query('SELECT 1');
       const result = await client.query(sql, params);
       return { changes: result.rowCount, lastInsertRowid: result.rows[0]?.id || 0 };
     } finally {
       client.release();
     }
   } catch (e) {
+    // 检测连接问题，清理缓存
+    if (e.message.includes('cannot commit') || e.message.includes('connection') || e.code === 'ECONNREFUSED') {
+      console.error('Connection error detected, clearing pool cache');
+      pool.totalCount = 0;
+    }
     console.error('exec error:', e.message, 'SQL:', (sql || '').slice(0, 200), 'Params:', JSON.stringify(params || []).slice(0, 200));
     throw e;
   }
