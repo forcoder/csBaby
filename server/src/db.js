@@ -6,9 +6,11 @@ const { Pool } = require('pg');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/csbaby',
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  max: 3,
+  min: 1,
+  idleTimeoutMillis: 20000,
+  connectionTimeoutMillis: 10000,
+  idle_in_transaction_session_timeout: 5000,
 });
 
 let dbReady = null;
