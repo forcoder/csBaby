@@ -3,14 +3,21 @@ const { Pool } = require('pg');
 // PostgreSQL 连接配置
 // 优先使用 DATABASE_URL 环境变量（Render 免费 PostgreSQL 会自动设置）
 // 本地开发时可使用 .env 文件或默认值
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/csbaby',
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
-  max: 2,
-  min: 0,
-  idleTimeoutMillis: 5000,
-  connectionTimeoutMillis: 10000,
-});
+// 使用单客户端模式避免连接池问题
+let _pool = null;
+
+function getPool() {
+  if (!_pool) {
+    _pool = new Pool({
+      connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/sbaby',
+      ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+      max: 1,
+      idleTimeoutMillis: 5000,
+      connectionTimeoutMillis: 10000,
+    });
+  }
+  return _pool;
+}
 
 // 强制重连机制
 let poolVersion = 0;
@@ -18,14 +25,14 @@ let poolVersion = 0;
 let dbReady = null;
 
 // 捕获连接池级别的错误
-pool.on('error', (e) => {
+getPool().on('error', (e) => {
   console.error('pg pool error:', e.message);
 });
 
 async function getDb() {
   if (dbReady) return dbReady;
   dbReady = (async () => {
-    const client = await pool.connect();
+    const client = await getPool().connect();
     try {
       // 简单验证连接
       await client.query('SELECT 1');
@@ -283,7 +290,7 @@ function interpolate(sql, params) {
 // 使用标准参数化查询，检测并恢复失效连接
 async function exec(sql, params = []) {
   try {
-    const client = await pool.connect();
+    const client = await getPool().connect();
     try {
       const result = await client.query(sql, params);
       return { changes: result.rowCount, lastInsertRowid: result.rows[0]?.id || 0 };
@@ -305,7 +312,7 @@ async function exec(sql, params = []) {
 async function queryAll(sql, params = []) {
   try {
     // 确保连接池有效
-    const client = await pool.connect();
+    const client = await getPool().connect();
     try {
       // 验证连接状态
       await client.query('SELECT 1');
@@ -328,7 +335,7 @@ async function queryOne(sql, params = []) {
 
 // 在单个连接上执行事务（所有操作共享同一连接）
 async function withTransaction(fn) {
-  const client = await pool.connect();
+  const client = await getPool().connect();
   try {
     await client.query('BEGIN');
     const result = await fn(client);
