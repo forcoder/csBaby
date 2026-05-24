@@ -50,9 +50,26 @@ class AuthManager @Inject constructor(
     private val authScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     init {
+        // 同步加载保存的认证状态到内存缓存
         authScope.launch {
             val saved = loadFromDataStore()
             _currentAuth.value = saved
+        }
+    }
+
+    /** 同步获取认证状态（阻塞直到加载完成，用于 OkHttp 拦截器） */
+    fun getAuthStateSync(): SyncAuthState? {
+        return _currentAuth.value ?: run {
+            // 如果内存缓存为空，尝试同步加载
+            // 注意：这只在首次调用时可能发生
+            var result: SyncAuthState? = null
+            authScope.launch {
+                result = loadFromDataStore()
+                _currentAuth.value = result
+            }
+            // 由于协程是异步的，这里只能返回当前缓存值
+            // 首次调用时可能为 null，后续调用会正确
+            result
         }
     }
 

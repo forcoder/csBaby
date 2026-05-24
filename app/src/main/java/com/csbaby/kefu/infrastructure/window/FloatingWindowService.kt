@@ -1,5 +1,6 @@
 package com.csbaby.kefu.infrastructure.window
 
+import android.app.AppOpsManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -15,6 +16,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
+import android.os.Process
 import android.os.SystemClock
 import android.net.Uri
 import android.provider.Settings
@@ -91,6 +93,35 @@ class FloatingWindowService : Service() {
     private var currentTab: String = "suggestion" // "suggestion" 或 "knowledge"
 
 
+    /**
+     * 使用 AppOpsManager 检查悬浮窗权限，比 Settings.canDrawOverlays 更可靠
+     * 在华为等定制系统上可能存在权限状态不一致的问题
+     */
+    private fun hasOverlayPermission(): Boolean {
+        Log.d(TAG, "hasOverlayPermission: checking...")
+
+        // 方法1：使用 AppOpsManager 检查
+        try {
+            val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+            val mode = appOps.checkOpNoThrow(
+                AppOpsManager.OPSTR_SYSTEM_ALERT_WINDOW,
+                Process.myUid(),
+                packageName
+            )
+            Log.d(TAG, "hasOverlayPermission: appops mode=$mode (ALLOWED=${AppOpsManager.MODE_ALLOWED})")
+            if (mode == AppOpsManager.MODE_ALLOWED) {
+                return true
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "hasOverlayPermission: appops check failed", e)
+        }
+
+        // 方法2：备用检查 Settings.canDrawOverlays
+        val canDraw = Settings.canDrawOverlays(this)
+        Log.d(TAG, "hasOverlayPermission: canDrawOverlays=$canDraw")
+        return canDraw
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -137,9 +168,9 @@ class FloatingWindowService : Service() {
     }
 
     private fun showFloatingWindow(data: DisplayData?) {
-        Log.d(TAG, "FWS.showFloatingWindow called, overlay=${Settings.canDrawOverlays(this)}, data=${data != null}")
+        Log.d(TAG, "FWS.showFloatingWindow called, overlay=${hasOverlayPermission()}, data=${data != null}")
 
-        if (!Settings.canDrawOverlays(this)) {
+        if (!hasOverlayPermission()) {
             Log.w(TAG, "FWS: Overlay permission missing, skip showing floating window")
             Toast.makeText(
                 this,
@@ -198,9 +229,9 @@ class FloatingWindowService : Service() {
      * 显示仅图标模式（无消息内容，用于默认显示悬浮图标）
      */
     private fun showFloatingIconOnly() {
-        Log.d(TAG, "FWS.showFloatingIconOnly called, overlay=${Settings.canDrawOverlays(this)}, floatingView=${floatingView != null}")
+        Log.d(TAG, "FWS.showFloatingIconOnly called, overlay=${hasOverlayPermission()}, floatingView=${floatingView != null}")
 
-        if (!Settings.canDrawOverlays(this)) {
+        if (!hasOverlayPermission()) {
             Log.e(TAG, "FWS: Overlay permission missing! User needs to grant it in Settings.")
             Toast.makeText(
                 this,
@@ -581,20 +612,12 @@ class FloatingWindowService : Service() {
         }
         this.suggestionPanel = suggestionPanel
         replyLabelTextView = createSectionLabel("AI 建议回复（可编辑）", "#67E8F9")
-        suggestedReplyEditText = EditText(this).apply {
-            textSize = 14f
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.parseColor("#94A3B8"))
-            setLineSpacing(0f, 1.18f)
-            setPadding(dp(14), dp(14), dp(14), dp(14))
-            minLines = 4
-            maxLines = 8
-            gravity = Gravity.TOP or Gravity.START
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-            isSingleLine = false
-            background = createReplyCardBackground(ReplySource.AI_GENERATED.name)
-        }
-        
+        // 先添加到 suggestionPanel（必须在父容器之前添加）
+        suggestionPanel.addView(replyLabelTextView)
+        suggestionPanel.addView(verticalSpace(8))
+        suggestionPanel.addView(createReplyEditText())
+        suggestedReplyEditText = createReplyEditText()
+
         // 知识库搜索面板
         val knowledgePanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -647,16 +670,7 @@ class FloatingWindowService : Service() {
         knowledgePanel.addView(searchContainer)
         knowledgePanel.addView(verticalSpace(12))
         knowledgePanel.addView(knowledgeResultsRecyclerContainer)
-        
-        // 将两个面板添加到垂直布局中
-        suggestionPanel.addView(replyLabelTextView)
-        suggestionPanel.addView(verticalSpace(8))
-        suggestionPanel.addView(suggestedReplyEditText)
-        
-        knowledgePanel.addView(searchContainer)
-        knowledgePanel.addView(verticalSpace(12))
-        knowledgePanel.addView(knowledgeResultsRecyclerContainer)
-        
+
         val tabContentContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
@@ -1115,6 +1129,22 @@ class FloatingWindowService : Service() {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = dp(18).toFloat()
             setStroke(dp(1), Color.parseColor("#33FDBA74"))
+        }
+    }
+
+    private fun createReplyEditText(): EditText {
+        return EditText(this).apply {
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.parseColor("#94A3B8"))
+            setLineSpacing(0f, 1.18f)
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            minLines = 4
+            maxLines = 8
+            gravity = Gravity.TOP or Gravity.START
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            isSingleLine = false
+            background = createReplyCardBackground(ReplySource.AI_GENERATED.name)
         }
     }
 

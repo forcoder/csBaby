@@ -272,24 +272,10 @@ function interpolate(sql, params) {
 }
 
 // 执行 SQL（INSERT/UPDATE/DELETE）
-// 使用简单查询协议（无参数绑定）以避免 PgBouncer 事务模式下扩展查询协议的问题
+// 使用标准参数化查询
 async function exec(sql, params = []) {
   try {
-    // 如果有参数，手动替换 $N 占位符（简单查询协议）
-    let finalSql = sql;
-    if (params.length > 0) {
-      // 预编译所有参数
-      const compiled = [];
-      for (let i = 0; i < params.length; i++) {
-        compiled.push(escapeSql(params[i]));
-      }
-      // 替换所有 $N 占位符（1-indexed）
-      finalSql = sql.replace(/\$(\d+)/g, (match, n) => {
-        const idx = parseInt(n, 10) - 1;
-        return idx < compiled.length ? compiled[idx] : match;
-      });
-    }
-    const result = await pool.query(finalSql);
+    const result = await pool.query(sql, params);
     return { changes: result.rowCount, lastInsertRowid: result.rows[0]?.id || 0 };
   } catch (e) {
     console.error('exec error:', e.message, 'SQL:', (sql || '').slice(0, 200), 'Params:', JSON.stringify(params || []).slice(0, 200));

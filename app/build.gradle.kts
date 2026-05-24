@@ -28,6 +28,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // 调试签名，允许安装到设备
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(

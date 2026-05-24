@@ -47,6 +47,10 @@ class SyncManager @Inject constructor(
     val authState: StateFlow<SyncAuthState?> = _authState.asStateFlow()
 
     private var syncJob: Job? = null
+    private var _lastSyncStats: String = ""
+
+    /** 上次同步统计信息 */
+    fun getLastSyncStats(): String? = _lastSyncStats.takeIf { it.isNotEmpty() }
 
     /** 离线同步队列（只读访问） */
     val queue: SyncQueue get() = syncQueue
@@ -175,10 +179,29 @@ class SyncManager @Inject constructor(
 
     /** 用 refreshToken 刷新认证状态 */
     private suspend fun tryRefreshToken(refreshToken: String): SyncAuthState? {
-        // 简化版：无需refreshToken机制，直接返回null触发重新登录
-        // 简化版token有效期30天，过期后用户需要重新登录
-        Timber.d("Token刷新: 简化版无需刷新，过期后用户需重新登录")
-        return null
+        return try {
+            val request = RefreshTokenRequest(refreshToken)
+            val response = syncClient.refreshApiService.refreshToken(request)
+            Timber.d("Token刷新响应: isSuccess=${response.isSuccess}, msg=${response.message}")
+            if (response.isSuccess && response.data != null) {
+                val data = response.data
+                SyncAuthState.fromLoginResponse(
+                    userId = data.userId,
+                    tenantId = data.tenantId.ifEmpty { data.userId },
+                    token = data.effectiveAccessToken(),
+                    refreshToken = data.refreshToken,
+                    expiresAt = data.expiresAt
+                ).also {
+                    Timber.d("Token刷新成功: token=${it.accessToken.take(20)}...")
+                }
+            } else {
+                Timber.w("Token刷新失败: ${response.message}")
+                null
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Token刷新异常")
+            null
+        }
     }
 
     // ========== 全量同步（首次登录 / 换手机恢复） ==========
@@ -195,8 +218,11 @@ class SyncManager @Inject constructor(
                 applyServerDataToLocal(data, tenantId)
 
                 syncCheckpointDao.updateSyncSuccess(tenantId, data.serverTime, null)
-                _syncState.value = SyncState.Success("同步完成")
-                Timber.d("全量同步完成: rules=${data.keywordRules.size}, models=${data.aiModelConfigs.size}")
+                val ruleCount = data.keywordRules.size
+                val modelCount = data.aiModelConfigs.size
+                _lastSyncStats = "全量同步: 获取 $ruleCount 条规则, $modelCount 条模型"
+                _syncState.value = SyncState.Success("同步完成 (获取 $ruleCount 条)")
+                Timber.d("全量同步完成: rules=$ruleCount, models=$modelCount")
                 Result.success(Unit)
             } else {
                 val msg = response.message.ifEmpty { "同步失败" }
@@ -238,7 +264,12 @@ class SyncManager @Inject constructor(
                 changesResponse.data?.nextCursor
             )
 
-            _syncState.value = SyncState.Success("同步完成")
+            val stats = _lastSyncStats
+            if (stats.isNotEmpty()) {
+                _syncState.value = SyncState.Success("同步完成 ($stats)")
+            } else {
+                _syncState.value = SyncState.Success("同步完成")
+            }
             Timber.d("增量同步完成")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -309,6 +340,12 @@ class SyncManager @Inject constructor(
             scenarios.forEach { scenarioDao.updateSyncVersion(it.id, newVersion) }
             replies.forEach { replyHistoryDao.updateSyncVersion(it.id, newVersion) }
             blacklists.forEach { messageBlacklistDao.updateSyncVersion(it.id, newVersion) }
+            // 显示同步统计
+            val stats = result.stats
+            if (stats != null) {
+                _lastSyncStats = "新增 ${stats.inserted} 条，更新 ${stats.updated} 条，删除 ${stats.deleted} 条"
+                Timber.d("推送完成: $_lastSyncStats")
+            }
         }
     }
 

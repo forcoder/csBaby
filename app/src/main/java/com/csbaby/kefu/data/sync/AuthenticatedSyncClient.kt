@@ -3,6 +3,8 @@ package com.csbaby.kefu.data.sync
 import android.util.Log
 import com.csbaby.kefu.BuildConfig
 import com.csbaby.kefu.data.model.SyncAuthState
+import com.csbaby.kefu.data.remote.ApiResponse
+import com.csbaby.kefu.data.remote.AuthResult
 import com.csbaby.kefu.data.remote.RefreshTokenRequest
 import com.csbaby.kefu.data.remote.SyncApiService
 import kotlinx.coroutines.runBlocking
@@ -18,26 +20,61 @@ class AuthenticatedSyncClient(
 ) {
     val apiService: SyncApiService
 
+    /** 用于 Token 刷新的 API Service（不经过认证拦截器） */
+    val refreshApiService: SyncApiService
+
     @Volatile
     private var isRefreshing = false
+
+    // 用于 Token 刷新的独立 Retrofit 实例（不经过认证拦截器）
+    private val refreshRetrofit: Retrofit
 
     init {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.BASIC
         }
 
+        // 用于刷新 Token 的 OkHttpClient（无认证拦截器）
+        val refreshClient = OkHttpClient.Builder()
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
+
+        refreshRetrofit = Retrofit.Builder()
+            .baseUrl(BuildConfig.SYNC_BASE_URL)
+            .client(refreshClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+
+        refreshApiService = refreshRetrofit.create(SyncApiService::class.java)
+
         val authInterceptor = Interceptor { chain ->
             val original = chain.request()
-            val token = authManager.currentAuthState?.accessToken
-            Log.d("AuthInterceptor", "url=${original.url}, hasToken=${token != null}")
-            val request = if (token != null) {
-                original.newBuilder()
+            val path = original.url.encodedPath
+
+            // 跳过不需要认证的接口（登录/注册/刷新token）
+            if (path.contains("auth/login") || path.contains("auth/register") || path.contains("auth/refresh")) {
+                Log.d("AuthInterceptor", "Skip auth for: $path")
+                return@Interceptor chain.proceed(original)
+            }
+
+            // 使用 getAuthStateSync 确保获取最新状态
+            val authState = authManager.getAuthStateSync()
+            val token = authState?.accessToken
+            Log.d("AuthInterceptor", "url=$path, hasToken=${token != null}, authState=${authState != null}")
+
+            if (token != null) {
+                val request = original.newBuilder()
                     .header("Authorization", "Bearer $token")
                     .build()
+                Log.d("AuthInterceptor", "Added Bearer token for: $path")
+                chain.proceed(request)
             } else {
-                original
+                Log.w("AuthInterceptor", "No token available for: $path - proceeding without auth")
+                chain.proceed(original)
             }
-            chain.proceed(request)
         }
 
         val unauthorizedInterceptor = Interceptor { chain ->
@@ -90,9 +127,35 @@ class AuthenticatedSyncClient(
         apiService = retrofit.create(SyncApiService::class.java)
     }
 
+    /**
+     * 使用 refreshToken 调用后端 /auth/refresh 接口获取新的 accessToken。
+     * 该方法在 401 响应时由 OkHttp 拦截器同步调用。
+     */
     private fun refreshTokenBlocking(refreshToken: String): SyncAuthState? {
-        // 简化版：无需refreshToken机制，直接使用原有token
-        // 如果token过期，用户需要重新登录
-        return authManager.currentAuthState
+        Log.d("AuthenticatedSyncClient", "refreshTokenBlocking() 开始刷新")
+        return runBlocking {
+            try {
+                val response = refreshApiService.refreshToken(RefreshTokenRequest(refreshToken))
+                Log.d("AuthenticatedSyncClient", "refreshToken 响应: isSuccess=${response.isSuccess}, msg=${response.message}")
+                if (response.isSuccess && response.data != null) {
+                    val data = response.data
+                    SyncAuthState.fromLoginResponse(
+                        userId = data.userId,
+                        tenantId = data.tenantId.ifEmpty { data.userId },
+                        token = data.effectiveAccessToken(),
+                        refreshToken = data.refreshToken,
+                        expiresAt = data.expiresAt
+                    ).also {
+                        Log.d("AuthenticatedSyncClient", "刷新成功: token=${it.accessToken.take(20)}...")
+                    }
+                } else {
+                    Log.w("AuthenticatedSyncClient", "刷新失败: ${response.message}")
+                    null
+                }
+            } catch (e: Exception) {
+                Log.e("AuthenticatedSyncClient", "刷新异常", e)
+                null
+            }
+        }
     }
 }

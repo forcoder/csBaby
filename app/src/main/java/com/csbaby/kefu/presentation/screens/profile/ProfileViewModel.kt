@@ -39,6 +39,8 @@ data class ProfileUiState(
     val currentTenantId: String? = null,
     val pendingSyncCount: Int = 0,
     val lastSyncTime: Long = 0L,
+    // 同步统计
+    val syncStats: String = "",
     // 数据备份与恢复
     val backupStatus: BackupStatus = BackupStatus.IDLE,
     val backupMessage: String = "",
@@ -288,7 +290,16 @@ class ProfileViewModel @Inject constructor(
     fun syncNow() {
         viewModelScope.launch {
             val tenantId = authManager.currentTenantId() ?: return@launch
-            syncManager.incrementalSync(tenantId)
+            val result = syncManager.incrementalSync(tenantId)
+            if (result.isSuccess) {
+                // 同步成功后更新统计信息
+                val tenant = authManager.currentTenantId()
+                if (tenant != null) {
+                    syncManager.getLastSyncStats()?.let { stats ->
+                        _uiState.update { it.copy(syncStats = stats) }
+                    }
+                }
+            }
         }
     }
 

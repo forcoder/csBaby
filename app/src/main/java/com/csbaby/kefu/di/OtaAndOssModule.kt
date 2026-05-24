@@ -1,6 +1,7 @@
 package com.csbaby.kefu.di
 
 import android.content.Context
+import com.csbaby.kefu.BuildConfig
 import com.csbaby.kefu.data.local.dao.*
 import com.csbaby.kefu.data.remote.OtaApiService
 import com.csbaby.kefu.data.remote.SyncApiService
@@ -17,7 +18,9 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import okhttp3.OkHttpClient
 import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 import javax.inject.Singleton
 
 @Module
@@ -33,7 +36,12 @@ object OtaAndOssModule {
 
     @Provides
     @Singleton
-    fun provideOtaApiService(retrofit: Retrofit): OtaApiService {
+    fun provideOtaApiService(okHttpClient: OkHttpClient): OtaApiService {
+        val retrofit = Retrofit.Builder()
+            .baseUrl("https://shz.al/")
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
         return retrofit.create(OtaApiService::class.java)
     }
 

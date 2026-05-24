@@ -6,27 +6,26 @@ import retrofit2.http.*
 
 /**
  * OTA更新API服务接口
+ *
+ * shz.al 简单存储API：
+ * - GET https://shz.al/~csBabyLog 直接返回版本信息JSON
  */
 interface OtaApiService {
-    
-    /**
-     * 检查更新
-     * @param versionCode 当前版本号
-     * @param channel 渠道（可选）
-     */
-    @GET("api/v1/ota/check")
-    suspend fun checkForUpdate(
-        @Query("versionCode") versionCode: Int,
-        @Query("channel") channel: String = "default"
-    ): ApiResponse<OtaUpdate?>
 
     /**
-     * 获取最新版本信息（无缓存）
+     * 检查更新（直接获取版本信息）
+     * shz.al 直接返回 JSON 对象，无 ApiResponse 包装
      */
-    @GET("api/v1/ota/latest")
-    suspend fun getLatestVersion(
-        @Query("channel") channel: String = "default"
-    ): ApiResponse<OtaUpdate?>
+    @GET("~csBabyLog")
+    suspend fun checkForUpdate(
+        @Query("versionCode") versionCode: Int = 0
+    ): OtaUpdate
+
+    /**
+     * 获取最新版本信息
+     */
+    @GET("~csBabyLog")
+    suspend fun getLatestVersion(): OtaUpdate
 
     /**
      * 获取版本列表（管理员）

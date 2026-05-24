@@ -24,10 +24,11 @@ class OtaRepositoryImpl @Inject constructor(
     override suspend fun checkForUpdate(currentVersionCode: Int): Result<OtaUpdate?> {
         return try {
             val response = apiService.checkForUpdate(currentVersionCode)
-            if (response.isSuccess) {
-                Result.success(response.data)
+            // shz.al 直接返回 OtaUpdate，比较版本号判断是否有更新
+            if (response.versionCode > currentVersionCode) {
+                Result.success(response)
             } else {
-                Result.failure(Exception(response.message.ifEmpty { "检查更新失败" }))
+                Result.success(null) // 没有更新
             }
         } catch (e: Exception) {
             Result.failure(Exception("网络连接失败: ${e.message}"))
