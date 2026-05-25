@@ -6,11 +6,6 @@ on:
     paths:
       - 'server/**'
       - 'app/**'
-  pull_request:
-    branches: [main, master]
-    paths:
-      - 'server/**'
-      - 'app/**'
   workflow_dispatch:
 
 concurrency:
@@ -18,61 +13,39 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ─────────────────────────────────────────
-  # Job 1: 安装依赖 + Lint + 测试
-  # ─────────────────────────────────────────
   build-and-test:
     name: Build & Test
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: server
-
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-
-      - name: 设置 Node.js 20
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: for f in src/*.js tests/*.js; do [ -f "$f" ] && node --check "$f" && echo "✅ $f"; done
 
-      - name: 安装依赖
-        run: npm ci
-
-      - name: 运行测试
-        run: npm test
-
-      - name: 语法检查（所有 JS 文件）
-        run: |
-          for f in src/*.js tests/*.js; do
-            [ -f "$f" ] && node --check "$f" && echo "✅ $f"
-          done
-
-  # ─────────────────────────────────────────
-  # Job 2: 部署到 Render（仅 main/master push）
-  # ─────────────────────────────────────────
   deploy:
     name: Deploy to Render
     needs: build-and-test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
 
       - name: 触发 Render 部署
         env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
           echo "=== 触发 Render 部署 ==="
           echo "Commit: $GITHUB_SHA"
 
-          # 先尝试 deploy hook
           if [ -n "$RENDER_DEPLOY_HOOK_URL" ]; then
             echo "使用 deploy hook..."
             HOOK_RESP=$(curl -s -w "\n%{http_code}" -X POST "$RENDER_DEPLOY_HOOK_URL")
@@ -80,44 +53,18 @@ jobs:
             echo "Deploy hook HTTP: $HOOK_CODE"
           fi
 
-          # 再用 API 触发
-          SERVICE_ID="srv-d85hdj3bc2fs73bqqeg0"
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            -H "Authorization: Bearer $RENDER_API_KEY" \
-            -H "Accept: application/json" \
-            -H "Content-Type: application/json" \
-            -d '{"clearCache":true,"branch":"main"}' \
-            "https://api.render.com/v1/services/$SERVICE_ID/deploys")
+          echo "等待 300 秒让 Render 完成构建..."
+          sleep 300
 
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | head -n -1)
-          echo "API HTTP: $HTTP_CODE"
-          echo "Response: $BODY"
-
-          if [ "$HTTP_CODE" != "201" ]; then
-            echo "⚠️ Deploy may have failed"
-          fi
-
-      - name: 等待构建完成
-        run: |
-          echo "等待 180 秒让 Render 完成构建和部署..."
-          sleep 180
-
-          for i in $(seq 1 15); do
-            RESPONSE=$(curl -s "https://csbaby-sync-server.onrender.com/")
-            VERSION=$(echo "$RESPONSE" | grep -o '"version":"[^"]*"' 2>/dev/null | cut -d'"' -f4)
-
+          for i in $(seq 1 20); do
+            VERSION=$(curl -s "https://csbaby-sync-server.onrender.com/" | grep -o '"version":"[^"]*"' | cut -d'"' -f4)
             echo "Attempt $i: VERSION=$VERSION"
-
-            # 检查是否是预期的新版本（不是 1.0.0）
             if [ -n "$VERSION" ] && [ "$VERSION" != "1.0.0" ]; then
               echo "✅ 部署成功！新版本: $VERSION"
               exit 0
             fi
-
-            [ $i -lt 15 ] && sleep 30
+            sleep 30
           done
 
-          echo "⚠️ 部署验证超时，当前版本: $(curl -s https://csbaby-sync-server.onrender.com/ | grep -o '"version":"[^"]*"' | cut -d'"' -f4)"
-          # 不失败，因为 Render 免费版的部署可能需要更长时间
-          echo "注意: 部署可能已完成但版本检查失败，请手动验证"
+          echo "⚠️ 部署验证失败"
+          exit 1
