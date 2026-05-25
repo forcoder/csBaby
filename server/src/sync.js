@@ -141,6 +141,8 @@ router.post('/push', async (req, res) => {
     // Test: can we do a simple SELECT?
     const testResult = await queryOne('SELECT 1 as val');
     console.log('[sync/push] SELECT test:', testResult);
+
+    for (const r of keywordRules) {
       const result = await exec(
         `INSERT INTO keyword_rules (id,keyword,match_type,reply_template,category,target_type,target_names_json,priority,enabled,created_at,updated_at,tenant_id,sync_version,deleted)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
