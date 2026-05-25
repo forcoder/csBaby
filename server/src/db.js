@@ -73,18 +73,29 @@ async function initSchema(pool) {
 
 // Execute SQL using pool directly (no client.connect/release)
 async function exec(sql, params = []) {
+  const client = await getPool().connect();
   try {
-    const result = await getPool().query(sql, params);
+    const result = await client.query(sql, params);
     return { changes: result.rowCount, lastInsertRowid: result.rows[0]?.id || 0 };
   } catch (e) {
-    console.error('exec error:', e.message, 'code:', e.code, 'SQL:', (sql || '').substring(0, 100));
+    console.error('exec error:', e.message, 'SQL:', (sql || '').substring(0, 80));
     throw e;
+  } finally {
+    try { client.release(true); } catch(e) { /* ignore */ }
   }
 }
 
 async function queryAll(sql, params = []) {
-  const result = await getPool().query(sql, params);
-  return result.rows;
+  const client = await getPool().connect();
+  try {
+    const result = await client.query(sql, params);
+    return result.rows;
+  } catch (e) {
+    console.error('queryAll error:', e.message);
+    throw e;
+  } finally {
+    try { client.release(true); } catch(e) { /* ignore */ }
+  }
 }
 
 async function queryOne(sql, params = []) {
