@@ -13,7 +13,13 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.13', ts: Date.now() });
+  const fs = require('fs');
+  let buildInfo = 'unknown';
+  try {
+    const pkg = JSON.parse(fs.readFileSync(__dirname + '/../package.json', 'utf8'));
+    buildInfo = pkg.version;
+  } catch(e) { buildInfo = 'error: ' + e.message; }
+  res.json({ status: 'ok', service: 'csbaby-sync-server', version: buildInfo, ts: Date.now(), pid: process.pid, uptime: process.uptime() });
 });
 
 // Auth routes
