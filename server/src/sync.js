@@ -219,8 +219,14 @@ router.post('/push', async (req, res) => {
       }
     }
 
-    // checkpoint - 使用 INSERT ON CONFLICT
-    await exec('INSERT INTO sync_checkpoints (tenant_id,last_sync_time,is_syncing,last_error) VALUES ($1,$2,0,NULL) ON CONFLICT (tenant_id) DO UPDATE SET last_sync_time=EXCLUDED.last_sync_time,is_syncing=EXCLUDED.is_syncing,last_error=EXCLUDED.last_error', [t, now]);
+    console.log('[sync/push] About to execute checkpoint SQL');
+    try {
+      await exec('INSERT INTO sync_checkpoints (tenant_id,last_sync_time,is_syncing,last_error) VALUES ($1,$2,0,NULL) ON CONFLICT (tenant_id) DO UPDATE SET last_sync_time=EXCLUDED.last_sync_time,is_syncing=EXCLUDED.is_syncing,last_error=EXCLUDED.last_error', [t, now]);
+      console.log('[sync/push] Checkpoint SQL OK');
+    } catch (e) {
+      console.error('[sync/push] Checkpoint SQL ERROR:', e.message);
+      throw e;
+    }
 
     console.log('[sync/push] Success, stats:', JSON.stringify(stats));
     res.json({ code:0, message:'成功', data:{ accepted:true, conflicts, newServerVersion:now, serverTime:now, stats } });

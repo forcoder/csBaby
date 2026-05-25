@@ -36,7 +36,9 @@ async function getDb() {
 
 // Simple SQL execution using pool.query directly
 async function exec(sql, params = []) {
+  console.log('[exec] SQL:', (sql || '').substring(0, 80));
   const result = await getPool().query(sql, params);
+  console.log('[exec] OK, rowCount:', result.rowCount);
   return { changes: result.rowCount, lastInsertRowid: result.rows[0]?.id || 0 };
 }
 
