@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.100', ts: Date.now() });
+  res.json({ status: 'ok', service: 'csbaby-sync-server', version: '1.0.13', ts: Date.now() });
 });
 
 // 最简单的测试

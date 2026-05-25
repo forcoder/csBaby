@@ -12,4 +12,18 @@ services:
         generateValue: true
       - key: PORT
         value: 8080
-# Force redeploy trigger - this line ensures rebuild
+services:
+  - type: web
+    name: csbaby-sync-server
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PORT
+        value: 8080
+# Force redeploy trigger - v2
