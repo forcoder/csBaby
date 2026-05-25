@@ -1,6 +1,7 @@
 package com.csbaby.kefu.data.repository
 
 import android.content.Context
+import android.util.Log
 import com.csbaby.kefu.data.model.OtaUpdate
 import com.csbaby.kefu.data.remote.OtaApiService
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,7 +54,8 @@ class OtaRepositoryImpl @Inject constructor(
                     file.delete()
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e("OtaRepository", "清理旧版本失败", e)
         }
     }
 }

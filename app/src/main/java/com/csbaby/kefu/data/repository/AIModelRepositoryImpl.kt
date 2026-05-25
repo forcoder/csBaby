@@ -50,7 +50,7 @@ class AIModelRepositoryImpl @Inject constructor(
         if (model.isDefault) {
             aiModelConfigDao.clearDefaultModel()
         }
-        aiModelConfigDao.updateModel(model.toEntity())
+        aiModelConfigDao.updateModel(model.toEntity().copy(syncVersion = 0L))
         syncManager.triggerSync()
     }
 

@@ -327,7 +327,13 @@ class ProfileViewModel @Inject constructor(
      */
     fun uploadBackup() {
         viewModelScope.launch {
-            backupManager.uploadBackup()
+            val result = backupManager.uploadBackup()
+            // 操作完成后（无论成功或失败）都重置状态，使按钮恢复正常
+            backupManager.clearStatus()
+            // 如果失败，状态重置后显示错误消息由 UI 层处理
+            result.onFailure { e ->
+                Timber.e(e, "备份失败")
+            }
         }
     }
 

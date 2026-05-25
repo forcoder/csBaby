@@ -41,11 +41,13 @@ class ReplyHistoryRepositoryImpl @Inject constructor(
 
     override suspend fun updateFinalReply(id: Long, finalReply: String) {
         replyHistoryDao.updateFinalReply(id, finalReply)
+        replyHistoryDao.updateSyncVersion(id, 0L)
         syncManager.triggerSync()
     }
 
     override suspend fun deleteReply(id: Long) {
-        replyHistoryDao.deleteById(id)
+        // 软删除：标记 deleted=1 并重置 syncVersion，让同步器推送到云端
+        replyHistoryDao.softDelete(id)
         syncManager.triggerSync()
     }
 

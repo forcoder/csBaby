@@ -31,7 +31,7 @@ class UserStyleRepositoryImpl @Inject constructor(
     }
 
     override suspend fun updateProfile(profile: UserStyleProfile) {
-        userStyleProfileDao.updateProfile(profile.toEntity())
+        userStyleProfileDao.updateProfile(profile.toEntity().copy(syncVersion = 0L))
         syncManager.triggerSync()
     }
 

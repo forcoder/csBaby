@@ -34,7 +34,7 @@ class ScenarioRepositoryImpl @Inject constructor(
     }
 
     override suspend fun updateScenario(scenario: Scenario) {
-        scenarioDao.updateScenario(scenario.toEntity())
+        scenarioDao.updateScenario(scenario.toEntity().copy(syncVersion = 0L))
         syncManager.triggerSync()
     }
 

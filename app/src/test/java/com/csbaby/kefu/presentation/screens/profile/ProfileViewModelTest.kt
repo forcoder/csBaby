@@ -291,4 +291,61 @@ class ProfileViewModelTest {
         assertEquals(BackupStatus.UPLOADING, viewModel.uiState.value.backupStatus)
         assertEquals("正在上传...", viewModel.uiState.value.backupMessage)
     }
+
+    @Test
+    fun `syncNow calls incrementalSync when logged in`() = runTest {
+        coEvery { authManager.currentTenantId() } returns "test_tenant"
+        coEvery { syncManager.incrementalSync(any()) } returns Result.success(Unit)
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.syncNow()
+        advanceUntilIdle()
+
+        coVerify { syncManager.incrementalSync("test_tenant") }
+    }
+
+    @Test
+    fun `syncNow does nothing when not logged in`() = runTest {
+        coEvery { authManager.currentTenantId() } returns null
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.syncNow()
+        advanceUntilIdle()
+
+        coVerify(inverse = true) { syncManager.incrementalSync(any()) }
+    }
+
+    @Test
+    fun `syncNow handles timeout error gracefully`() = runTest {
+        coEvery { authManager.currentTenantId() } returns "test_tenant"
+        coEvery { syncManager.incrementalSync(any()) } returns Result.failure(java.net.SocketTimeoutException("timeout"))
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.syncNow()
+        advanceUntilIdle()
+
+        // 验证同步调用被触发
+        coVerify { syncManager.incrementalSync("test_tenant") }
+    }
+
+    @Test
+    fun `syncNow handles network error gracefully`() = runTest {
+        coEvery { authManager.currentTenantId() } returns "test_tenant"
+        coEvery { syncManager.incrementalSync(any()) } returns Result.failure(java.net.UnknownHostException("网络不可达"))
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.syncNow()
+        advanceUntilIdle()
+
+        // 验证同步调用被触发（即使失败也要记录日志，不崩溃）
+        coVerify { syncManager.incrementalSync("test_tenant") }
+    }
 }

@@ -17,7 +17,7 @@ data class KeywordRuleEntity(
     val enabled: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    val tenantId: String = DEFAULT_TENANT_ID,
+    val tenantId: String = DEFAULT_TENANT_ID,  // 保留默认值用于旧数据兼容
     val syncVersion: Long = 0L,
     val deleted: Boolean = false
 ) {

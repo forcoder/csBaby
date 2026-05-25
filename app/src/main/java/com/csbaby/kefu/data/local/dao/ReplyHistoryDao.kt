@@ -49,4 +49,7 @@ interface ReplyHistoryDao {
 
     @Query("UPDATE reply_history SET syncVersion = :version WHERE id = :id")
     suspend fun updateSyncVersion(id: Long, version: Long)
+
+    @Query("UPDATE reply_history SET deleted = 1, syncVersion = 0 WHERE id = :id")
+    suspend fun softDelete(id: Long)
 }

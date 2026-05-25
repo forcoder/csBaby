@@ -97,7 +97,8 @@ class AuthenticatedSyncClient(
                                         .build()
                                     return@Interceptor chain.proceed(retryRequest)
                                 }
-                            } catch (_: Exception) {
+                            } catch (e: Exception) {
+                                Log.w("AuthSync", "Token 刷新失败，尝试使用原 Token", e)
                             } finally {
                                 isRefreshing = false
                             }

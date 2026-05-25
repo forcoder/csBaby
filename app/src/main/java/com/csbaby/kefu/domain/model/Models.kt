@@ -7,7 +7,7 @@ data class AppConfig(
     val isMonitored: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val lastUsed: Long = System.currentTimeMillis(),
-    val tenantId: String = "default_tenant",
+    val tenantId: String = "",
     val syncVersion: Long = 0L,
     val deleted: Boolean = false
 )
@@ -25,11 +25,10 @@ data class KeywordRule(
     val enabled: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    val tenantId: String = "default_tenant",
+    val tenantId: String = "",
     val syncVersion: Long = 0L,
     val deleted: Boolean = false
 )
-
 
 data class Scenario(
     val id: Long = 0,
@@ -38,7 +37,7 @@ data class Scenario(
     val targetId: String?,
     val description: String?,
     val createdAt: Long = System.currentTimeMillis(),
-    val tenantId: String = "default_tenant",
+    val tenantId: String = "",
     val syncVersion: Long = 0L,
     val deleted: Boolean = false
 )
@@ -56,7 +55,7 @@ data class AIModelConfig(
     val monthlyCost: Double = 0.0,
     val lastUsed: Long = System.currentTimeMillis(),
     val createdAt: Long = System.currentTimeMillis(),
-    val tenantId: String = "default_tenant",
+    val tenantId: String = "",
     val syncVersion: Long = 0L,
     val deleted: Boolean = false
 )
@@ -73,7 +72,7 @@ data class UserStyleProfile(
     val accuracyScore: Float = 0.0f,
     val lastTrained: Long = System.currentTimeMillis(),
     val createdAt: Long = System.currentTimeMillis(),
-    val tenantId: String = "default_tenant",
+    val tenantId: String = "",
     val syncVersion: Long = 0L,
     val deleted: Boolean = false
 )
@@ -89,7 +88,7 @@ data class ReplyHistory(
     val styleApplied: Boolean = false,
     val sendTime: Long = System.currentTimeMillis(),
     val modified: Boolean = false,
-    val tenantId: String = "default_tenant",
+    val tenantId: String = "",
     val syncVersion: Long = 0L,
     val deleted: Boolean = false
 )
@@ -102,9 +101,6 @@ data class ReplyContext(
     val isGroupConversation: Boolean? = null,
     val userId: String
 )
-
-
-
 
 data class ReplyResult(
     val reply: String,

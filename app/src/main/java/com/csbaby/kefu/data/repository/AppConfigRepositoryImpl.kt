@@ -44,7 +44,7 @@ class AppConfigRepositoryImpl @Inject constructor(
     }
 
     override suspend fun updateApp(app: AppConfig) {
-        appConfigDao.updateApp(app.toEntity())
+        appConfigDao.updateApp(app.toEntity().copy(syncVersion = 0L))
         syncManager.triggerSync()
     }
 

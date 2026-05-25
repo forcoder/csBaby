@@ -31,6 +31,7 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 
@@ -659,17 +660,21 @@ class FloatingWindowService : Service() {
         
         searchContainer.addView(knowledgeSearchEditText)
         searchContainer.addView(searchButton)
-        
+
+        knowledgePanel.addView(searchContainer)
+        knowledgePanel.addView(verticalSpace(12))
+
+        // 用 ScrollView 包裹结果列表，支持滚动
+        val resultsScrollView = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(240))
+        }
         knowledgeResultsRecyclerContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(240))
             setPadding(dp(8), dp(8), dp(8), dp(8))
             background = createMessageCardBackground()
         }
-        
-        knowledgePanel.addView(searchContainer)
-        knowledgePanel.addView(verticalSpace(12))
-        knowledgePanel.addView(knowledgeResultsRecyclerContainer)
+        resultsScrollView.addView(knowledgeResultsRecyclerContainer)
+        knowledgePanel.addView(resultsScrollView)
 
         val tabContentContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL

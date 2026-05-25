@@ -61,4 +61,7 @@ interface KeywordRuleDao {
 
     @Query("UPDATE keyword_rules SET syncVersion = :version WHERE id = :id")
     suspend fun updateSyncVersion(id: Long, version: Long)
+
+    @Query("UPDATE keyword_rules SET deleted = 1, syncVersion = 0 WHERE id = :id")
+    suspend fun softDelete(id: Long)
 }
