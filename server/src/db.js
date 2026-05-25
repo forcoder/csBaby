@@ -7,7 +7,7 @@ function getPool() {
     _pool = new Pool({
       connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/csbaby',
       ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
-      max: 2,
+      max: 3,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
     });
@@ -21,81 +21,28 @@ let dbReady = null;
 async function getDb() {
   if (dbReady) return dbReady;
   dbReady = (async () => {
-    const pool = getPool();
     try {
-      await pool.query('SELECT 1');
+      await getPool().query('SELECT 1');
       console.log('[getDb] Connection OK');
-      // Skip initSchema - tables should already exist
-      // await initSchema(pool);
     } catch (e) {
       console.error('[getDb] error:', e.message);
       dbReady = null;
       throw e;
     }
-    return pool;
+    return getPool();
   })();
   return dbReady;
 }
 
-async function initSchema(pool) {
-  // Use a single try-catch for all schema operations
-  const statements = [
-    `CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`,
-    `CREATE TABLE IF NOT EXISTS users (id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, display_name TEXT NOT NULL, tenant_id UUID NOT NULL, created_at BIGINT NOT NULL)`,
-    `CREATE TABLE IF NOT EXISTS refresh_tokens (token TEXT PRIMARY KEY, user_id UUID NOT NULL, tenant_id UUID NOT NULL, expires_at BIGINT NOT NULL, created_at BIGINT NOT NULL)`,
-    `CREATE TABLE IF NOT EXISTS keyword_rules (id SERIAL PRIMARY KEY, keyword TEXT NOT NULL, match_type TEXT NOT NULL DEFAULT 'CONTAINS', reply_template TEXT NOT NULL, category TEXT NOT NULL DEFAULT '', target_type TEXT NOT NULL DEFAULT 'ALL', target_names_json TEXT NOT NULL DEFAULT '[]', priority INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, tenant_id UUID NOT NULL, sync_version BIGINT NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0)`,
-    `CREATE TABLE IF NOT EXISTS ai_model_configs (id SERIAL PRIMARY KEY, model_type TEXT NOT NULL, model_name TEXT NOT NULL, api_key TEXT NOT NULL DEFAULT '', api_endpoint TEXT NOT NULL DEFAULT '', temperature REAL NOT NULL DEFAULT 0.7, max_tokens INTEGER NOT NULL DEFAULT 1000, is_default INTEGER NOT NULL DEFAULT 0, is_enabled INTEGER NOT NULL DEFAULT 1, monthly_cost REAL NOT NULL DEFAULT 0, last_used BIGINT NOT NULL DEFAULT 0, created_at BIGINT NOT NULL, tenant_id UUID NOT NULL, sync_version BIGINT NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0)`,
-    `CREATE TABLE IF NOT EXISTS user_style_profiles (user_id UUID PRIMARY KEY, formality_level REAL NOT NULL DEFAULT 0.5, enthusiasm_level REAL NOT NULL DEFAULT 0.5, professionalism_level REAL NOT NULL DEFAULT 0.5, word_count_preference INTEGER NOT NULL DEFAULT 50, common_phrases TEXT NOT NULL DEFAULT '', avoid_phrases TEXT NOT NULL DEFAULT '', learning_samples INTEGER NOT NULL DEFAULT 0, accuracy_score REAL NOT NULL DEFAULT 0, last_trained BIGINT NOT NULL DEFAULT 0, created_at BIGINT NOT NULL, tenant_id UUID NOT NULL, sync_version BIGINT NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0)`,
-    `CREATE TABLE IF NOT EXISTS app_configs (package_name TEXT PRIMARY KEY, app_name TEXT NOT NULL, icon_uri TEXT, is_monitored INTEGER NOT NULL DEFAULT 0, created_at BIGINT NOT NULL, last_used BIGINT NOT NULL DEFAULT 0, tenant_id UUID NOT NULL, sync_version BIGINT NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0)`,
-    `CREATE TABLE IF NOT EXISTS scenarios (id SERIAL PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'ALL_PROPERTIES', target_id TEXT, description TEXT, created_at BIGINT NOT NULL, tenant_id UUID NOT NULL, sync_version BIGINT NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0)`,
-    `CREATE TABLE IF NOT EXISTS rule_scenario_relation (rule_id INTEGER NOT NULL, scenario_id INTEGER NOT NULL, tenant_id UUID NOT NULL, PRIMARY KEY (rule_id, scenario_id))`,
-    `CREATE TABLE IF NOT EXISTS reply_history (id SERIAL PRIMARY KEY, source_app TEXT NOT NULL, original_message TEXT NOT NULL, generated_reply TEXT NOT NULL, final_reply TEXT NOT NULL, rule_matched_id INTEGER, model_used_id INTEGER, style_applied INTEGER NOT NULL DEFAULT 0, send_time BIGINT NOT NULL, modified INTEGER NOT NULL DEFAULT 0, tenant_id UUID NOT NULL, sync_version BIGINT NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0)`,
-    `CREATE TABLE IF NOT EXISTS sync_checkpoints (tenant_id UUID PRIMARY KEY, last_sync_time BIGINT NOT NULL DEFAULT 0, sync_token TEXT, is_syncing INTEGER NOT NULL DEFAULT 0, last_error TEXT)`,
-    `CREATE TABLE IF NOT EXISTS message_blacklist (id SERIAL PRIMARY KEY, type TEXT NOT NULL, value TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', package_name TEXT, created_at BIGINT NOT NULL, is_enabled INTEGER NOT NULL DEFAULT 1, tenant_id UUID NOT NULL, sync_version BIGINT NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0)`,
-    `CREATE TABLE IF NOT EXISTS ota_versions (version_code INTEGER PRIMARY KEY, version_name TEXT NOT NULL, download_url TEXT NOT NULL, file_size INTEGER NOT NULL DEFAULT 0, md5 TEXT NOT NULL DEFAULT '', release_notes TEXT NOT NULL DEFAULT '', channel TEXT NOT NULL DEFAULT 'default', is_force_update INTEGER NOT NULL DEFAULT 0, min_required_version INTEGER NOT NULL DEFAULT 1, is_published INTEGER NOT NULL DEFAULT 1, release_date BIGINT, created_at BIGINT NOT NULL)`,
-    `CREATE TABLE IF NOT EXISTS backup_records (id SERIAL PRIMARY KEY, tenant_id UUID NOT NULL, device_name TEXT NOT NULL DEFAULT '', app_version TEXT NOT NULL DEFAULT '', data_json TEXT NOT NULL, data_size INTEGER NOT NULL DEFAULT 0, checksum TEXT NOT NULL DEFAULT '', created_at BIGINT NOT NULL)`,
-    `CREATE INDEX IF NOT EXISTS idx_kr_tenant ON keyword_rules(tenant_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_am_tenant ON ai_model_configs(tenant_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_rh_tenant ON reply_history(tenant_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_mb_tenant ON message_blacklist(tenant_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
-  ];
-
-  for (const sql of statements) {
-    try {
-      await pool.query(sql);
-    } catch (e) {
-      console.error('Schema init error:', e.message, 'SQL:', sql.substring(0, 80));
-      // Continue with other statements
-    }
-  }
-}
-
-// Execute SQL using pool directly (no client.connect/release)
+// Simple SQL execution using pool.query directly
 async function exec(sql, params = []) {
-  const client = await getPool().connect();
-  try {
-    const result = await client.query(sql, params);
-    return { changes: result.rowCount, lastInsertRowid: result.rows[0]?.id || 0 };
-  } catch (e) {
-    console.error('exec error:', e.message, 'SQL:', (sql || '').substring(0, 80));
-    throw e;
-  } finally {
-    try { client.release(true); } catch(e) { /* ignore */ }
-  }
+  const result = await getPool().query(sql, params);
+  return { changes: result.rowCount, lastInsertRowid: result.rows[0]?.id || 0 };
 }
 
 async function queryAll(sql, params = []) {
-  const client = await getPool().connect();
-  try {
-    const result = await client.query(sql, params);
-    return result.rows;
-  } catch (e) {
-    console.error('queryAll error:', e.message);
-    throw e;
-  } finally {
-    try { client.release(true); } catch(e) { /* ignore */ }
-  }
+  const result = await getPool().query(sql, params);
+  return result.rows;
 }
 
 async function queryOne(sql, params = []) {
@@ -103,6 +50,7 @@ async function queryOne(sql, params = []) {
   return results[0] || null;
 }
 
+// Transaction helper - only use when needed
 async function withTransaction(fn) {
   const client = await getPool().connect();
   try {
