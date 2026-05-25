@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { getDb, queryAll, queryOne, exec, withTransaction } = require('./db');
+const { getDb, queryAll, queryOne, exec } = require('./db');
 const { authMiddleware } = require('./auth');
 
 const router = Router();
