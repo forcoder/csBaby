@@ -3,8 +3,8 @@ services:
     name: csbaby-sync-server
     env: node
     plan: free
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: npm install && node -e "console.log('Build OK, version:', require('./package.json').version)"
+    startCommand: node src/index.js
     envVars:
       - key: NODE_ENV
         value: production
@@ -12,18 +12,5 @@ services:
         generateValue: true
       - key: PORT
         value: 8080
-services:
-  - type: web
-    name: csbaby-sync-server
-    env: node
-    plan: free
-    buildCommand: npm install
-    startCommand: npm start
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: JWT_SECRET
-        generateValue: true
-      - key: PORT
-        value: 8080
-# Force redeploy trigger - v2
+    autoDeploy: yes
+# Force rebuild - clear cache
