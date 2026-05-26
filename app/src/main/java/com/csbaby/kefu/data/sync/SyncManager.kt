@@ -156,9 +156,6 @@ class SyncManager @Inject constructor(
                 val result = fullSync(saved.tenantId)
                 if (result.isSuccess) {
                     Timber.d("自动全量同步成功: tenant=${saved.tenantId}")
-
-                    // 添加 Longcat AI 模型
-                    addLongcatModels(saved.tenantId)
                 } else {
                     Timber.w("自动全量同步失败: ${result.exceptionOrNull()?.message}")
                 }
@@ -179,8 +176,6 @@ class SyncManager @Inject constructor(
 
                 try {
                     fullSync(refreshed.tenantId)
-                    // 添加 Longcat AI 模型
-                    addLongcatModels(refreshed.tenantId)
                 } catch (e: Exception) {
                     Timber.e(e, "Token 刷新后全量同步异常")
                 }
@@ -704,125 +699,98 @@ class SyncManager @Inject constructor(
 
     fun currentTenantId(): String? = _authState.value?.tenantId
 
-    /**
-     * 添加 Longcat AI 模型到本地模型列表
-     */
-    suspend fun addLongcatModels(tenantId: String) {
-        val longcatModels = listOf(
-            AIModelConfigEntity(
-                id = 1001L,
-                modelType = "OPENAI",
-                modelName = "LongCat-Flash-Chat",
-                apiKey = "", // TODO: 从配置文件读取API Key
-                apiEndpoint = "https://api.longcat.chat/openai",
-                temperature = 0.7f,
-                maxTokens = 6000,
-                isDefault = false,
-                isEnabled = true,
-                monthlyCost = 0.0,
-                lastUsed = 0L,
-                createdAt = System.currentTimeMillis(),
-                tenantId = tenantId,
-                syncVersion = 0L,
-                deleted = false
-            ),
-            AIModelConfigEntity(
-                id = 1002L,
-                modelType = "OPENAI",
-                modelName = "LongCat-2.0-Preview",
-                apiKey = "", // TODO: 从配置文件读取API Key
-                apiEndpoint = "https://api.longcat.chat/openai",
-                temperature = 0.7f,
-                maxTokens = 6000,
-                isDefault = false,
-                isEnabled = true,
-                monthlyCost = 0.0,
-                lastUsed = 0L,
-                createdAt = System.currentTimeMillis(),
-                tenantId = tenantId,
-                syncVersion = 0L,
-                deleted = false
-            ),
-            AIModelConfigEntity(
-                id = 1003L,
-                modelType = "OPENAI",
-                modelName = "LongCat-Flash-Lite",
-                apiKey = "", // TODO: 从配置文件读取API Key
-                apiEndpoint = "https://api.longcat.chat/openai",
-                temperature = 0.7f,
-                maxTokens = 6000,
-                isDefault = true,
-                isEnabled = true,
-                monthlyCost = 0.0,
-                lastUsed = 0L,
-                createdAt = System.currentTimeMillis(),
-                tenantId = tenantId,
-                syncVersion = 0L,
-                deleted = false
-            )
-        )
-
-        longcatModels.forEach { model ->
-            try {
-                aiModelConfigDao.insertModel(model)
-                Timber.d("添加 Longcat 模型成功: ${model.modelName}")
-            } catch (e: Exception) {
-                Timber.e(e, "添加 Longcat 模型失败: ${model.modelName}")
-            }
-        }
-
-        // 触发同步将模型推送到云端
-        triggerSync()
-    }
-
     // ========== 数据转换 ==========
 
     private fun SyncKeywordRule.toEntity(tenantId: String) = KeywordRuleEntity(
-        id = id, keyword = keyword, matchType = matchType,
-        replyTemplate = replyTemplate, category = category,
-        targetType = targetType, targetNamesJson = targetNamesJson,
-        priority = priority, enabled = enabled,
-        createdAt = createdAt, updatedAt = updatedAt,
-        tenantId = tenantId, syncVersion = syncVersion, deleted = deleted
+        id = id,
+        keyword = keyword.orEmpty(),
+        matchType = matchType.orEmpty(),
+        replyTemplate = replyTemplate.orEmpty(),
+        category = category.orEmpty(),
+        targetType = targetType.orEmpty(),
+        targetNamesJson = targetNamesJson.orEmpty(),
+        priority = priority,
+        enabled = enabled,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        tenantId = tenantId,
+        syncVersion = syncVersion,
+        deleted = deleted
     )
 
     private fun SyncAIModelConfig.toEntity(tenantId: String) = AIModelConfigEntity(
-        id = id, modelType = modelType, modelName = modelName,
-        apiKey = apiKey, apiEndpoint = apiEndpoint,
-        temperature = temperature, maxTokens = maxTokens,
-        isDefault = isDefault, isEnabled = isEnabled,
-        monthlyCost = monthlyCost, lastUsed = lastUsed, createdAt = createdAt,
-        tenantId = tenantId, syncVersion = syncVersion, deleted = deleted
+        id = id,
+        modelType = modelType.orEmpty(),
+        modelName = modelName.orEmpty(),
+        apiKey = apiKey.orEmpty(),
+        apiEndpoint = apiEndpoint.orEmpty(),
+        temperature = temperature,
+        maxTokens = maxTokens,
+        isDefault = isDefault,
+        isEnabled = isEnabled,
+        monthlyCost = monthlyCost,
+        lastUsed = lastUsed,
+        createdAt = createdAt,
+        tenantId = tenantId,
+        syncVersion = syncVersion,
+        deleted = deleted
     )
 
     private fun SyncUserStyleProfile.toEntity(tenantId: String) = UserStyleProfileEntity(
-        userId = userId, formalityLevel = formalityLevel,
-        enthusiasmLevel = enthusiasmLevel, professionalismLevel = professionalismLevel,
+        userId = userId.orEmpty(),
+        formalityLevel = formalityLevel,
+        enthusiasmLevel = enthusiasmLevel,
+        professionalismLevel = professionalismLevel,
         wordCountPreference = wordCountPreference,
-        commonPhrases = commonPhrases, avoidPhrases = avoidPhrases,
-        learningSamples = learningSamples, accuracyScore = accuracyScore,
-        lastTrained = lastTrained, createdAt = createdAt,
-        tenantId = tenantId, syncVersion = syncVersion, deleted = deleted
+        commonPhrases = commonPhrases.orEmpty(),
+        avoidPhrases = avoidPhrases.orEmpty(),
+        learningSamples = learningSamples,
+        accuracyScore = accuracyScore,
+        lastTrained = lastTrained,
+        createdAt = createdAt,
+        tenantId = tenantId,
+        syncVersion = syncVersion,
+        deleted = deleted
     )
 
     private fun SyncAppConfig.toEntity(tenantId: String) = AppConfigEntity(
-        packageName = packageName, appName = appName, iconUri = iconUri,
-        isMonitored = isMonitored, createdAt = createdAt, lastUsed = lastUsed,
-        tenantId = tenantId, syncVersion = syncVersion, deleted = deleted
+        packageName = packageName.orEmpty(),
+        appName = appName.orEmpty(),
+        iconUri = iconUri,
+        isMonitored = isMonitored,
+        createdAt = createdAt,
+        lastUsed = lastUsed,
+        tenantId = tenantId,
+        syncVersion = syncVersion,
+        deleted = deleted
     )
 
     private fun SyncScenario.toEntity(tenantId: String) = ScenarioEntity(
-        id = id, name = name, type = type, targetId = targetId,
-        description = description, createdAt = createdAt,
-        tenantId = tenantId, syncVersion = syncVersion, deleted = deleted
+        id = id,
+        name = name.orEmpty(),
+        type = type.orEmpty(),
+        targetId = targetId,
+        description = description,
+        createdAt = createdAt,
+        tenantId = tenantId,
+        syncVersion = syncVersion,
+        deleted = deleted
     )
 
     private fun SyncReplyHistory.toEntity(tenantId: String) = ReplyHistoryEntity(
-        id = id, sourceApp = sourceApp, originalMessage = originalMessage,
-        generatedReply = generatedReply, finalReply = finalReply,
-        ruleMatchedId = ruleMatchedId, modelUsedId = modelUsedId,
-        styleApplied = styleApplied, sendTime = sendTime, modified = modified,
-        tenantId = tenantId, syncVersion = syncVersion, deleted = deleted
+        id = id,
+        sourceApp = sourceApp.orEmpty(),
+        originalMessage = originalMessage.orEmpty(),
+        generatedReply = generatedReply.orEmpty(),
+        finalReply = finalReply.orEmpty(),
+        ruleMatchedId = ruleMatchedId,
+        modelUsedId = modelUsedId,
+        styleApplied = styleApplied,
+        sendTime = sendTime,
+        modified = modified,
+        tenantId = tenantId,
+        syncVersion = syncVersion,
+        deleted = deleted
     )
 
     private fun KeywordRuleEntity.toSyncModel() = SyncKeywordRule(

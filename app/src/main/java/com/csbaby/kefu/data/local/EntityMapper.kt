@@ -95,7 +95,7 @@ object EntityMapper {
     // AIModelConfig mapping
     fun AIModelConfigEntity.toDomain() = AIModelConfig(
         id = id,
-        modelType = ModelType.valueOf(modelType),
+        modelType = parseModelType(modelType),
         modelName = modelName,
         apiKey = apiKey,
         apiEndpoint = apiEndpoint,
@@ -188,6 +188,18 @@ object EntityMapper {
             else gson.fromJson(json, object : TypeToken<List<String>>() {}.type)
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    private fun parseModelType(value: String): ModelType {
+        return try {
+            ModelType.valueOf(value)
+        } catch (e: IllegalArgumentException) {
+            try {
+                ModelType.valueOf(value.uppercase())
+            } catch (e2: IllegalArgumentException) {
+                ModelType.OPENAI
+            }
         }
     }
 
