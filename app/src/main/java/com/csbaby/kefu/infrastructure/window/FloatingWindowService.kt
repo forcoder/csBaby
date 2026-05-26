@@ -653,7 +653,7 @@ class FloatingWindowService : Service() {
         this.suggestionPanel = suggestionPanel
         replyLabelTextView = createSectionLabel("AI 建议回复（可编辑）", "#67E8F9")
 
-        // 建议回复区域：EditText + 复制按钮水平排列
+        // 建议回复区域：EditText 单独一行
         val replyRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -661,23 +661,6 @@ class FloatingWindowService : Service() {
         val replyEditText = createReplyEditText()
         suggestedReplyEditText = replyEditText
         replyRow.addView(replyEditText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-
-        val copyReplyButton = TextView(this).apply {
-            text = "复制"
-            textSize = 12f
-            setTextColor(Color.parseColor("#67E8F9"))
-            setPadding(dp(8), dp(6), dp(8), dp(6))
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(8).toFloat()
-                setStroke(dp(1), Color.parseColor("#67E8F9"))
-                setColor(Color.TRANSPARENT)
-            }
-            setOnClickListener {
-                copySuggestedReply()
-            }
-        }
-        replyRow.addView(copyReplyButton)
 
         suggestionPanel.addView(replyLabelTextView)
         suggestionPanel.addView(verticalSpace(8))
@@ -754,8 +737,17 @@ class FloatingWindowService : Service() {
             gravity = Gravity.CENTER_VERTICAL
         }
 
+        val copyReplyButton = createBottomActionButton(
+            text = "复制",
+            background = createSolidButtonBackground("#374151", "#4B5563"),
+            textColor = "#E5E7EB",
+            weight = 0.7f
+        ) {
+            copySuggestedReply()
+        }
+
         val sendButton = createBottomActionButton(
-            text = "⚡ 直接发送",
+            text = "发送",
             background = createGradientButtonBackground("#7C3AED", "#06B6D4", strokeColor = "#A855F7"),
             textColor = "#FFFFFF",
             weight = 1f
@@ -770,6 +762,8 @@ class FloatingWindowService : Service() {
         ) {
             addOriginalMessageToBlacklist()
         }
+        actionRow.addView(copyReplyButton)
+        actionRow.addView(spaceView(6))
         actionRow.addView(sendButton)
         actionRow.addView(spaceView(8))
         actionRow.addView(blacklistButton)
@@ -879,9 +873,17 @@ class FloatingWindowService : Service() {
         val reply = getCurrentReplyText()
         if (reply.isBlank()) return
 
-        copyReplyToClipboard(reply)
-        Toast.makeText(this, "已复制回复内容", Toast.LENGTH_SHORT).show()
-        setExpanded(false, animated = true)
+        try {
+            copyReplyToClipboard(reply)
+            Toast.makeText(this, "已复制回复内容", Toast.LENGTH_SHORT).show()
+            setExpanded(false, animated = true)
+        } catch (e: SecurityException) {
+            Toast.makeText(this, "复制失败：没有剪贴板访问权限", Toast.LENGTH_SHORT).show()
+        } catch (e: NullPointerException) {
+            Toast.makeText(this, "复制失败：系统剪贴板不可用", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "复制失败：${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     /**
@@ -920,7 +922,9 @@ class FloatingWindowService : Service() {
 
 
     private fun copyReplyToClipboard(reply: String) {
-        val clipboardManager = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        val clipboardManager = getSystemService(CLIPBOARD_SERVICE) as? ClipboardManager
+            ?: throw NullPointerException("ClipboardManager not available")
+
         clipboardManager.setPrimaryClip(ClipData.newPlainText("suggested_reply", reply))
     }
 
