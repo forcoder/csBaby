@@ -108,7 +108,7 @@ fun ModelScreen(
 @Composable
 fun ModelItem(
     model: AIModelConfig,
-    testResult: Boolean?,
+    testResult: TestResult?,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onSetDefault: () -> Unit,
@@ -141,12 +141,23 @@ fun ModelItem(
                         // Test result indicator
                         if (testResult != null) {
                             Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = if (testResult) Icons.Default.CheckCircle else Icons.Default.Error,
-                                contentDescription = if (testResult) "测试成功" else "测试失败",
-                                tint = if (testResult) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            Column {
+                                Icon(
+                                    imageVector = if (testResult.success) Icons.Default.CheckCircle else Icons.Default.Error,
+                                    contentDescription = if (testResult.success) "测试成功" else "测试失败",
+                                    tint = if (testResult.success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                if (!testResult.success && testResult.errorMessage != null) {
+                                    Text(
+                                        text = testResult.errorMessage,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.widthIn(max = 200.dp),
+                                        maxLines = 2
+                                    )
+                                }
+                            }
                         }
                     }
                     Text(
@@ -278,7 +289,7 @@ fun ModelEditDialog(
                     label = { Text("API密钥") },
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                    keyboardOptions = KeyboardOptions.Default
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -354,7 +365,7 @@ fun ModelEditDialog(
 
 private fun getDefaultEndpoint(modelType: ModelType): String {
     return when (modelType) {
-        ModelType.OPENAI -> "https://api.openai.com/v1/chat/completions"
+        ModelType.OPENAI -> "https://api.longcat.chat/openai"
         ModelType.CLAUDE -> "https://api.anthropic.com/v1/messages"
         ModelType.ZHIPU -> "https://open.bigmodel.cn/api/paas/v4/chat/completions"
         ModelType.TONGYI -> "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"

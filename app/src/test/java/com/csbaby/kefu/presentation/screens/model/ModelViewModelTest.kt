@@ -206,7 +206,8 @@ class ModelViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals(true, state.testResults[1L])
+        assertEquals(true, state.testResults[1L]?.success)
+        assertNull(state.testResults[1L]?.errorMessage)
     }
 
     @Test
@@ -221,6 +222,7 @@ class ModelViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals(false, state.testResults[1L])
+        assertEquals(false, state.testResults[1L]?.success)
+        assertEquals("连接超时", state.testResults[1L]?.errorMessage)
     }
 }

@@ -11,10 +11,15 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+data class TestResult(
+    val success: Boolean,
+    val errorMessage: String? = null
+)
+
 data class ModelUiState(
     val models: List<AIModelConfig> = emptyList(),
     val isLoading: Boolean = false,
-    val testResults: Map<Long, Boolean> = emptyMap()
+    val testResults: Map<Long, TestResult> = emptyMap()
 )
 
 @HiltViewModel
@@ -74,9 +79,12 @@ class ModelViewModel @Inject constructor(
     fun testConnection(modelId: Long) {
         viewModelScope.launch {
             val result = aiService.testModelConnection(modelId)
-            val success = result.getOrDefault(false)
+            val testResult = result.fold(
+                onSuccess = { TestResult(success = true) },
+                onFailure = { TestResult(success = false, errorMessage = it.message ?: "未知错误") }
+            )
             _uiState.update {
-                it.copy(testResults = it.testResults + (modelId to success))
+                it.copy(testResults = it.testResults + (modelId to testResult))
             }
         }
     }

@@ -652,11 +652,36 @@ class FloatingWindowService : Service() {
         }
         this.suggestionPanel = suggestionPanel
         replyLabelTextView = createSectionLabel("AI 建议回复（可编辑）", "#67E8F9")
-        // 先添加到 suggestionPanel（必须在父容器之前添加）
+
+        // 建议回复区域：EditText + 复制按钮水平排列
+        val replyRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val replyEditText = createReplyEditText()
+        suggestedReplyEditText = replyEditText
+        replyRow.addView(replyEditText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+        val copyReplyButton = TextView(this).apply {
+            text = "复制"
+            textSize = 12f
+            setTextColor(Color.parseColor("#67E8F9"))
+            setPadding(dp(8), dp(6), dp(8), dp(6))
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(8).toFloat()
+                setStroke(dp(1), Color.parseColor("#67E8F9"))
+                setColor(Color.TRANSPARENT)
+            }
+            setOnClickListener {
+                copySuggestedReply()
+            }
+        }
+        replyRow.addView(copyReplyButton)
+
         suggestionPanel.addView(replyLabelTextView)
         suggestionPanel.addView(verticalSpace(8))
-        suggestionPanel.addView(createReplyEditText())
-        suggestedReplyEditText = createReplyEditText()
+        suggestionPanel.addView(replyRow)
 
         // 知识库搜索面板
         val knowledgePanel = LinearLayout(this).apply {
@@ -737,14 +762,6 @@ class FloatingWindowService : Service() {
         ) {
             sendSuggestedReply()
         }
-        val copyButton = createBottomActionButton(
-            text = "复制回复",
-            background = createSolidButtonBackground("#1E293B", "#334155"),
-            textColor = "#E2E8F0",
-            weight = 0.92f
-        ) {
-            copySuggestedReply()
-        }
         val blacklistButton = createBottomActionButton(
             text = "🚫 加入黑名单",
             background = createSolidButtonBackground("#7F1D1D", "#991B1B"),
@@ -754,8 +771,6 @@ class FloatingWindowService : Service() {
             addOriginalMessageToBlacklist()
         }
         actionRow.addView(sendButton)
-        actionRow.addView(spaceView(8))
-        actionRow.addView(copyButton)
         actionRow.addView(spaceView(8))
         actionRow.addView(blacklistButton)
 
