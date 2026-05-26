@@ -203,7 +203,7 @@ data class SyncAIModelConfig(
     @SerializedName("modelType") val modelType: String = "",
     @SerializedName("modelName") val modelName: String = "",
     @SerializedName("apiKey") val apiKey: String = "",
-    @SerializedName("apiEndpoint") val apiEndpoint: String = "",
+    @SerializedName("baseUrl") val apiEndpoint: String = "",
     @SerializedName("temperature") val temperature: Float = 0.7f,
     @SerializedName("maxTokens") val maxTokens: Int = 1000,
     @SerializedName("isDefault") val isDefault: Boolean = false,

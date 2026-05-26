@@ -148,11 +148,17 @@ class SyncManager @Inject constructor(
             _authState.value = saved
             Timber.d("恢复登录状态: tenant=${saved.tenantId}")
 
+            // 迁移本地 default_tenant 数据到真实租户（首次登录/卸载重装场景）
+            migrateLocalDataIfNeeded(saved.tenantId)
+
             // 自动触发全量同步以恢复云端数据（首次登录/卸载重装场景）
             try {
                 val result = fullSync(saved.tenantId)
                 if (result.isSuccess) {
                     Timber.d("自动全量同步成功: tenant=${saved.tenantId}")
+
+                    // 添加 Longcat AI 模型
+                    addLongcatModels(saved.tenantId)
                 } else {
                     Timber.w("自动全量同步失败: ${result.exceptionOrNull()?.message}")
                 }
@@ -167,8 +173,14 @@ class SyncManager @Inject constructor(
                 _authState.value = refreshed
                 authManager.saveAuthState(refreshed)
                 Timber.d("Token 刷新成功: tenant=${refreshed.tenantId}")
+
+                // 迁移本地 default_tenant 数据到真实租户
+                migrateLocalDataIfNeeded(refreshed.tenantId)
+
                 try {
                     fullSync(refreshed.tenantId)
+                    // 添加 Longcat AI 模型
+                    addLongcatModels(refreshed.tenantId)
                 } catch (e: Exception) {
                     Timber.e(e, "Token 刷新后全量同步异常")
                 }
@@ -322,7 +334,8 @@ class SyncManager @Inject constructor(
         val checkpoint = syncCheckpointDao.getCheckpoint(tenantId)
         val since = checkpoint?.lastSyncTime ?: 0L
         val localRuleCount = keywordRuleDao.getRulesByTenantSync(tenantId).size
-        Log.d("SyncManager", "incrementalSync: localRuleCount=$localRuleCount, since=$since")
+        val defaultRuleCount = keywordRuleDao.getRulesByTenantSync(DEFAULT_TENANT_ID).size
+        Log.d("SyncManager", "incrementalSync: localRuleCount=$localRuleCount, defaultRuleCount=$defaultRuleCount, since=$since, tenantId=$tenantId")
 
         _syncState.value = SyncState.Syncing("正在同步变更...")
         syncCheckpointDao.updateSyncing(tenantId, true)
@@ -336,6 +349,7 @@ class SyncManager @Inject constructor(
             } else {
                 pushLocalChanges(tenantId, since)  // 增量同步
             }
+            Log.d("SyncManager", "推送结果: pushStats='$pushStats'")
 
             // 2. 拉取云端变更到本地
             val changesResponse = syncApiService.getChanges(tenantId, since)
@@ -689,6 +703,77 @@ class SyncManager @Inject constructor(
     fun isLoggedIn(): Boolean = _authState.value != null
 
     fun currentTenantId(): String? = _authState.value?.tenantId
+
+    /**
+     * 添加 Longcat AI 模型到本地模型列表
+     */
+    suspend fun addLongcatModels(tenantId: String) {
+        val longcatModels = listOf(
+            AIModelConfigEntity(
+                id = 1001L,
+                modelType = "openai",
+                modelName = "LongCat-Flash-Chat",
+                apiKey = "ak_27i3gd19u43J3fT1tS1Le0mN6cz6U",
+                apiEndpoint = "https://api.longcat.chat/openai",
+                temperature = 0.7f,
+                maxTokens = 6000,
+                isDefault = false,
+                isEnabled = true,
+                monthlyCost = 0.0,
+                lastUsed = 0L,
+                createdAt = System.currentTimeMillis(),
+                tenantId = tenantId,
+                syncVersion = 0L,
+                deleted = false
+            ),
+            AIModelConfigEntity(
+                id = 1002L,
+                modelType = "openai",
+                modelName = "LongCat-2.0-Preview",
+                apiKey = "ak_27c8n82xm2H53f97aG8OV1Zw8am6w",
+                apiEndpoint = "https://api.longcat.chat/openai",
+                temperature = 0.7f,
+                maxTokens = 6000,
+                isDefault = false,
+                isEnabled = true,
+                monthlyCost = 0.0,
+                lastUsed = 0L,
+                createdAt = System.currentTimeMillis(),
+                tenantId = tenantId,
+                syncVersion = 0L,
+                deleted = false
+            ),
+            AIModelConfigEntity(
+                id = 1003L,
+                modelType = "openai",
+                modelName = "LongCat-Flash-Lite",
+                apiKey = "ak_27i3gd19u43J3fT1tS1Le0mN6cz6U",
+                apiEndpoint = "https://api.longcat.chat/openai",
+                temperature = 0.7f,
+                maxTokens = 6000,
+                isDefault = true,
+                isEnabled = true,
+                monthlyCost = 0.0,
+                lastUsed = 0L,
+                createdAt = System.currentTimeMillis(),
+                tenantId = tenantId,
+                syncVersion = 0L,
+                deleted = false
+            )
+        )
+
+        longcatModels.forEach { model ->
+            try {
+                aiModelConfigDao.insertModel(model)
+                Timber.d("添加 Longcat 模型成功: ${model.modelName}")
+            } catch (e: Exception) {
+                Timber.e(e, "添加 Longcat 模型失败: ${model.modelName}")
+            }
+        }
+
+        // 触发同步将模型推送到云端
+        triggerSync()
+    }
 
     // ========== 数据转换 ==========
 
