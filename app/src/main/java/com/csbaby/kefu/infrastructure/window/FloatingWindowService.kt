@@ -10,6 +10,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
@@ -38,6 +39,8 @@ import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.csbaby.kefu.R
 import com.csbaby.kefu.data.local.PreferencesManager
+import com.csbaby.kefu.data.local.dao.MessageBlacklistDao
+import com.csbaby.kefu.data.local.entity.MessageBlacklistEntity
 import com.csbaby.kefu.domain.model.ReplySource
 
 import com.csbaby.kefu.AppEntryPoint
@@ -64,6 +67,13 @@ class FloatingWindowService : Service() {
         ).replyOrchestrator()
     }
 
+    private val messageBlacklistDao: MessageBlacklistDao by lazy {
+        EntryPointAccessors.fromApplication(
+            applicationContext,
+            AppEntryPoint::class.java
+        ).messageBlacklistDao()
+    }
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private var windowManager: WindowManager? = null
@@ -82,7 +92,8 @@ class FloatingWindowService : Service() {
     private var originalMessageTextView: TextView? = null
     private var replyLabelTextView: TextView? = null
     private var suggestedReplyEditText: EditText? = null
-    
+    private var dragHandleView: View? = null
+
     // 新增知识库相关变量
     private var tabContainer: LinearLayout? = null
     private var suggestionTab: TextView? = null
@@ -92,6 +103,11 @@ class FloatingWindowService : Service() {
     private var suggestionPanel: LinearLayout? = null
     private var knowledgePanel: LinearLayout? = null
     private var currentTab: String = "suggestion" // "suggestion" 或 "knowledge"
+
+    // SharedPreferences 用于保存悬浮窗位置
+    private val floatingPrefs: SharedPreferences by lazy {
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
 
 
     /**
@@ -369,6 +385,10 @@ class FloatingWindowService : Service() {
 
     private fun createLayoutParams(): WindowManager.LayoutParams {
         val screenWidth = resources.displayMetrics.widthPixels
+        val defaultX = max(screenWidth - dp(96), dp(12))
+        val defaultY = dp(88)
+        val savedX = floatingPrefs.getInt(KEY_POSITION_X, defaultX)
+        val savedY = floatingPrefs.getInt(KEY_POSITION_Y, defaultY)
         return WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -376,10 +396,9 @@ class FloatingWindowService : Service() {
             computeWindowFlags(),
             PixelFormat.TRANSLUCENT
         ).apply {
-
             gravity = Gravity.TOP or Gravity.START
-            x = max(screenWidth - dp(96), dp(12))
-            y = dp(88)
+            x = clampWindowX(savedX)
+            y = max(savedY, dp(24))
         }
     }
 
@@ -470,9 +489,27 @@ class FloatingWindowService : Service() {
         }
         expandedPanelView = panel
 
+        // 拖动条区域：40dp高度透明条，用于拖动悬浮窗
+        // 位于面板顶部，不影响内容区域点击事件
         val dragHandle = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(40)
+            )
+            // 透明背景，视觉上不可见但可触摸
+            setBackgroundColor(Color.TRANSPARENT)
+            // 顶部圆角装饰条（仅视觉提示，5dp高度小横条）
+            contentDescription = "拖动区域，按住可移动悬浮窗位置"
+        }
+        dragHandleView = dragHandle
+        // 使用专用拖动监听器，不影响内容区域点击
+        dragHandle.setOnTouchListener(createDragHandleTouchListener())
+
+        // 拖动条内的视觉指示器（小横条，仅装饰）
+        val dragIndicator = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(dp(46), dp(5)).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
+                topMargin = dp(8)
             }
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -480,7 +517,9 @@ class FloatingWindowService : Service() {
                 setColor(Color.parseColor("#55E2E8F0"))
             }
         }
-        dragHandle.setOnTouchListener(createWindowTouchListener())
+        // 将指示器添加到面板中（在拖动条下方）
+        panel.addView(dragHandle)
+        panel.addView(dragIndicator)
 
         val headerRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -706,9 +745,19 @@ class FloatingWindowService : Service() {
         ) {
             copySuggestedReply()
         }
+        val blacklistButton = createBottomActionButton(
+            text = "🚫 加入黑名单",
+            background = createSolidButtonBackground("#7F1D1D", "#991B1B"),
+            textColor = "#FCA5A5",
+            weight = 0.92f
+        ) {
+            addOriginalMessageToBlacklist()
+        }
         actionRow.addView(sendButton)
-        actionRow.addView(spaceView(10))
+        actionRow.addView(spaceView(8))
         actionRow.addView(copyButton)
+        actionRow.addView(spaceView(8))
+        actionRow.addView(blacklistButton)
 
         val footNote = TextView(this).apply {
             text = "小圆球可拖动；收起后不打扰，点一下再展开。"
@@ -716,7 +765,7 @@ class FloatingWindowService : Service() {
             setTextColor(Color.parseColor("#64748B"))
         }
 
-        panel.addView(dragHandle)
+        // dragHandle 已在上面添加到 panel 中，此处跳过
         panel.addView(verticalSpace(14))
         panel.addView(headerRow)
         panel.addView(verticalSpace(12))
@@ -818,6 +867,40 @@ class FloatingWindowService : Service() {
         copyReplyToClipboard(reply)
         Toast.makeText(this, "已复制回复内容", Toast.LENGTH_SHORT).show()
         setExpanded(false, animated = true)
+    }
+
+    /**
+     * 将当前原始消息作为关键词添加到黑名单
+     */
+    private fun addOriginalMessageToBlacklist() {
+        val data = currentDisplayData ?: return
+        val originalMessage = data.originalMessage.trim()
+        if (originalMessage.isBlank()) {
+            Toast.makeText(this, "当前没有可添加的消息内容", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        serviceScope.launch {
+            try {
+                val entity = MessageBlacklistEntity(
+                    type = MessageBlacklistEntity.TYPE_KEYWORD,
+                    value = originalMessage,
+                    description = "来自悬浮窗添加"
+                )
+                messageBlacklistDao.insert(entity)
+                Toast.makeText(
+                    this@FloatingWindowService,
+                    "已将「${originalMessage.take(20)}...」添加到黑名单",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@FloatingWindowService,
+                    "添加失败：${e.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
     }
 
 
@@ -995,12 +1078,72 @@ class FloatingWindowService : Service() {
                 MotionEvent.ACTION_UP -> {
                     if (!moved) {
                         onClick?.invoke()
+                    } else {
+                        // 拖动结束时保存位置到 SharedPreferences
+                        saveWindowPosition(params.x, params.y)
                     }
                     true
                 }
 
                 else -> false
             }
+        }
+    }
+
+    /**
+     * 创建拖动条专用的触摸监听器
+     * 拖动条区域约40dp高度，透明，触摸时悬浮窗跟随手指移动
+     * 不影响内容区域的点击事件
+     */
+    private fun createDragHandleTouchListener(): View.OnTouchListener {
+        var initialX = 0
+        var initialY = 0
+        var initialTouchX = 0f
+        var initialTouchY = 0f
+
+        return View.OnTouchListener { _, event ->
+            val params = windowLayoutParams ?: return@OnTouchListener false
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = params.x
+                    initialY = params.y
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    true
+                }
+
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = (event.rawX - initialTouchX).toInt()
+                    val dy = (event.rawY - initialTouchY).toInt()
+                    params.x = clampWindowX(initialX + dx)
+                    params.y = max(initialY + dy, dp(24))
+                    updateWindowLayout()
+                    true
+                }
+
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    // 拖动结束时保存位置
+                    saveWindowPosition(params.x, params.y)
+                    true
+                }
+
+                else -> false
+            }
+        }
+    }
+
+    /**
+     * 保存悬浮窗位置到 SharedPreferences
+     */
+    private fun saveWindowPosition(x: Int, y: Int) {
+        try {
+            floatingPrefs.edit()
+                .putInt(KEY_POSITION_X, x)
+                .putInt(KEY_POSITION_Y, y)
+                .apply()
+            Log.d(TAG, "悬浮窗位置已保存: x=$x, y=$y")
+        } catch (e: Exception) {
+            Log.e(TAG, "保存悬浮窗位置失败", e)
         }
     }
 
@@ -1327,6 +1470,7 @@ class FloatingWindowService : Service() {
             originalMessageTextView = null
             replyLabelTextView = null
             suggestedReplyEditText = null
+            dragHandleView = null
             tabContainer = null
             suggestionTab = null
             knowledgeTab = null
@@ -1606,6 +1750,11 @@ class FloatingWindowService : Service() {
         private const val CHANNEL_ID = "floating_window_channel"
         private const val NOTIFICATION_ID = 1001
         private const val TAG = "FloatingWindowService"
+
+        // SharedPreferences 名称和键名，用于保存/恢复悬浮窗位置
+        private const val PREFS_NAME = "floating_window_prefs"
+        private const val KEY_POSITION_X = "floating_window_position_x"
+        private const val KEY_POSITION_Y = "floating_window_position_y"
 
         fun show(context: Context, displayData: DisplayData? = null) {
             val intent = Intent(context, FloatingWindowService::class.java).apply {

@@ -21,6 +21,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.csbaby.kefu.R
+import com.csbaby.kefu.presentation.screens.blacklist.BlacklistScreen
 import com.csbaby.kefu.presentation.screens.home.HomeScreen
 import com.csbaby.kefu.presentation.screens.knowledge.KnowledgeScreen
 import com.csbaby.kefu.presentation.screens.model.ModelScreen
@@ -93,7 +94,10 @@ fun AppNavigation() {
             composable(Screen.Home.route) { HomeScreen() }
             composable(Screen.Knowledge.route) { KnowledgeScreen() }
             composable(Screen.Models.route) { ModelScreen() }
-            composable(Screen.Profile.route) { ProfileScreen() }
+            composable(Screen.Profile.route) { ProfileScreen(navController = navController) }
+            composable("blacklist") {
+                BlacklistScreen(onNavigateBack = { navController.popBackStack() })
+            }
         }
     }
 }

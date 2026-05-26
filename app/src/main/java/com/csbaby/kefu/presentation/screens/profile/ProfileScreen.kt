@@ -13,11 +13,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
 import com.csbaby.kefu.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
+    navController: NavController? = null,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -131,6 +133,55 @@ fun ProfileScreen(
                                 onCheckedChange = { viewModel.toggleAutoSend(it) }
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = stringResource(R.string.theme),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip(
+                                selected = uiState.themeMode == "light",
+                                onClick = { viewModel.toggleThemeMode("light") },
+                                label = { Text(stringResource(R.string.theme_light)) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.LightMode,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            )
+                            FilterChip(
+                                selected = uiState.themeMode == "dark",
+                                onClick = { viewModel.toggleThemeMode("dark") },
+                                label = { Text(stringResource(R.string.theme_dark)) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.DarkMode,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            )
+                            FilterChip(
+                                selected = uiState.themeMode == "system",
+                                onClick = { viewModel.toggleThemeMode("system") },
+                                label = { Text(stringResource(R.string.theme_system)) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.SettingsSuggest,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -157,6 +208,11 @@ fun ProfileScreen(
                     onDeleteBackup = { viewModel.deleteBackup(it) },
                     onClearBackupStatus = { viewModel.clearBackupStatus() }
                 )
+            }
+
+            // Message Blacklist Card
+            item {
+                MessageBlacklistCard(navController = navController)
             }
 
             // OTA Update Card
@@ -395,6 +451,51 @@ fun OtaUpdateCard(
                     color = MaterialTheme.colorScheme.error
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun MessageBlacklistCard(navController: NavController? = null) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { navController?.navigate("blacklist") }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Block,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Column {
+                    Text(
+                        text = "消息黑名单",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "管理关键词、发送者、内容过滤规则",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

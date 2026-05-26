@@ -1,6 +1,7 @@
 package com.csbaby.kefu
 
 import com.csbaby.kefu.data.local.PreferencesManager
+import com.csbaby.kefu.data.local.dao.MessageBlacklistDao
 import com.csbaby.kefu.data.sync.SyncManager
 import com.csbaby.kefu.infrastructure.ota.OtaScheduler
 import com.csbaby.kefu.infrastructure.reply.ReplyOrchestrator
@@ -15,4 +16,5 @@ interface AppEntryPoint {
     fun otaScheduler(): OtaScheduler
     fun syncManager(): SyncManager
     fun preferencesManager(): PreferencesManager
+    fun messageBlacklistDao(): MessageBlacklistDao
 }
