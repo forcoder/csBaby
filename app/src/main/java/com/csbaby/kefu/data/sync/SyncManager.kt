@@ -85,7 +85,7 @@ class SyncManager @Inject constructor(
                 )
                 _authState.value = auth
                 authManager.saveAuthState(auth)
-                _syncState.value = SyncState.Success("登录成功")
+                _syncState.value = SyncState.Success("登录成功", "")
                 Timber.d("登录成功: tenant=${auth.tenantId}, user=${auth.userId}")
                 // 迁移本地数据到真实租户（仅首次登录/新设备场景）
                 migrateLocalDataIfNeeded(auth.tenantId)
@@ -116,7 +116,7 @@ class SyncManager @Inject constructor(
                 )
                 _authState.value = auth
                 authManager.saveAuthState(auth)
-                _syncState.value = SyncState.Success("注册成功")
+                _syncState.value = SyncState.Success("注册成功", "")
                 Timber.d("注册成功: tenant=${auth.tenantId}, user=${auth.userId}")
                 Result.success(auth)
             } else {
@@ -489,26 +489,8 @@ class SyncManager @Inject constructor(
         )
         Log.d("SyncManager", "doPush: rules=${rules.size}, models=${models.size}, deletedIds=$deletedIds")
 
-        // 测试用：只发 1 条最简单的 keywordRules
-        Timber.w("TEST: 简化请求，只发 1 条规则，tenantId=$tenantId")
-        val testRules = if (rules.isNotEmpty()) {
-            listOf(rules.first().copy(id = 0, tenantId = tenantId, syncVersion = 0)).map { it.toSyncModel() }
-        } else {
-            emptyList()
-        }
         val response = try {
-            syncApiService.pushChanges(PushChangesRequest(
-                tenantId = tenantId,
-                keywordRules = testRules,
-                aiModelConfigs = emptyList(),
-                userStyleProfile = null,
-                appConfigs = emptyList(),
-                scenarios = emptyList(),
-                replyHistory = emptyList(),
-                messageBlacklist = emptyList(),
-                deletedIds = emptyMap(),
-                baseVersion = baseVersion
-            ))
+            syncApiService.pushChanges(request)
         } catch (e: Exception) {
             Timber.e(e, "推送失败: ${e.message}")
             throw e

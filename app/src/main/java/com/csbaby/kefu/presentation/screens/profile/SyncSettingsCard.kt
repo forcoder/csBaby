@@ -257,7 +257,9 @@ fun SyncSettingsCard(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
 
-                            backupRecords.take(3).forEach { record ->
+                            // 防御性检查：确保 backupRecords 不为 null
+                            val safeRecords = backupRecords ?: emptyList()
+                            safeRecords.take(3).forEach { record ->
                                 BackupRecordItem(
                                     record = record,
                                     isOperating = backupStatus != BackupStatus.IDLE,
@@ -267,7 +269,7 @@ fun SyncSettingsCard(
                                 Spacer(modifier = Modifier.height(4.dp))
                             }
 
-                            if (backupRecords.size > 3) {
+                            if (safeRecords.size > 3) {
                                 Text(
                                     text = "还有 ${backupRecords.size - 3} 条备份...",
                                     style = MaterialTheme.typography.bodySmall,

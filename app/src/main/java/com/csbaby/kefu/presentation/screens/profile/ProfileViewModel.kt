@@ -87,7 +87,6 @@ class ProfileViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         syncState = state,
-                        // 从成功状态中提取统计信息
                         syncStats = if (state is SyncState.Success) state.stats else it.syncStats
                     )
                 }
@@ -295,7 +294,11 @@ class ProfileViewModel @Inject constructor(
 
     fun syncNow() {
         viewModelScope.launch {
-            val tenantId = authManager.currentTenantId() ?: return@launch
+            val tenantId = authManager.currentTenantId()
+            if (tenantId == null) {
+                _uiState.update { it.copy(syncState = SyncState.Error("请先登录后再同步")) }
+                return@launch
+            }
             syncManager.incrementalSync(tenantId)
         }
     }

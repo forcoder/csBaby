@@ -94,28 +94,28 @@ data class AuthResult(
 }
 
 data class SyncAllData(
-    val keywordRules: List<SyncKeywordRule>,
-    val aiModelConfigs: List<SyncAIModelConfig>,
-    val userStyleProfile: SyncUserStyleProfile?,
-    val appConfigs: List<SyncAppConfig>,
-    val scenarios: List<SyncScenario>,
-    val replyHistory: List<SyncReplyHistory>,
-    val messageBlacklist: List<SyncMessageBlacklist>,
-    val serverTime: Long
+    val keywordRules: List<SyncKeywordRule> = emptyList(),
+    val aiModelConfigs: List<SyncAIModelConfig> = emptyList(),
+    val userStyleProfile: SyncUserStyleProfile? = null,
+    val appConfigs: List<SyncAppConfig> = emptyList(),
+    val scenarios: List<SyncScenario> = emptyList(),
+    val replyHistory: List<SyncReplyHistory> = emptyList(),
+    val messageBlacklist: List<SyncMessageBlacklist> = emptyList(),
+    val serverTime: Long = 0L
 )
 
 data class SyncChanges(
-    val keywordRules: List<SyncKeywordRule>,
-    val aiModelConfigs: List<SyncAIModelConfig>,
-    val userStyleProfile: SyncUserStyleProfile?,
-    val appConfigs: List<SyncAppConfig>,
-    val scenarios: List<SyncScenario>,
-    val replyHistory: List<SyncReplyHistory>,
-    val messageBlacklist: List<SyncMessageBlacklist>,
-    val deletedIds: Map<String, List<String>>,
-    val serverTime: Long,
-    val hasMore: Boolean,
-    val nextCursor: String?
+    val keywordRules: List<SyncKeywordRule> = emptyList(),
+    val aiModelConfigs: List<SyncAIModelConfig> = emptyList(),
+    val userStyleProfile: SyncUserStyleProfile? = null,
+    val appConfigs: List<SyncAppConfig> = emptyList(),
+    val scenarios: List<SyncScenario> = emptyList(),
+    val replyHistory: List<SyncReplyHistory> = emptyList(),
+    val messageBlacklist: List<SyncMessageBlacklist> = emptyList(),
+    val deletedIds: Map<String, List<String>> = emptyMap(),
+    val serverTime: Long = 0L,
+    val hasMore: Boolean = false,
+    val nextCursor: String? = null
 )
 
 data class PushChangesRequest(
@@ -182,106 +182,106 @@ data class ConflictResolveResult(
 // ========== 同步数据模型（与本地 Entity 字段对应） ==========
 
 data class SyncKeywordRule(
-    @SerializedName("id") val id: Long,
-    @SerializedName("keyword") val keyword: String,
-    @SerializedName("match_type") val matchType: String,
-    @SerializedName("reply_template") val replyTemplate: String,
-    @SerializedName("category") val category: String,
-    @SerializedName("target_type") val targetType: String,
-    @SerializedName("target_names") val targetNamesJson: String,
-    @SerializedName("priority") val priority: Int,
-    @SerializedName("enabled") val enabled: Boolean,
-    @SerializedName("createdAt") val createdAt: Long,
-    @SerializedName("updatedAt") val updatedAt: Long,
-    @SerializedName("tenantId") val tenantId: String,
-    @SerializedName("syncVersion") val syncVersion: Long,
-    @SerializedName("deleted") val deleted: Boolean
+    @SerializedName("id") val id: Long = 0L,
+    @SerializedName("keyword") val keyword: String = "",
+    @SerializedName("matchType") val matchType: String = "",
+    @SerializedName("replyTemplate") val replyTemplate: String = "",
+    @SerializedName("category") val category: String = "",
+    @SerializedName("targetType") val targetType: String = "",
+    @SerializedName("targetNamesJson") val targetNamesJson: String = "",
+    @SerializedName("priority") val priority: Int = 0,
+    @SerializedName("enabled") val enabled: Boolean = true,
+    @SerializedName("createdAt") val createdAt: Long = 0L,
+    @SerializedName("updatedAt") val updatedAt: Long = 0L,
+    @SerializedName("tenantId") val tenantId: String = "",
+    @SerializedName("syncVersion") val syncVersion: Long = 0L,
+    @SerializedName("deleted") val deleted: Boolean = false
 )
 
 data class SyncAIModelConfig(
-    @SerializedName("id") val id: Long,
-    @SerializedName("modelType") val modelType: String,
-    @SerializedName("modelName") val modelName: String,
-    @SerializedName("apiKey") val apiKey: String,
-    @SerializedName("apiEndpoint") val apiEndpoint: String,
-    @SerializedName("temperature") val temperature: Float,
-    @SerializedName("maxTokens") val maxTokens: Int,
-    @SerializedName("isDefault") val isDefault: Boolean,
-    @SerializedName("isEnabled") val isEnabled: Boolean,
-    @SerializedName("monthlyCost") val monthlyCost: Double,
-    @SerializedName("lastUsed") val lastUsed: Long,
-    @SerializedName("createdAt") val createdAt: Long,
-    @SerializedName("tenantId") val tenantId: String,
-    @SerializedName("syncVersion") val syncVersion: Long,
-    @SerializedName("deleted") val deleted: Boolean
+    @SerializedName("id") val id: Long = 0L,
+    @SerializedName("modelType") val modelType: String = "",
+    @SerializedName("modelName") val modelName: String = "",
+    @SerializedName("apiKey") val apiKey: String = "",
+    @SerializedName("apiEndpoint") val apiEndpoint: String = "",
+    @SerializedName("temperature") val temperature: Float = 0.7f,
+    @SerializedName("maxTokens") val maxTokens: Int = 1000,
+    @SerializedName("isDefault") val isDefault: Boolean = false,
+    @SerializedName("isEnabled") val isEnabled: Boolean = true,
+    @SerializedName("monthlyCost") val monthlyCost: Double = 0.0,
+    @SerializedName("lastUsed") val lastUsed: Long = 0L,
+    @SerializedName("createdAt") val createdAt: Long = 0L,
+    @SerializedName("tenantId") val tenantId: String = "",
+    @SerializedName("syncVersion") val syncVersion: Long = 0L,
+    @SerializedName("deleted") val deleted: Boolean = false
 )
 
 data class SyncUserStyleProfile(
-    @SerializedName("userId") val userId: String,
-    @SerializedName("formalityLevel") val formalityLevel: Float,
-    @SerializedName("enthusiasmLevel") val enthusiasmLevel: Float,
-    @SerializedName("professionalismLevel") val professionalismLevel: Float,
-    @SerializedName("wordCountPreference") val wordCountPreference: Int,
-    @SerializedName("commonPhrases") val commonPhrases: String,
-    @SerializedName("avoidPhrases") val avoidPhrases: String,
-    @SerializedName("learningSamples") val learningSamples: Int,
-    @SerializedName("accuracyScore") val accuracyScore: Float,
-    @SerializedName("lastTrained") val lastTrained: Long,
-    @SerializedName("createdAt") val createdAt: Long,
-    @SerializedName("tenantId") val tenantId: String,
-    @SerializedName("syncVersion") val syncVersion: Long,
-    @SerializedName("deleted") val deleted: Boolean
+    @SerializedName("userId") val userId: String = "",
+    @SerializedName("formalityLevel") val formalityLevel: Float = 0.5f,
+    @SerializedName("enthusiasmLevel") val enthusiasmLevel: Float = 0.5f,
+    @SerializedName("professionalismLevel") val professionalismLevel: Float = 0.5f,
+    @SerializedName("wordCountPreference") val wordCountPreference: Int = 50,
+    @SerializedName("commonPhrases") val commonPhrases: String = "",
+    @SerializedName("avoidPhrases") val avoidPhrases: String = "",
+    @SerializedName("learningSamples") val learningSamples: Int = 0,
+    @SerializedName("accuracyScore") val accuracyScore: Float = 0f,
+    @SerializedName("lastTrained") val lastTrained: Long = 0L,
+    @SerializedName("createdAt") val createdAt: Long = 0L,
+    @SerializedName("tenantId") val tenantId: String = "",
+    @SerializedName("syncVersion") val syncVersion: Long = 0L,
+    @SerializedName("deleted") val deleted: Boolean = false
 )
 
 data class SyncAppConfig(
-    @SerializedName("packageName") val packageName: String,
-    @SerializedName("appName") val appName: String,
-    @SerializedName("iconUri") val iconUri: String?,
-    @SerializedName("isMonitored") val isMonitored: Boolean,
-    @SerializedName("createdAt") val createdAt: Long,
-    @SerializedName("lastUsed") val lastUsed: Long,
-    @SerializedName("tenantId") val tenantId: String,
-    @SerializedName("syncVersion") val syncVersion: Long,
-    @SerializedName("deleted") val deleted: Boolean
+    @SerializedName("packageName") val packageName: String = "",
+    @SerializedName("appName") val appName: String = "",
+    @SerializedName("iconUri") val iconUri: String? = null,
+    @SerializedName("isMonitored") val isMonitored: Boolean = false,
+    @SerializedName("createdAt") val createdAt: Long = 0L,
+    @SerializedName("lastUsed") val lastUsed: Long = 0L,
+    @SerializedName("tenantId") val tenantId: String = "",
+    @SerializedName("syncVersion") val syncVersion: Long = 0L,
+    @SerializedName("deleted") val deleted: Boolean = false
 )
 
 data class SyncScenario(
-    @SerializedName("id") val id: Long,
-    @SerializedName("name") val name: String,
-    @SerializedName("type") val type: String,
-    @SerializedName("targetId") val targetId: String?,
-    @SerializedName("description") val description: String?,
-    @SerializedName("createdAt") val createdAt: Long,
-    @SerializedName("tenantId") val tenantId: String,
-    @SerializedName("syncVersion") val syncVersion: Long,
-    @SerializedName("deleted") val deleted: Boolean
+    @SerializedName("id") val id: Long = 0L,
+    @SerializedName("name") val name: String = "",
+    @SerializedName("type") val type: String = "",
+    @SerializedName("targetId") val targetId: String? = null,
+    @SerializedName("description") val description: String? = null,
+    @SerializedName("createdAt") val createdAt: Long = 0L,
+    @SerializedName("tenantId") val tenantId: String = "",
+    @SerializedName("syncVersion") val syncVersion: Long = 0L,
+    @SerializedName("deleted") val deleted: Boolean = false
 )
 
 data class SyncReplyHistory(
-    @SerializedName("id") val id: Long,
-    @SerializedName("sourceApp") val sourceApp: String,
-    @SerializedName("originalMessage") val originalMessage: String,
-    @SerializedName("generatedReply") val generatedReply: String,
-    @SerializedName("finalReply") val finalReply: String,
-    @SerializedName("ruleMatchedId") val ruleMatchedId: Long?,
-    @SerializedName("modelUsedId") val modelUsedId: Long?,
-    @SerializedName("styleApplied") val styleApplied: Boolean,
-    @SerializedName("sendTime") val sendTime: Long,
-    @SerializedName("modified") val modified: Boolean,
-    @SerializedName("tenantId") val tenantId: String,
-    @SerializedName("syncVersion") val syncVersion: Long,
-    @SerializedName("deleted") val deleted: Boolean
+    @SerializedName("id") val id: Long = 0L,
+    @SerializedName("sourceApp") val sourceApp: String = "",
+    @SerializedName("originalMessage") val originalMessage: String = "",
+    @SerializedName("generatedReply") val generatedReply: String = "",
+    @SerializedName("finalReply") val finalReply: String = "",
+    @SerializedName("ruleMatchedId") val ruleMatchedId: Long? = null,
+    @SerializedName("modelUsedId") val modelUsedId: Long? = null,
+    @SerializedName("styleApplied") val styleApplied: Boolean = false,
+    @SerializedName("sendTime") val sendTime: Long = 0L,
+    @SerializedName("modified") val modified: Boolean = false,
+    @SerializedName("tenantId") val tenantId: String = "",
+    @SerializedName("syncVersion") val syncVersion: Long = 0L,
+    @SerializedName("deleted") val deleted: Boolean = false
 )
 
 data class SyncMessageBlacklist(
-    @SerializedName("id") val id: Long,
-    @SerializedName("type") val type: String,
-    @SerializedName("value") val value: String,
-    @SerializedName("description") val description: String,
-    @SerializedName("packageName") val packageName: String?,
-    @SerializedName("createdAt") val createdAt: Long,
-    @SerializedName("isEnabled") val isEnabled: Boolean,
-    @SerializedName("tenantId") val tenantId: String,
-    @SerializedName("syncVersion") val syncVersion: Long,
-    @SerializedName("deleted") val deleted: Boolean
+    @SerializedName("id") val id: Long = 0L,
+    @SerializedName("type") val type: String = "",
+    @SerializedName("value") val value: String = "",
+    @SerializedName("description") val description: String = "",
+    @SerializedName("packageName") val packageName: String? = null,
+    @SerializedName("createdAt") val createdAt: Long = 0L,
+    @SerializedName("isEnabled") val isEnabled: Boolean = true,
+    @SerializedName("tenantId") val tenantId: String = "",
+    @SerializedName("syncVersion") val syncVersion: Long = 0L,
+    @SerializedName("deleted") val deleted: Boolean = false
 )

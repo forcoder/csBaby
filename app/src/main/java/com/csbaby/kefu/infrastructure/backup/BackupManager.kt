@@ -112,10 +112,12 @@ class BackupManager @Inject constructor(
                 _backupRecords.value = response.data
                 Result.success(response.data)
             } else {
+                _backupRecords.value = emptyList()  // 确保不会为 null
                 Result.failure(Exception(response.message.ifEmpty { "获取备份列表失败" }))
             }
         } catch (e: Exception) {
             Timber.e(e, "获取备份列表失败")
+            _backupRecords.value = emptyList()  // 确保不会为 null
             Result.failure(e)
         }
     }
