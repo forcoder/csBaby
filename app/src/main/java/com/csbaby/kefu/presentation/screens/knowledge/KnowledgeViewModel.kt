@@ -23,7 +23,8 @@ data class KnowledgeUiState(
     val isLoading: Boolean = false,
     val isImporting: Boolean = false,
     val isClearing: Boolean = false,
-    val noticeMessage: String? = null
+    val noticeMessage: String? = null,
+    val deleteErrorMessage: String? = null
 )
 
 
@@ -186,6 +187,12 @@ class KnowledgeViewModel @Inject constructor(
     fun deleteRule(id: Long) {
         viewModelScope.launch {
             knowledgeBaseManager.deleteRule(id)
+                .onSuccess {
+                    _uiState.update { it.copy(deleteErrorMessage = null) }
+                }
+                .onFailure { error ->
+                    _uiState.update { it.copy(deleteErrorMessage = error.message ?: "删除失败") }
+                }
             triggerAutoSyncForLoggedInUser()
         }
     }

@@ -85,7 +85,7 @@ class KnowledgeBaseManager @Inject constructor(
     /**
      * Delete a rule.
      */
-    suspend fun deleteRule(id: Long) = keywordRuleRepository.deleteRule(id)
+    suspend fun deleteRule(id: Long): Result<Unit> = keywordRuleRepository.deleteRule(id)
 
     /**
      * Clear all rules and return removed count.

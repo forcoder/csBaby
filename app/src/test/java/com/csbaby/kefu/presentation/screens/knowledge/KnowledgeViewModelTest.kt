@@ -219,7 +219,7 @@ class KnowledgeViewModelTest {
     fun `deleteRule calls knowledge base manager`() = runTest {
         every { knowledgeBaseManager.getAllRules() } returns flowOf(emptyList())
         every { knowledgeBaseManager.getAllCategories() } returns flowOf(emptyList())
-        coEvery { knowledgeBaseManager.deleteRule(any()) } returns Unit
+        coEvery { knowledgeBaseManager.deleteRule(any()) } returns Result.success(Unit)
         every { syncManager.isLoggedIn() } returns false
 
         val viewModel = createViewModel(mockk(relaxed = true))
@@ -235,7 +235,7 @@ class KnowledgeViewModelTest {
     fun `deleteRule triggers sync when logged in`() = runTest {
         every { knowledgeBaseManager.getAllRules() } returns flowOf(emptyList())
         every { knowledgeBaseManager.getAllCategories() } returns flowOf(emptyList())
-        coEvery { knowledgeBaseManager.deleteRule(any()) } returns Unit
+        coEvery { knowledgeBaseManager.deleteRule(any()) } returns Result.success(Unit)
         every { syncManager.isLoggedIn() } returns true
         coEvery { syncManager.triggerSync() } returns Unit
 

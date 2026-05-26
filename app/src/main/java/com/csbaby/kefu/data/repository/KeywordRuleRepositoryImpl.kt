@@ -8,6 +8,7 @@ import com.csbaby.kefu.data.local.entity.KeywordRuleEntity
 import com.csbaby.kefu.data.local.entity.RuleScenarioCrossRef
 import com.csbaby.kefu.data.sync.AuthManager
 import com.csbaby.kefu.data.sync.SyncManager
+import androidx.room.Transaction
 import com.csbaby.kefu.domain.model.KeywordRule
 import com.csbaby.kefu.domain.repository.KeywordRuleRepository
 import kotlinx.coroutines.flow.Flow
@@ -96,9 +97,17 @@ class KeywordRuleRepositoryImpl @Inject constructor(
         syncManager.triggerSync()
     }
 
-    override suspend fun deleteRule(id: Long) {
+    @Transaction
+    override suspend fun deleteRule(id: Long): Result<Unit> = runCatching {
+        val rule = keywordRuleDao.getById(id)
+        if (rule == null) {
+            throw Exception("规则不存在 (id=$id)")
+        }
         scenarioDao.deleteRelationsForRule(id)
-        keywordRuleDao.softDelete(id)
+        val affectedRows = keywordRuleDao.softDelete(id)
+        if (affectedRows == 0) {
+            throw Exception("删除失败：未找到匹配的规则")
+        }
         syncManager.triggerSync()
     }
 

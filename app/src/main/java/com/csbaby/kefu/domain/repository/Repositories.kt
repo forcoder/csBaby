@@ -23,7 +23,7 @@ interface KeywordRuleRepository {
     suspend fun searchByKeyword(keyword: String): List<KeywordRule>
     suspend fun insertRule(rule: KeywordRule): Long
     suspend fun updateRule(rule: KeywordRule)
-    suspend fun deleteRule(id: Long)
+    suspend fun deleteRule(id: Long): Result<Unit>
     suspend fun deleteAllRules()
     suspend fun getRuleCount(): Int
     fun getRuleCountFlow(): Flow<Int>
