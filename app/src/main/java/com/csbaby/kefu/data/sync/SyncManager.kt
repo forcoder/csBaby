@@ -713,7 +713,7 @@ class SyncManager @Inject constructor(
                 id = 1001L,
                 modelType = "openai",
                 modelName = "LongCat-Flash-Chat",
-                apiKey = "ak_27i3gd19u43J3fT1tS1Le0mN6cz6U",
+                apiKey = "", // TODO: 从配置文件读取API Key
                 apiEndpoint = "https://api.longcat.chat/openai",
                 temperature = 0.7f,
                 maxTokens = 6000,
@@ -730,7 +730,7 @@ class SyncManager @Inject constructor(
                 id = 1002L,
                 modelType = "openai",
                 modelName = "LongCat-2.0-Preview",
-                apiKey = "ak_27c8n82xm2H53f97aG8OV1Zw8am6w",
+                apiKey = "", // TODO: 从配置文件读取API Key
                 apiEndpoint = "https://api.longcat.chat/openai",
                 temperature = 0.7f,
                 maxTokens = 6000,
@@ -747,7 +747,7 @@ class SyncManager @Inject constructor(
                 id = 1003L,
                 modelType = "openai",
                 modelName = "LongCat-Flash-Lite",
-                apiKey = "ak_27i3gd19u43J3fT1tS1Le0mN6cz6U",
+                apiKey = "", // TODO: 从配置文件读取API Key
                 apiEndpoint = "https://api.longcat.chat/openai",
                 temperature = 0.7f,
                 maxTokens = 6000,
