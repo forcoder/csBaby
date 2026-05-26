@@ -25,6 +25,8 @@ import com.csbaby.kefu.presentation.screens.home.HomeScreen
 import com.csbaby.kefu.presentation.screens.knowledge.KnowledgeScreen
 import com.csbaby.kefu.presentation.screens.model.ModelScreen
 import com.csbaby.kefu.presentation.screens.profile.ProfileScreen
+import com.csbaby.kefu.presentation.screens.model.ModelScreen
+import com.csbaby.kefu.presentation.screens.profile.ProfileScreen
 
 sealed class Screen(
     val route: String,
