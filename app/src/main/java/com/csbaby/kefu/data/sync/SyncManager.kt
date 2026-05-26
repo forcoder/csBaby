@@ -711,7 +711,7 @@ class SyncManager @Inject constructor(
         val longcatModels = listOf(
             AIModelConfigEntity(
                 id = 1001L,
-                modelType = "openai",
+                modelType = "OPENAI",
                 modelName = "LongCat-Flash-Chat",
                 apiKey = "", // TODO: 从配置文件读取API Key
                 apiEndpoint = "https://api.longcat.chat/openai",
@@ -728,7 +728,7 @@ class SyncManager @Inject constructor(
             ),
             AIModelConfigEntity(
                 id = 1002L,
-                modelType = "openai",
+                modelType = "OPENAI",
                 modelName = "LongCat-2.0-Preview",
                 apiKey = "", // TODO: 从配置文件读取API Key
                 apiEndpoint = "https://api.longcat.chat/openai",
@@ -745,7 +745,7 @@ class SyncManager @Inject constructor(
             ),
             AIModelConfigEntity(
                 id = 1003L,
-                modelType = "openai",
+                modelType = "OPENAI",
                 modelName = "LongCat-Flash-Lite",
                 apiKey = "", // TODO: 从配置文件读取API Key
                 apiEndpoint = "https://api.longcat.chat/openai",
