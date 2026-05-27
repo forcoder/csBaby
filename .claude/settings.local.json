@@ -29,7 +29,22 @@
       "Bash(./gradlew :app:assembleDebug)",
       "Bash(adb devices *)",
       "Bash(adb install *)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(adb shell *)",
+      "Bash(adb logcat *)",
+      "Bash(adb pull *)",
+      "Bash(xxd)",
+      "Bash(adb exec-out *)",
+      "Bash(sqlite3 /tmp/kefu_db.sqlite3 \"SELECT id, keyword, matchType FROM keyword_rules LIMIT 20;\")",
+      "Bash(sqlite3 *)",
+      "Read(//tmp/**)",
+      "Bash(./gradlew assembleDebug)",
+      "Bash(python3 -c ' *)",
+      "Bash(./gradlew compileDebugKotlin compileDebugUnitTestKotlin)",
+      "Bash(./gradlew testDebugUnitTest --tests \"com.csbaby.kefu.presentation.screens.model.ModelViewModelTest\")",
+      "Bash(./gradlew compileDebugKotlin)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   },
   "enableAllProjectMcpServers": true,

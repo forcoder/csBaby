@@ -37,7 +37,7 @@ object EntityMapper {
     fun KeywordRuleEntity.toDomain(applicableScenarios: List<Long> = emptyList()) = KeywordRule(
         id = id,
         keyword = keyword,
-        matchType = MatchType.valueOf(matchType),
+        matchType = enumValueOrDefault(matchType, MatchType.CONTAINS),
         replyTemplate = replyTemplate,
         category = category,
         applicableScenarios = applicableScenarios,
@@ -71,7 +71,7 @@ object EntityMapper {
     fun ScenarioEntity.toDomain() = Scenario(
         id = id,
         name = name,
-        type = ScenarioType.valueOf(type),
+        type = enumValueOrDefault(type, ScenarioType.ALL_PROPERTIES),
         targetId = targetId,
         description = description,
         createdAt = createdAt,

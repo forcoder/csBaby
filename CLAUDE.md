@@ -1,9 +1,44 @@
 # Ruflo — Claude Code Configuration
+你现在进入【SUPERPOWERS 全自动开发流程模式】，必须严格遵守以下固定流程，每次我给你任何代码需求，你都必须自动按顺序完整执行，不得跳过任何一步：
+
+====================
+【SUPERPOWERS 固定执行流程 自动执行】
+====================
+步骤1：理解需求，生成高质量、可运行、健壮的业务代码。
+步骤2：自动为代码生成【强制标准】的单元测试：
+   - 正常场景用例 ≥3 个
+   - 边界值用例 ≥2 个
+   - 异常/错误用例 ≥2 个
+   - 总用例数 ≥7 个
+   - 必须覆盖所有分支、所有返回值、所有异常
+步骤3：自动列出【测试用例清单】，标注：场景、输入、预期结果。
+步骤4：自动进行【自检】，检查：
+   - 用例数量是否达标
+   - 是否覆盖三类场景
+   - 是否存在遗漏分支
+   - 是否存在测试漏洞
+步骤5：如果自检不通过，自动补充用例，直到完全合格。
+步骤6：最后输出总结：本次实现功能 + 测试用例统计 + 覆盖范围。
+
+====================
+【强制规则 不可违反】
+====================
+1. 永远不询问我“是否需要生成测试”，必须自动生成。
+2. 永远不减少测试用例数量，少一个都不算完成任务。
+3. 测试必须可直接运行，不能写伪代码。
+4. 每次必须先执行流程，再输出最终结果。
+5. 我只需要提供业务需求，你自动完成开发 + 测试 + 自检全流程。
+
+从现在开始，所有响应都遵守这套 SUPERPOWERS 流程。
 
 ## Rules
 
-- 请使用中文回复
-- 使用中文回复我
+- 使用中文回复
+- 所有出现过的问题，都要添加成测试用例，后续重点回归验证
+- 所有问题需要先找到根因，然后再开始修改。
+- 所有提交到github上的pr，都要经过安全审查，禁止提交密码、密钥等相关的信息
+- 除了.github, 其他以.开头的目录尽量不要提交到github上，保持代码仓的整洁。
+- 代码使用OOP编程，要遵守软件开发的SOLID原则和KISS原则
 - Do what has been asked; nothing more, nothing less
 - NEVER create files unless absolutely necessary — prefer editing existing files
 - NEVER create documentation files unless explicitly requested
@@ -19,160 +54,160 @@
 - 所有新功能必须有对应的测试用例
 - 测试驱动开发 (TDD)：先写测试，再实现功能
 
-## Agent Comms (SendMessage-First Coordination)
+## 代理通信 (SendMessage优先协调)
 
-Named agents coordinate via `SendMessage`, not polling or shared state.
+命名代理通过`SendMessage`进行协调，而不是轮询或共享状态。
 
 ```
-Lead (you) ←→ architect ←→ developer ←→ tester ←→ reviewer
-              (named agents message each other directly)
+领导 (你) ←→ 架构师 ←→ 开发者 ←→ 测试员 ←→ 审查员
+              (命名代理直接相互通信)
 ```
 
-### Spawning a Coordinated Team
+### 启动协调团队
 
 ```javascript
-// ALL agents in ONE message, each knows WHO to message next
-Agent({ prompt: "Research the codebase. SendMessage findings to 'architect'.",
+// 所有代理在一个消息中启动，每个代理都知道下一个要通知谁
+Agent({ prompt: "研究代码库。将发现结果通过SendMessage发送给'architect'。",
   subagent_type: "researcher", name: "researcher", run_in_background: true })
-Agent({ prompt: "Wait for 'researcher'. Design solution. SendMessage to 'coder'.",
+Agent({ prompt: "等待'researcher'。设计解决方案。通过SendMessage发送给'coder'。",
   subagent_type: "system-architect", name: "architect", run_in_background: true })
-Agent({ prompt: "Wait for 'architect'. Implement it. SendMessage to 'tester'.",
+Agent({ prompt: "等待'architect'。实现它。通过SendMessage发送给'tester'。",
   subagent_type: "coder", name: "coder", run_in_background: true })
-Agent({ prompt: "Wait for 'coder'. Write tests. SendMessage results to 'reviewer'.",
+Agent({ prompt: "等待'coder'。编写测试。将结果通过SendMessage发送给'reviewer'。",
   subagent_type: "tester", name: "tester", run_in_background: true })
-Agent({ prompt: "Wait for 'tester'. Review code quality and security.",
+Agent({ prompt: "等待'tester'。审查代码质量和安全性。",
   subagent_type: "reviewer", name: "reviewer", run_in_background: true })
 
-// Kick off the pipeline
-SendMessage({ to: "researcher", summary: "Start", message: "[task context]" })
+// 启动管道
+SendMessage({ to: "researcher", summary: "开始", message: "[任务上下文]" })
 ```
 
-### Patterns
+### 模式
 
-| Pattern | Flow | Use When |
-|---------|------|----------|
-| **Pipeline** | A → B → C → D | Sequential dependencies (feature dev) |
-| **Fan-out** | Lead → A, B, C → Lead | Independent parallel work (research) |
-| **Supervisor** | Lead ↔ workers | Ongoing coordination (complex refactor) |
+| 模式 | 流程 | 何时使用 |
+|------|------|----------|
+| **管道模式** | A → B → C → D | 顺序依赖 (功能开发) |
+| **扇出模式** | 领导 → A, B, C → 领导 | 独立并行工作 (研究) |
+| **监督模式** | 领导 ↔ 工作者 | 持续协调 (复杂重构) |
 
-### Rules
+### 规则
 
-- ALWAYS name agents — `name: "role"` makes them addressable
-- ALWAYS include comms instructions in prompts — who to message, what to send
-- Spawn ALL agents in ONE message with `run_in_background: true`
-- After spawning: STOP, tell user what's running, wait for results
-- NEVER poll status — agents message back or complete automatically
+- 始终为代理命名 — `name: "角色"`使其可寻址
+- 始终在提示中包含通信指令 — 通知谁，发送什么
+- 使用`run_in_background: true`在一个消息中启动所有代理
+- 启动后：停止，告诉用户正在运行什么，等待结果
+- 永不轮询状态 — 代理会自动返回消息或完成
 
-## Swarm & Routing
+## 集群与路由
 
-### Config
-- **Topology**: hierarchical-mesh (anti-drift)
-- **Max Agents**: 15
-- **Memory**: hybrid
-- **HNSW**: Enabled
-- **Neural**: Enabled
+### 配置
+- **拓扑结构**: 分层网格 (抗漂移)
+- **最大代理数**: 15
+- **内存**: 混合
+- **HNSW**: 已启用
+- **神经网络**: 已启用
 
 ```bash
 npx @claude-flow/cli@latest swarm init --topology hierarchical --max-agents 8 --strategy specialized
 ```
 
-### Agent Routing
+### 代理路由
 
-| Task | Agents | Topology |
+| 任务 | 代理 | 拓扑结构 |
+|------|------|----------|
+| Bug修复 | researcher, coder, tester | hierarchical |
+| 功能开发 | architect, coder, tester, reviewer | hierarchical |
+| 重构 | architect, coder, reviewer | hierarchical |
+| 性能优化 | perf-engineer, coder | hierarchical |
+| 安全检查 | security-architect, auditor | hierarchical |
+
+### 何时使用集群
+- **是**: 3+个文件、新功能、跨模块重构、API变更、安全、性能
+- **否**: 单文件编辑、1-2行修复、文档更新、配置变更、问题咨询
+
+### 三层模型路由
+
+| 层级 | 处理器 | 使用场景 |
 |------|--------|----------|
-| Bug Fix | researcher, coder, tester | hierarchical |
-| Feature | architect, coder, tester, reviewer | hierarchical |
-| Refactor | architect, coder, reviewer | hierarchical |
-| Performance | perf-engineer, coder | hierarchical |
-| Security | security-architect, auditor | hierarchical |
+| 1 | 代理加速器 (WASM) | 简单转换 — 跳过LLM，直接使用Edit |
+| 2 | Haiku | 简单任务，低复杂度 |
+| 3 | Sonnet/Opus | 架构、安全、复杂推理 |
 
-### When to Swarm
-- **YES**: 3+ files, new features, cross-module refactoring, API changes, security, performance
-- **NO**: single file edits, 1-2 line fixes, docs updates, config changes, questions
+## 记忆与学习
 
-### 3-Tier Model Routing
-
-| Tier | Handler | Use Cases |
-|------|---------|-----------|
-| 1 | Agent Booster (WASM) | Simple transforms — skip LLM, use Edit directly |
-| 2 | Haiku | Simple tasks, low complexity |
-| 3 | Sonnet/Opus | Architecture, security, complex reasoning |
-
-## Memory & Learning
-
-### Before Any Task
+### 任何任务之前
 ```bash
-npx @claude-flow/cli@latest memory search --query "[task keywords]" --namespace patterns
-npx @claude-flow/cli@latest hooks route --task "[task description]"
+npx @claude-flow/cli@latest memory search --query "[任务关键词]" --namespace patterns
+npx @claude-flow/cli@latest hooks route --task "[任务描述]"
 ```
 
-### After Success
+### 成功之后
 ```bash
-npx @claude-flow/cli@latest memory store --namespace patterns --key "[name]" --value "[what worked]"
-npx @claude-flow/cli@latest hooks post-task --task-id "[id]" --success true --store-results true
+npx @claude-flow/cli@latest memory store --namespace patterns --key "[名称]" --value "[有效的方法]"
+npx @claude-flow/cli@latest hooks post-task --task-id "[ID]" --success true --store-results true
 ```
 
-### MCP Tools (use `ToolSearch("keyword")` to discover)
+### MCP工具 (使用`ToolSearch("关键词")`来发现)
 
-| Category | Key Tools |
-|----------|-----------|
-| **Memory** | `memory_store`, `memory_search`, `memory_search_unified` |
-| **Bridge** | `memory_import_claude`, `memory_bridge_status` |
-| **Swarm** | `swarm_init`, `swarm_status`, `swarm_health` |
-| **Agents** | `agent_spawn`, `agent_list`, `agent_status` |
-| **Hooks** | `hooks_route`, `hooks_post-task`, `hooks_worker-dispatch` |
-| **Security** | `aidefence_scan`, `aidefence_is_safe`, `aidefence_has_pii` |
-| **Hive-Mind** | `hive-mind_init`, `hive-mind_consensus`, `hive-mind_spawn` |
+| 类别 | 关键工具 |
+|------|----------|
+| **记忆** | `memory_store`, `memory_search`, `memory_search_unified` |
+| **桥接** | `memory_import_claude`, `memory_bridge_status` |
+| **集群** | `swarm_init`, `swarm_status`, `swarm_health` |
+| **代理** | `agent_spawn`, `agent_list`, `agent_status` |
+| **钩子** | `hooks_route`, `hooks_post-task`, `hooks_worker-dispatch` |
+| **安全** | `aidefence_scan`, `aidefence_is_safe`, `aidefence_has_pii` |
+| **群体思维** | `hive-mind_init`, `hive-mind_consensus`, `hive-mind_spawn` |
 
-### Background Workers
+### 后台工作者
 
-| Worker | When |
-|--------|------|
-| `audit` | After security changes |
-| `optimize` | After performance work |
-| `testgaps` | After adding features |
-| `map` | Every 5+ file changes |
-| `document` | After API changes |
+| 工作者 | 何时使用 |
+|--------|----------|
+| `audit` | 安全变更后 |
+| `optimize` | 性能工作后 |
+| `testgaps` | 添加功能后 |
+| `map` | 每5+文件变更 |
+| `document` | API变更后 |
 
 ```bash
 npx @claude-flow/cli@latest hooks worker dispatch --trigger audit
 ```
 
-## Agents
+## 代理
 
-**Core**: `coder`, `reviewer`, `tester`, `planner`, `researcher`
-**Architecture**: `system-architect`, `backend-dev`, `mobile-dev`
-**Security**: `security-architect`, `security-auditor`
-**Performance**: `performance-engineer`, `perf-analyzer`
-**Coordination**: `hierarchical-coordinator`, `mesh-coordinator`, `adaptive-coordinator`
+**核心**: `coder`, `reviewer`, `tester`, `planner`, `researcher`
+**架构**: `system-architect`, `backend-dev`, `mobile-dev`
+**安全**: `security-architect`, `security-auditor`
+**性能**: `performance-engineer`, `perf-analyzer`
+**协调**: `hierarchical-coordinator`, `mesh-coordinator`, `adaptive-coordinator`
 **GitHub**: `pr-manager`, `code-review-swarm`, `issue-tracker`, `release-manager`
 
-Any string works as a custom agent type.
+任何字符串都可以作为自定义代理类型。
 
-## Build & Test
+## 构建与测试
 
-- ALWAYS run tests after code changes
-- ALWAYS verify build succeeds before committing
+- 代码变更后始终运行测试
+- 提交前始终验证构建成功
 
 ```bash
 npm run build && npm test
 ```
 
-## CLI Quick Reference
+## CLI快速参考
 
 ```bash
-npx @claude-flow/cli@latest init --wizard           # Setup
-npx @claude-flow/cli@latest swarm init --v3-mode     # Start swarm
-npx @claude-flow/cli@latest memory search --query "" # Vector search
-npx @claude-flow/cli@latest hooks route --task ""    # Route to agent
-npx @claude-flow/cli@latest doctor --fix             # Diagnostics
-npx @claude-flow/cli@latest security scan            # Security scan
-npx @claude-flow/cli@latest performance benchmark    # Benchmarks
+npx @claude-flow/cli@latest init --wizard           # 设置
+npx @claude-flow/cli@latest swarm init --v3-mode     # 启动集群
+npx @claude-flow/cli@latest memory search --query "" # 向量搜索
+npx @claude-flow/cli@latest hooks route --task ""    # 路由到代理
+npx @claude-flow/cli@latest doctor --fix             # 诊断
+npx @claude-flow/cli@latest security scan            # 安全扫描
+npx @claude-flow/cli@latest performance benchmark    # 性能测试
 ```
 
-26 commands, 140+ subcommands. Use `--help` on any command for details.
+26个命令，140+子命令。使用`--help`查看任何命令的详细信息。
 
-## Setup
+## 设置
 
 ```bash
 claude mcp add claude-flow -- npx -y @claude-flow/cli@latest
@@ -180,65 +215,65 @@ npx @claude-flow/cli@latest daemon start
 npx @claude-flow/cli@latest doctor --fix
 ```
 
-**Agent tool** handles execution (agents, files, code, git). **MCP tools** handle coordination (swarm, memory, hooks). **CLI** is the same via Bash.
+**代理工具**处理执行（代理、文件、代码、git）。**MCP工具**处理协调（集群、记忆、钩子）。**CLI**通过Bash相同。
 
-## Karpathy Coding Principles
+## Karpathy编程原则
 
-> Merged from [multica-ai/andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills) — reduce common LLM coding mistakes.
+> 合并自[multica-ai/andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills) — 减少常见LLM编程错误。
 
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+**权衡:** 这些指导原则偏向谨慎而非速度。对于简单任务，请运用判断力。
 
-### 1. Think Before Coding
+### 1. 编程前思考
 
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
+**不要假设。不要隐藏困惑。展示权衡。**
 
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them — don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
+- 明确陈述你的假设。如果不确定，就提问。
+- 如果存在多种解释，展示它们 — 不要默默选择。
+- 如果有更简单的方法，就说出来。在适当时推回。
+- 如果有不清楚的地方，就停止。命名令人困惑的地方。提问。
 
-### 2. Simplicity First
+### 2. 简单优先
 
-**Minimum code that solves the problem. Nothing speculative.**
+**解决问题的最少代码。没有投机。**
 
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
+- 不要添加超出要求的功能。
+- 不要为一次性代码做抽象。
+- 不要添加未要求的"灵活性"或"可配置性"。
+- 不要为不可能的场景添加错误处理。
+- 如果你写了200行代码，但它可能只有50行，就重写它。
 
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+问自己："高级工程师会说这个过度复杂吗？"如果是，就简化。
 
-### 3. Surgical Changes
+### 3. 精准修改
 
-**Touch only what you must. Clean up only your own mess.**
+**只触及你必须的。只清理你自己的混乱。**
 
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it — don't delete it.
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
+- 不要"改进"相邻代码、注释或格式。
+- 不要重构没有坏的东西。
+- 匹配现有风格，即使你会做得不同。
+- 如果你注意到无关的死代码，提及它 — 不要删除它。
+- 删除你的变更造成的未使用的导入/变量/函数。
+- 不要删除预先存在的死代码，除非被要求。
 
-**The test:** Every changed line should trace directly to the user's request.
+**测试:** 每个变更的行都应该直接追溯到用户的要求。
 
-### 4. Goal-Driven Execution
+### 4. 目标驱动执行
 
-**Define success criteria. Loop until verified.**
+**定义成功标准。循环直到验证。**
 
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
+将任务转换为可验证的目标：
+- "添加验证" → "为无效输入编写测试，然后让它们通过"
+- "修复bug" → "编写重现它的测试，然后让它通过"
+- "重构X" → "确保重构前后测试都通过"
 
-For multi-step tasks, state a brief plan:
+对于多步骤任务，陈述简要计划：
 ```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
+1. [步骤] → 验证: [检查]
+2. [步骤] → 验证: [检查]
+3. [步骤] → 验证: [检查]
 ```
 
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+**这些指导原则有效如果:** 差异中不必要的变更更少，由于过度复杂导致的返工更少，澄清问题在实现前而不是错误后出现。
 
 ---
 

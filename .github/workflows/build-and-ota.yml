@@ -1,0 +1,104 @@
+name: Build and OTA Deploy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-ota:
+    name: Build APK and Upload to shz.al
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'microsoft'
+          cache: gradle
+
+      - name: Grant gradlew execute permission
+        run: chmod +x ./gradlew
+
+      - name: Clean build cache
+        run: ./gradlew clean --no-daemon
+        continue-on-error: true
+
+      - name: Cache Gradle artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            .gradle
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Read current version
+        id: version
+        run: |
+          VERSION_CODE=$(grep 'APP_VERSION_CODE' gradle.properties | cut -d'=' -f2)
+          VERSION_NAME=$(grep 'APP_VERSION_NAME' gradle.properties | cut -d'=' -f2)
+          echo "code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "📦 Current version: v$VERSION_NAME ($VERSION_CODE)"
+
+      - name: Build Debug APK
+        run: |
+          ./gradlew assembleDebug --no-daemon \
+            --stacktrace
+
+      - name: Rename APK
+        run: |
+          APK_SRC="app/build/outputs/apk/debug/app-debug.apk"
+          APK_DST="app/build/outputs/apk/debug/csBaby-v${{ steps.version.outputs.name }}-debug.apk"
+          mv "$APK_SRC" "$APK_DST"
+          echo "APK_PATH=$APK_DST" >> $GITHUB_ENV
+          echo "APK_NAME=csBaby-v${{ steps.version.outputs.name }}-debug.apk" >> $GITHUB_ENV
+
+      - name: Upload APK to shz.al
+        run: |
+          APK_PATH="${{ env.APK_PATH }}"
+          APK_NAME="${{ env.APK_NAME }}"
+          VERSION_CODE="${{ steps.version.outputs.code }}"
+          VERSION_NAME="${{ steps.version.outputs.name }}"
+          RELEASE_DATE="$(date +%Y-%m-%d)"
+
+          # Get APK info
+          APK_SIZE=$(stat -c%s "$APK_PATH")
+          APK_MD5=$(md5sum "$APK_PATH" | cut -d' ' -f1)
+
+          # Create version info JSON
+          VERSION_JSON="{\"versionCode\":$VERSION_CODE,\"versionName\":\"$VERSION_NAME\",\"releaseDate\":\"$RELEASE_DATE\",\"fileSize\":$APK_SIZE,\"md5\":\"$APK_MD5\",\"downloadUrl\":\"https://shz.al/~csBabyApk\",\"releaseNotes\":\"v$VERSION_NAME 更新\",\"forceUpdate\":false}"
+
+          # Upload version info
+          echo "[1/2] Uploading version info..."
+          curl -s -X POST -F "n=csBabyLog" -F "c=@<(echo \"$VERSION_JSON\")" -F "e=7d" https://shz.al
+
+          # Upload APK
+          echo "[2/2] Uploading APK..."
+          curl -s -X POST -F "n=csBabyApk" -F "filename=$APK_NAME" -F "c=@$APK_PATH" -F "e=7d" https://shz.al
+
+      - name: Output APK download URL
+        run: |
+          echo "## 🎉 Build and OTA deploy successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|----|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | v${{ steps.version.outputs.name }} (${{ steps.version.outputs.code }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| APK File | ${{ env.APK_NAME }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Download URL | https://shz.al/~csBabyApk |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY

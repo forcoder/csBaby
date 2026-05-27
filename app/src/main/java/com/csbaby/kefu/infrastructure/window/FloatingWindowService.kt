@@ -385,7 +385,8 @@ class FloatingWindowService : Service() {
 
     private fun createLayoutParams(): WindowManager.LayoutParams {
         val screenWidth = resources.displayMetrics.widthPixels
-        val defaultX = max(screenWidth - dp(96), dp(12))
+        // 默认停靠在右上角：留出气泡宽度(68dp) + 边距
+        val defaultX = max(screenWidth - dp(84), dp(8))
         val defaultY = dp(88)
         val savedX = floatingPrefs.getInt(KEY_POSITION_X, defaultX)
         val savedY = floatingPrefs.getInt(KEY_POSITION_Y, defaultY)
@@ -489,37 +490,49 @@ class FloatingWindowService : Service() {
         }
         expandedPanelView = panel
 
-        // 拖动条区域：40dp高度透明条，用于拖动悬浮窗
-        // 位于面板顶部，不影响内容区域点击事件
-        val dragHandle = View(this).apply {
+        // 拖动条区域：位于面板顶部，专门用于拖动悬浮窗
+        // 使用专用拖动监听器，不影响内容区域点击
+        val dragHandle = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(40)
+                dp(36)
             )
-            // 透明背景，视觉上不可见但可触摸
             setBackgroundColor(Color.TRANSPARENT)
-            // 顶部圆角装饰条（仅视觉提示，5dp高度小横条）
             contentDescription = "拖动区域，按住可移动悬浮窗位置"
         }
         dragHandleView = dragHandle
-        // 使用专用拖动监听器，不影响内容区域点击
         dragHandle.setOnTouchListener(createDragHandleTouchListener())
 
-        // 拖动条内的视觉指示器（小横条，仅装饰）
-        val dragIndicator = View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(dp(46), dp(5)).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-                topMargin = dp(8)
-            }
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(99).toFloat()
-                setColor(Color.parseColor("#55E2E8F0"))
-            }
+        // 拖拽把手视觉指示器：三条横线，明确提示可拖拽
+        val gripLinesContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER
+            )
         }
-        // 将指示器添加到面板中（在拖动条下方）
+        // 绘制三条横线作为拖拽把手
+        val gripLineColor = Color.parseColor("#6694A3B8")
+        val gripLineWidth = dp(28)
+        val gripLineHeight = dp(3)
+        val gripLineSpacing = dp(3)
+        repeat(3) { i ->
+            val line = View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(gripLineWidth, gripLineHeight).apply {
+                    if (i > 0) topMargin = gripLineSpacing
+                }
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = dp(2).toFloat()
+                    setColor(gripLineColor)
+                }
+            }
+            gripLinesContainer.addView(line)
+        }
+        dragHandle.addView(gripLinesContainer)
         panel.addView(dragHandle)
-        panel.addView(dragIndicator)
 
         val headerRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -741,7 +754,7 @@ class FloatingWindowService : Service() {
             text = "复制",
             background = createSolidButtonBackground("#374151", "#4B5563"),
             textColor = "#E5E7EB",
-            weight = 0.7f
+            weight = 0.6f
         ) {
             copySuggestedReply()
         }
@@ -750,22 +763,22 @@ class FloatingWindowService : Service() {
             text = "发送",
             background = createGradientButtonBackground("#7C3AED", "#06B6D4", strokeColor = "#A855F7"),
             textColor = "#FFFFFF",
-            weight = 1f
+            weight = 0.8f
         ) {
             sendSuggestedReply()
         }
         val blacklistButton = createBottomActionButton(
-            text = "🚫 加入黑名单",
+            text = "🚫 黑名单",
             background = createSolidButtonBackground("#7F1D1D", "#991B1B"),
             textColor = "#FCA5A5",
-            weight = 0.92f
+            weight = 0.9f
         ) {
             addOriginalMessageToBlacklist()
         }
         actionRow.addView(copyReplyButton)
         actionRow.addView(spaceView(6))
         actionRow.addView(sendButton)
-        actionRow.addView(spaceView(8))
+        actionRow.addView(spaceView(6))
         actionRow.addView(blacklistButton)
 
         val footNote = TextView(this).apply {
@@ -807,7 +820,7 @@ class FloatingWindowService : Service() {
 
         sourceChipTextView?.text = getSourceChipText(data.source)
         confidenceChipTextView?.text = "$confidence% 把握"
-        metaTextView?.text = "会话：$conversation · 来源：$sourceLabel"
+        metaTextView?.text = "会话：$conversation"
         replyLabelTextView?.text = getSuggestionTitle(data.source) + "（可编辑）"
         originalMessageTextView?.text = data.originalMessage.ifBlank { "（暂无客户消息内容）" }
         suggestedReplyEditText?.background = createReplyCardBackground(data.source)
@@ -847,11 +860,18 @@ class FloatingWindowService : Service() {
                 hideFloatingWindow()
             }
             ChatAutomationAccessibilityService.SendReplyStatus.WRONG_WINDOW -> {
-                Toast.makeText(this, "请先停留在对应聊天窗口后再发送", Toast.LENGTH_LONG).show()
+                val appName = getAppName(data.targetPackage)
+                copyReplyToClipboard(reply)
+                Toast.makeText(this, "当前不在${appName}聊天页面，请先打开${appName}并进入对应聊天窗口，回复已复制", Toast.LENGTH_LONG).show()
+            }
+            ChatAutomationAccessibilityService.SendReplyStatus.NO_ACTIVE_WINDOW -> {
+                val appName = getAppName(data.targetPackage)
+                copyReplyToClipboard(reply)
+                Toast.makeText(this, "未检测到${appName}窗口，请先打开${appName}并停留在聊天页面，回复已复制", Toast.LENGTH_LONG).show()
             }
             ChatAutomationAccessibilityService.SendReplyStatus.INPUT_NOT_FOUND -> {
                 copyReplyToClipboard(reply)
-                Toast.makeText(this, "仍未找到聊天输入框，请先停留在目标聊天页并点一下输入区域后重试，回复已先复制", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "未找到聊天输入框，请确保停留在聊天页面并点击一下输入区域后重试，回复已复制", Toast.LENGTH_LONG).show()
             }
 
             ChatAutomationAccessibilityService.SendReplyStatus.SEND_BUTTON_NOT_FOUND -> {
@@ -861,7 +881,6 @@ class FloatingWindowService : Service() {
 
             ChatAutomationAccessibilityService.SendReplyStatus.INPUT_FAILED,
             ChatAutomationAccessibilityService.SendReplyStatus.CLICK_FAILED,
-            ChatAutomationAccessibilityService.SendReplyStatus.NO_ACTIVE_WINDOW,
             ChatAutomationAccessibilityService.SendReplyStatus.SERVICE_UNAVAILABLE -> {
                 copyReplyToClipboard(reply)
                 Toast.makeText(this, "自动发送失败，回复内容已复制，可手动粘贴发送", Toast.LENGTH_LONG).show()
@@ -1111,7 +1130,8 @@ class FloatingWindowService : Service() {
 
     /**
      * 创建拖动条专用的触摸监听器
-     * 拖动条区域约40dp高度，透明，触摸时悬浮窗跟随手指移动
+     * 拖动条区域约36dp高度，触摸时悬浮窗跟随手指移动
+     * 按下时把手颜色变亮，提供拖拽视觉反馈
      * 不影响内容区域的点击事件
      */
     private fun createDragHandleTouchListener(): View.OnTouchListener {
@@ -1120,7 +1140,7 @@ class FloatingWindowService : Service() {
         var initialTouchX = 0f
         var initialTouchY = 0f
 
-        return View.OnTouchListener { _, event ->
+        return View.OnTouchListener { view, event ->
             val params = windowLayoutParams ?: return@OnTouchListener false
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -1128,6 +1148,8 @@ class FloatingWindowService : Service() {
                     initialY = params.y
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
+                    // 拖拽开始时把手颜色变亮
+                    setDragHandleGripColor(view, Color.parseColor("#BBE2E8F0"))
                     true
                 }
 
@@ -1141,6 +1163,8 @@ class FloatingWindowService : Service() {
                 }
 
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    // 拖动结束时恢复把手颜色
+                    setDragHandleGripColor(view, Color.parseColor("#6694A3B8"))
                     // 拖动结束时保存位置
                     saveWindowPosition(params.x, params.y)
                     true
@@ -1148,6 +1172,24 @@ class FloatingWindowService : Service() {
 
                 else -> false
             }
+        }
+    }
+
+    /**
+     * 设置拖拽把手横线颜色
+     */
+    private fun setDragHandleGripColor(view: View, color: Int) {
+        try {
+            if (view is FrameLayout && view.childCount > 0) {
+                val container = view.getChildAt(0) as? LinearLayout ?: return
+                for (i in 0 until container.childCount) {
+                    val line = container.getChildAt(i)
+                    (line.background as? GradientDrawable)?.setColor(color)
+                    line.invalidate()
+                }
+            }
+        } catch (_: Exception) {
+            // 颜色设置失败不影响核心功能
         }
     }
 
@@ -1306,11 +1348,15 @@ class FloatingWindowService : Service() {
             setHintTextColor(Color.parseColor("#94A3B8"))
             setLineSpacing(0f, 1.18f)
             setPadding(dp(14), dp(14), dp(14), dp(14))
-            minLines = 4
-            maxLines = 8
+            minLines = 2
+            maxLines = 5
             gravity = Gravity.TOP or Gravity.START
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             isSingleLine = false
+            // 限制最大高度，超出时内部滚动
+            maxHeight = dp(120)
+            setVerticalScrollBarEnabled(true)
+            scrollBarStyle = View.SCROLLBARS_INSIDE_INSET
             background = createReplyCardBackground(ReplySource.AI_GENERATED.name)
         }
     }
@@ -1460,6 +1506,16 @@ class FloatingWindowService : Service() {
             this.background = background
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, weight)
             setOnClickListener { onClick() }
+        }
+    }
+
+    private fun getAppName(packageName: String): String {
+        return when (packageName) {
+            "com.tencent.mm" -> "微信"
+            "com.myhostex.hostexapp" -> "百居易"
+            "com.meituan.phoenix" -> "美团民宿"
+            "com.tujia.hotel" -> "途家民宿"
+            else -> packageName
         }
     }
 

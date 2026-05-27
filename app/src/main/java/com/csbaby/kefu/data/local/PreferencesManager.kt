@@ -49,6 +49,7 @@ class PreferencesManager @Inject constructor(
         val FIRST_LAUNCH = booleanPreferencesKey("first_launch")
         val NOTIFICATION_PERMISSION_ASKED = booleanPreferencesKey("notification_permission_asked")
         val OVERLAY_PERMISSION_ASKED = booleanPreferencesKey("overlay_permission_asked")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
     }
 
     // Data class for user preferences
@@ -64,7 +65,8 @@ class PreferencesManager @Inject constructor(
         val currentUserId: String = "default_user",
         val isFirstLaunch: Boolean = true,
         val notificationPermissionAsked: Boolean = false,
-        val overlayPermissionAsked: Boolean = false
+        val overlayPermissionAsked: Boolean = false,
+        val themeMode: String = "system"
     )
 
     val userPreferencesFlow: Flow<UserPreferences> = dataStore.data
@@ -88,7 +90,8 @@ class PreferencesManager @Inject constructor(
                 currentUserId = preferences[PreferencesKeys.CURRENT_USER_ID] ?: "default_user",
                 isFirstLaunch = preferences[PreferencesKeys.FIRST_LAUNCH] ?: true,
                 notificationPermissionAsked = preferences[PreferencesKeys.NOTIFICATION_PERMISSION_ASKED] ?: false,
-                overlayPermissionAsked = preferences[PreferencesKeys.OVERLAY_PERMISSION_ASKED] ?: false
+                overlayPermissionAsked = preferences[PreferencesKeys.OVERLAY_PERMISSION_ASKED] ?: false,
+                themeMode = preferences[PreferencesKeys.THEME_MODE] ?: "system"
             )
         }
 
@@ -179,6 +182,12 @@ class PreferencesManager @Inject constructor(
     suspend fun setOverlayPermissionAsked() {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.OVERLAY_PERMISSION_ASKED] = true
+        }
+    }
+
+    suspend fun updateThemeMode(mode: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.THEME_MODE] = mode
         }
     }
 }

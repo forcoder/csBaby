@@ -21,11 +21,10 @@ class ChatAutomationAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        serviceInfo = serviceInfo.apply {
-            packageNames = SUPPORTED_CHAT_PACKAGES.toTypedArray()
-        }
+        // API 26+ 中 serviceInfo 由系统管理，不可直接赋值。
+        // packageNames 已在 accessibility_service_config.xml 中配置，无需在此覆盖。
         instance = this
-        Log.d(TAG, "Chat automation accessibility service connected")
+        Log.d(TAG, "Chat automation accessibility service connected, serviceInfo=$serviceInfo")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -44,8 +43,13 @@ class ChatAutomationAccessibilityService : AccessibilityService() {
     }
 
     private fun sendReplyInternal(reply: String, targetPackage: String?): SendReplyStatus {
-        val root = resolveRootForPackage(targetPackage) ?: return SendReplyStatus.NO_ACTIVE_WINDOW
+        val root = resolveRootForPackage(targetPackage)
+        if (root == null) {
+            Log.w(TAG, "sendReplyInternal: root is null, targetPackage=$targetPackage")
+            return SendReplyStatus.NO_ACTIVE_WINDOW
+        }
         val activePackage = root.packageName?.toString().orEmpty()
+        Log.d(TAG, "sendReplyInternal: activePackage=$activePackage, targetPackage=$targetPackage")
 
         if (!targetPackage.isNullOrBlank() && activePackage != targetPackage) {
             Log.w(TAG, "Active window package mismatch. expected=$targetPackage actual=$activePackage")
@@ -53,7 +57,13 @@ class ChatAutomationAccessibilityService : AccessibilityService() {
         }
 
         val preparedRoot = ensureChatComposerReady(root, activePackage, targetPackage)
-        val inputNode = findInputNode(preparedRoot, activePackage) ?: return SendReplyStatus.INPUT_NOT_FOUND
+        val inputNode = findInputNode(preparedRoot, activePackage)
+        if (inputNode == null) {
+            Log.w(TAG, "sendReplyInternal: inputNode not found for package=$activePackage")
+            // 打印窗口层级帮助调试
+            logAllRelevantWindows(targetPackage = activePackage)
+            return SendReplyStatus.INPUT_NOT_FOUND
+        }
         prepareInputNode(inputNode)
         SystemClock.sleep(80)
         if (!setInputText(inputNode, reply)) {
@@ -181,8 +191,12 @@ class ChatAutomationAccessibilityService : AccessibilityService() {
         }
 
         if (shouldLogFailure) {
-            Log.w(TAG, "Failed to find input node in package=$activePackage")
-            logAllRelevantWindows(targetPackage = activePackage)
+            Log.w(TAG, "Failed to find input node in package=$activePackage, rootChildCount=${root.childCount}")
+            // 轻量级打印可编辑节点（限制深度和数量，避免ANR）
+            val editableNodes = mutableListOf<String>()
+            collectEditableNodes(root, editableNodes, depth = 0, maxDepth = 3, maxNodes = 20)
+            Log.w(TAG, "Editable nodes found: ${editableNodes.size}")
+            editableNodes.forEach { Log.w(TAG, "  editable: $it") }
         }
         return null
     }
@@ -641,24 +655,45 @@ class ChatAutomationAccessibilityService : AccessibilityService() {
 
 
         fun isEnabled(context: Context): Boolean {
-
-            val accessibilityManager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-            val enabledServices = accessibilityManager.getEnabledAccessibilityServiceList(
-                AccessibilityServiceInfo.FEEDBACK_ALL_MASK
-            )
-            val expectedComponent = ComponentName(context, ChatAutomationAccessibilityService::class.java)
-
-            return enabledServices.any { serviceInfo ->
-                val serviceComponent = ComponentName(
-                    serviceInfo.resolveInfo.serviceInfo.packageName,
-                    serviceInfo.resolveInfo.serviceInfo.name
-                )
-                serviceComponent == expectedComponent
+            // 优先通过 instance 引用判断（服务已连接且运行中）
+            Log.d(TAG, "isEnabled: instance=$instance")
+            if (instance != null) {
+                Log.d(TAG, "isEnabled: instance is not null, returning true")
+                return true
             }
+
+            // 回退：通过系统设置检查服务是否在已启用列表中
+            val enabledServicesSetting = try {
+                android.provider.Settings.Secure.getString(
+                    context.contentResolver,
+                    android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "isEnabled: error reading settings", e)
+                null
+            }
+
+            Log.d(TAG, "isEnabled: enabledServicesSetting=$enabledServicesSetting")
+
+            if (enabledServicesSetting.isNullOrBlank()) return false
+
+            val expectedComponent = ComponentName(context, ChatAutomationAccessibilityService::class.java)
+            val colonSplitter = enabledServicesSetting.split(':')
+            val result = colonSplitter.any { componentStr ->
+                val component = ComponentName.unflattenFromString(componentStr.trim())
+                Log.d(TAG, "isEnabled: comparing $component with $expectedComponent, match=${component == expectedComponent}")
+                component == expectedComponent
+            }
+            Log.d(TAG, "isEnabled: result=$result")
+            return result
         }
 
         fun sendReply(reply: String, targetPackage: String?): SendReplyStatus {
-            val service = instance ?: return SendReplyStatus.SERVICE_UNAVAILABLE
+            Log.d(TAG, "sendReply: instance=$instance, replyLength=${reply.length}, targetPackage=$targetPackage")
+            val service = instance ?: run {
+                Log.e(TAG, "sendReply: instance is null, service not connected")
+                return SendReplyStatus.SERVICE_UNAVAILABLE
+            }
             return service.sendReplyInternal(reply, targetPackage)
         }
     }

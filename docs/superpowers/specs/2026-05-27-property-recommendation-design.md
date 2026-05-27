@@ -462,7 +462,7 @@ data class ReplyResult(
 | description | description | 描述 |
 | link | link | 链接 |
 | imageUrl | image_url | 图片URL |
-| status | status | 状态 |
+| status | status | 状态（AVAILABLE/FULL，与本地格式一致） |
 | syncVersion | sync_version | 同步版本 |
 | deleted | deleted | 软删除 |
 

@@ -27,7 +27,7 @@ object DatabaseModule {
             KefuDatabase::class.java,
             KefuDatabase.DATABASE_NAME
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .build()
     }
 
@@ -159,6 +159,16 @@ object DatabaseModule {
             database.execSQL("CREATE INDEX IF NOT EXISTS index_message_blacklist_tenantId ON message_blacklist(tenantId)")
             // 补充 MIGRATION_2_3 中缺失的 user_style_profiles tenantId 索引
             database.execSQL("CREATE INDEX IF NOT EXISTS index_user_style_profiles_tenantId ON user_style_profiles(tenantId)")
+        }
+    }
+
+    private val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            // 修复 LongCat API 端点：旧端点 /openai 改为 /openai/v1/chat/completions
+            database.execSQL(
+                "UPDATE ai_model_configs SET apiEndpoint = 'https://api.longcat.chat/openai/v1/chat/completions' " +
+                "WHERE apiEndpoint = 'https://api.longcat.chat/openai'"
+            )
         }
     }
 }

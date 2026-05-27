@@ -53,15 +53,17 @@ class AIClientImpl @Inject constructor(
 
             val request = requestBuilder.build()
             check(!android.os.Looper.getMainLooper().isCurrentThread()) { "AIClient 必须在非主线程调用" }
+            Timber.d("AI Request: url=${config.apiEndpoint}, model=${getModelName(config)}, apiKey=${config.apiKey.take(8)}...")
             val response = okHttpClient.newCall(request).execute()
             val responseBody = response.body?.string() ?: return Result.failure(Exception("Empty response"))
 
-            Timber.d("AI Response: $responseBody")
+            Timber.d("AI Response: status=${response.code}, body=${responseBody.take(500)}")
 
             if (response.isSuccessful) {
                 val reply = parseResponse(responseBody, config.modelType)
                 Result.success(reply)
             } else {
+                Timber.e("AI API Error: ${response.code} - $responseBody")
                 Result.failure(Exception("API Error: ${response.code} - $responseBody"))
             }
         } catch (e: Exception) {
@@ -78,6 +80,7 @@ class AIClientImpl @Inject constructor(
             val result = generateCompletion(config, testMessages, 0.7f, 50)
             result.map { it.isNotEmpty() }
         } catch (e: Exception) {
+            Timber.e(e, "Model connection test failed")
             Result.failure(e)
         }
     }
@@ -253,7 +256,7 @@ class AIClientImpl @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Failed to parse response, attempting fallback extraction")
+            Timber.e(e, "Failed to parse response (modelType=$modelType), attempting fallback extraction. Response: ${responseBody.take(500)}")
             val fallback = extractContentFromResponse(responseBody)
             // 如果降级提取仍返回原始 responseBody（说明是无效 JSON），返回错误提示
             if (fallback == responseBody) {
@@ -264,8 +267,8 @@ class AIClientImpl @Inject constructor(
     }
 
     private fun parseOpenAIResponse(json: JSONObject): String {
-        val choices = json.getJSONArray("choices")
-        if (choices.length() > 0) {
+        val choices = json.optJSONArray("choices")
+        if (choices != null && choices.length() > 0) {
             val firstChoice = choices.getJSONObject(0)
             val message = firstChoice.getJSONObject("message")
             return message.getString("content")

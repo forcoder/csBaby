@@ -1,0 +1,39 @@
+name: Keepalive Health Check
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    name: Ping Render Server
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Ping Render Server
+        run: |
+          SERVER_URL="https://csbaby-sync-server-py.onrender.com/health"
+          echo "=== Keepalive Health Check ==="
+          echo "Time: $(date -u +%Y-%m-%d\ %H:%M:%S) UTC"
+          echo "Server: $SERVER_URL"
+
+          # Ping with 10s timeout, retry 3 times
+          if curl -sSf --max-time 10 --retry 3 "$SERVER_URL"; then
+            echo "✅ Server is healthy"
+          else
+            echo "⚠️  Server health check failed!"
+            exit 1
+          fi
+
+      - name: Output check result
+        run: |
+          echo "## 💓 Keepalive check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Server: https://csbaby-sync-server-py.onrender.com/health" >> $GITHUB_STEP_SUMMARY
+          echo "Time: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "Status: ✅ OK" >> $GITHUB_STEP_SUMMARY

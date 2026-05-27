@@ -13,6 +13,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.csbaby.kefu.data.local.PreferencesManager
@@ -20,6 +23,7 @@ import com.csbaby.kefu.infrastructure.notification.NotificationListenerServiceIm
 import com.csbaby.kefu.infrastructure.window.FloatingWindowService
 import com.csbaby.kefu.presentation.navigation.AppNavigation
 import com.csbaby.kefu.presentation.theme.KefuTheme
+import com.csbaby.kefu.presentation.theme.ThemeMode
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -53,7 +57,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            KefuTheme {
+            val preferences by preferencesManager.userPreferencesFlow.collectAsState(
+                initial = PreferencesManager.UserPreferences()
+            )
+            val currentThemeMode = remember(preferences.themeMode) {
+                ThemeMode.fromValue(preferences.themeMode)
+            }
+
+            KefuTheme(themeMode = currentThemeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

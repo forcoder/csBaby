@@ -17,7 +17,7 @@ import com.csbaby.kefu.data.local.entity.*
         SyncCheckpointEntity::class,
         MessageBlacklistEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class KefuDatabase : RoomDatabase() {

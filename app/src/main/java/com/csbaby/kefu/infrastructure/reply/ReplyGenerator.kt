@@ -4,6 +4,7 @@ import android.util.Log
 import com.csbaby.kefu.data.local.PreferencesManager
 import com.csbaby.kefu.domain.model.*
 
+import com.csbaby.kefu.domain.repository.AIModelRepository
 import com.csbaby.kefu.domain.repository.ReplyHistoryRepository
 import com.csbaby.kefu.domain.repository.UserStyleRepository
 import com.csbaby.kefu.infrastructure.ai.AIService
@@ -30,7 +31,8 @@ class ReplyGenerator @Inject constructor(
     private val styleLearningEngine: StyleLearningEngine,
     private val replyHistoryRepository: ReplyHistoryRepository,
     private val userStyleRepository: UserStyleRepository,
-    private val preferencesManager: PreferencesManager
+    private val preferencesManager: PreferencesManager,
+    private val aiModelRepository: AIModelRepository
 ) {
     companion object {
         private const val TAG = "ReplyGenerator"
@@ -142,6 +144,23 @@ class ReplyGenerator @Inject constructor(
             )
         }
 
+        // Check if default model is configured
+        val defaultModel = aiModelRepository.getDefaultModel()
+        if (defaultModel == null) {
+            if (isBaijuyiContext(context)) {
+                Log.w(TAG, "Baijuyi AI generation skipped: no default model configured")
+            }
+            return null
+        }
+
+        // Check if API key is configured
+        if (defaultModel.apiKey.isBlank()) {
+            if (isBaijuyiContext(context)) {
+                Log.w(TAG, "Baijuyi AI generation skipped: API key is empty for model ${defaultModel.modelName}")
+            }
+            return null
+        }
+
         // Build system prompt
         val systemPrompt = buildSystemPrompt(context, styleProfile)
 
@@ -195,16 +214,17 @@ class ReplyGenerator @Inject constructor(
      */
     private fun buildSystemPrompt(context: ReplyContext, styleProfile: UserStyleProfile?): String {
         val basePrompt = """
-            You are a professional customer service assistant. Your role is to help generate helpful, accurate, and polite responses to customer inquiries.
-            
-            Guidelines:
-            - Be helpful and solution-oriented
-            - Use a professional but friendly tone
-            - Keep responses concise and clear
-            - Acknowledge the customer's concern before providing a solution
+            你是一位专业的客服助手。
+
+            严格规则：
+            - 只输出回复内容本身，禁止添加任何前缀（如"回复："、"建议您："、"您好："等）
+            - 禁止输出任何解释、说明、分析或额外文字
+            - 必须使用中文，禁止使用英文
+            - 语气专业且友好，符合客服身份
+            - 回复简洁明了，不超过100字
+            - 直接输出回复文本，不要加引号或任何格式标记
         """.trimIndent()
 
-        // Add style customization if available
         return if (styleProfile != null) {
             styleLearningEngine.generateStyleSystemPrompt(styleProfile) + "\n\n" + basePrompt
         } else {
@@ -217,13 +237,13 @@ class ReplyGenerator @Inject constructor(
      */
     private fun buildUserPrompt(message: String, context: ReplyContext): String {
         return """
-            Customer message:
+            客户消息：
             "$message"
-            
-            App context: ${context.appPackage}
-            ${context.scenarioId?.let { "Scenario: $it" } ?: ""}
-            
-            Please generate an appropriate customer service response.
+
+            应用上下文：${context.appPackage}
+            ${context.scenarioId?.let { "场景：$it" } ?: ""}
+
+            请用中文生成一条简洁、专业、符合语境的客服回复。只输出回复内容。
         """.trimIndent()
     }
 
