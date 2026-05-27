@@ -52,6 +52,7 @@ fun KnowledgeScreen(
     var editingRule by remember { mutableStateOf<KeywordRule?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var showClearDialog by remember { mutableStateOf(false) }
+    var ruleToDelete by remember { mutableStateOf<KeywordRule?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()

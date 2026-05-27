@@ -56,6 +56,9 @@ fun SyncSettingsCard(
     var showRestoreConfirm by remember { mutableStateOf<Int?>(null) }
     var showDeleteConfirm by remember { mutableStateOf<Int?>(null) }
 
+    // 同步状态变化提示（由外部 snackbarHostState 处理）
+    // 内联状态指示器保留，用于卡片内的即时视觉反馈
+
     Card(
         modifier = modifier.fillMaxWidth()
     ) {

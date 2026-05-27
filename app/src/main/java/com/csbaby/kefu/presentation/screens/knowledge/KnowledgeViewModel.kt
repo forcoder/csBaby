@@ -188,10 +188,20 @@ class KnowledgeViewModel @Inject constructor(
         viewModelScope.launch {
             knowledgeBaseManager.deleteRule(id)
                 .onSuccess {
-                    _uiState.update { it.copy(deleteErrorMessage = null) }
+                    _uiState.update {
+                        it.copy(
+                            deleteErrorMessage = null,
+                            noticeMessage = "规则已删除"
+                        )
+                    }
                 }
                 .onFailure { error ->
-                    _uiState.update { it.copy(deleteErrorMessage = error.message ?: "删除失败") }
+                    _uiState.update {
+                        it.copy(
+                            deleteErrorMessage = error.message ?: "删除失败",
+                            noticeMessage = "删除失败：${error.message ?: "未知错误"}"
+                        )
+                    }
                 }
             triggerAutoSyncForLoggedInUser()
         }

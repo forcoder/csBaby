@@ -11,7 +11,9 @@ data class BackupRecord(
     val appVersion: String = "",
     val dataSize: Long = 0,
     val checksum: String = "",
-    val createdAt: Long = 0
+    val createdAt: Long = 0,
+    val backupType: String = "manual",  // 服务端返回的备份类型
+    val version: String = "1.0"          // 服务端返回的版本号
 )
 
 /**

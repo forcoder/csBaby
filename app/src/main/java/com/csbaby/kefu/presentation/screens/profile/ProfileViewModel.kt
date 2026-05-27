@@ -14,6 +14,7 @@ import com.csbaby.kefu.domain.repository.UserStyleRepository
 import com.csbaby.kefu.infrastructure.backup.BackupManager
 import com.csbaby.kefu.infrastructure.ota.OtaManager
 import com.csbaby.kefu.infrastructure.style.StyleLearningEngine
+import com.csbaby.kefu.presentation.theme.ThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -44,7 +45,9 @@ data class ProfileUiState(
     // 数据备份与恢复
     val backupStatus: BackupStatus = BackupStatus.IDLE,
     val backupMessage: String = "",
-    val backupRecords: List<BackupRecord> = emptyList()
+    val backupRecords: List<BackupRecord> = emptyList(),
+    // 主题
+    val themeMode: String = "system"
 )
 
 data class OtaUpdateInfo(
@@ -130,7 +133,8 @@ class ProfileViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         styleLearningEnabled = prefs.styleLearningEnabled,
-                        autoSendEnabled = prefs.autoSendEnabled
+                        autoSendEnabled = prefs.autoSendEnabled,
+                        themeMode = prefs.themeMode
                     )
                 }
             }
@@ -196,6 +200,13 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             preferencesManager.updateAutoSendEnabled(enabled)
             _uiState.update { it.copy(autoSendEnabled = enabled) }
+        }
+    }
+
+    fun toggleThemeMode(mode: String) {
+        viewModelScope.launch {
+            preferencesManager.updateThemeMode(mode)
+            _uiState.update { it.copy(themeMode = mode) }
         }
     }
 

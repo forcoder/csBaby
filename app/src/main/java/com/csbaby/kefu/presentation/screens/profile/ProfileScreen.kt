@@ -15,14 +15,34 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.csbaby.kefu.R
+import com.csbaby.kefu.data.sync.SyncState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
-    navController: NavController? = null,
+    navController: NavController,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // 监听同步状态变化，显示 Snackbar 提示
+    LaunchedEffect(uiState.syncState) {
+        when (val state = uiState.syncState) {
+            is SyncState.Success -> {
+                val message = if (uiState.syncStats.isNotEmpty()) {
+                    "同步完成：${uiState.syncStats}"
+                } else {
+                    "同步完成"
+                }
+                snackbarHostState.showSnackbar(message)
+            }
+            is SyncState.Error -> {
+                snackbarHostState.showSnackbar("同步失败：${state.message}")
+            }
+            else -> {}
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -33,7 +53,8 @@ fun ProfileScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -456,11 +477,11 @@ fun OtaUpdateCard(
 }
 
 @Composable
-fun MessageBlacklistCard(navController: NavController? = null) {
+fun MessageBlacklistCard(navController: NavController) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { navController?.navigate("blacklist") }
+            .clickable { navController.navigate("blacklist") }
     ) {
         Row(
             modifier = Modifier

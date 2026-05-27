@@ -303,7 +303,20 @@ class SyncManager @Inject constructor(
                 syncCheckpointDao.updateSyncSuccess(tenantId, data.serverTime, null)
                 val ruleCount = data.keywordRules.size
                 val modelCount = data.aiModelConfigs.size
-                val stats = "全量同步: 获取 $ruleCount 条规则, $modelCount 条模型"
+                val appCount = data.appConfigs.size
+                val scenarioCount = data.scenarios.size
+                val blacklistCount = data.messageBlacklist.size
+                val profileCount = if (data.userStyleProfile != null) 1 else 0
+                val stats = buildString {
+                    append("全量同步完成：")
+                    if (ruleCount > 0) append("知识库${ruleCount}条，")
+                    if (blacklistCount > 0) append("黑名单${blacklistCount}条，")
+                    if (modelCount > 0) append("模型${modelCount}条，")
+                    if (appCount > 0) append("监控应用${appCount}条，")
+                    if (scenarioCount > 0) append("场景${scenarioCount}条，")
+                    if (profileCount > 0) append("风格画像${profileCount}条，")
+                    if (endsWith("，")) deleteCharAt(lastIndex)
+                }
                 _lastSyncStats = stats
                 _syncState.value = SyncState.Success("同步完成", stats)
                 Timber.d("全量同步完成: rules=$ruleCount, models=$modelCount")
@@ -360,11 +373,30 @@ class SyncManager @Inject constructor(
             )
 
             // 生成统计信息
-            val pullCount = changesResponse.data?.keywordRules?.size ?: 0
-            val stats = if (pushStats.isNotEmpty()) {
-                "推送 ${pushStats}；拉取 $pullCount 条"
-            } else {
-                "拉取 $pullCount 条"
+            val changes = changesResponse.data
+            val pullRuleCount = changes?.keywordRules?.size ?: 0
+            val pullModelCount = changes?.aiModelConfigs?.size ?: 0
+            val pullAppCount = changes?.appConfigs?.size ?: 0
+            val pullScenarioCount = changes?.scenarios?.size ?: 0
+            val pullBlacklistCount = changes?.messageBlacklist?.size ?: 0
+            val pullProfileCount = if (changes?.userStyleProfile != null) 1 else 0
+            val pullReplyCount = changes?.replyHistory?.size ?: 0
+
+            val stats = buildString {
+                if (pushStats.isNotEmpty()) {
+                    append("推送：$pushStats；")
+                }
+                append("拉取：")
+                val details = mutableListOf<String>()
+                if (pullRuleCount > 0) details.add("知识库${pullRuleCount}条")
+                if (pullBlacklistCount > 0) details.add("黑名单${pullBlacklistCount}条")
+                if (pullModelCount > 0) details.add("模型${pullModelCount}条")
+                if (pullAppCount > 0) details.add("监控应用${pullAppCount}条")
+                if (pullScenarioCount > 0) details.add("场景${pullScenarioCount}条")
+                if (pullReplyCount > 0) details.add("回复历史${pullReplyCount}条")
+                if (pullProfileCount > 0) details.add("风格画像${pullProfileCount}条")
+                if (details.isEmpty()) details.add("无变更")
+                append(details.joinToString("，"))
             }
             _syncState.value = SyncState.Success("同步完成", stats)
             Log.d("SyncManager", "增量同步完成: $stats")
@@ -523,7 +555,21 @@ class SyncManager @Inject constructor(
             return if (stats != null) {
                 "新增 ${stats.inserted} 条，更新 ${stats.updated} 条，删除 ${stats.deleted} 条"
             } else {
-                ""
+                buildString {
+                    val details = mutableListOf<String>()
+                    if (rules.isNotEmpty()) details.add("知识库${rules.size}条")
+                    if (blacklists.isNotEmpty()) details.add("黑名单${blacklists.size}条")
+                    if (models.isNotEmpty()) details.add("模型${models.size}条")
+                    if (apps.isNotEmpty()) details.add("监控应用${apps.size}条")
+                    if (scenarios.isNotEmpty()) details.add("场景${scenarios.size}条")
+                    if (replies.isNotEmpty()) details.add("回复历史${replies.size}条")
+                    if (profiles.isNotEmpty()) details.add("风格画像${profiles.size}条")
+                    if (deletedIds.isNotEmpty()) {
+                        val totalDeleted = deletedIds.values.sumOf { it.size }
+                        if (totalDeleted > 0) details.add("删除${totalDeleted}条")
+                    }
+                    if (details.isNotEmpty()) details.joinToString("，") else ""
+                }
             }
         }
         return ""
@@ -704,7 +750,7 @@ class SyncManager @Inject constructor(
     private fun SyncKeywordRule.toEntity(tenantId: String) = KeywordRuleEntity(
         id = id,
         keyword = keyword.orEmpty(),
-        matchType = matchType.orEmpty(),
+        matchType = matchType.orEmpty().ifEmpty { "CONTAINS" },
         replyTemplate = replyTemplate.orEmpty(),
         category = category.orEmpty(),
         targetType = targetType.orEmpty(),
@@ -768,7 +814,7 @@ class SyncManager @Inject constructor(
     private fun SyncScenario.toEntity(tenantId: String) = ScenarioEntity(
         id = id,
         name = name.orEmpty(),
-        type = type.orEmpty(),
+        type = type.orEmpty().ifEmpty { "ALL_PROPERTIES" },
         targetId = targetId,
         description = description,
         createdAt = createdAt,

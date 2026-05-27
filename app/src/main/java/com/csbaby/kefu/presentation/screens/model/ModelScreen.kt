@@ -1,16 +1,12 @@
 package com.csbaby.kefu.presentation.screens.model
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Settings
-
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,14 +29,57 @@ fun ModelScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var editingModel by remember { mutableStateOf<AIModelConfig?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportModels(uri)
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importModels(uri)
+        }
+    }
+
+    LaunchedEffect(uiState.exportImportMessage) {
+        val message = uiState.exportImportMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.consumeExportImportMessage()
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.model_config)) },
+                actions = {
+                    IconButton(
+                        onClick = { exportLauncher.launch("csbaby_models_export.json") },
+                        enabled = uiState.models.isNotEmpty()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FileDownload,
+                            contentDescription = "导出模型配置"
+                        )
+                    }
+                    IconButton(
+                        onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FileUpload,
+                            contentDescription = "导入模型配置"
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         },
@@ -50,7 +89,8 @@ fun ModelScreen(
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Model")
             }
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         if (uiState.models.isEmpty()) {
             Box(
@@ -138,27 +178,26 @@ fun ModelItem(
                                 label = { Text("默认") }
                             )
                         }
-                        // Test result indicator
+                        // Test result indicator (icon only)
                         if (testResult != null) {
                             Spacer(modifier = Modifier.width(8.dp))
-                            Column {
-                                Icon(
-                                    imageVector = if (testResult.success) Icons.Default.CheckCircle else Icons.Default.Error,
-                                    contentDescription = if (testResult.success) "测试成功" else "测试失败",
-                                    tint = if (testResult.success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                if (!testResult.success && testResult.errorMessage != null) {
-                                    Text(
-                                        text = testResult.errorMessage,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.widthIn(max = 200.dp),
-                                        maxLines = 2
-                                    )
-                                }
-                            }
+                            Icon(
+                                imageVector = if (testResult.success) Icons.Default.CheckCircle else Icons.Default.Error,
+                                contentDescription = if (testResult.success) "测试成功" else "测试失败",
+                                tint = if (testResult.success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
+                    }
+                    // Error message on separate line below model name
+                    if (testResult != null && !testResult.success && testResult.errorMessage != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = testResult.errorMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                     Text(
                         text = "${model.modelType.name} • ${model.apiEndpoint.take(30)}...",
@@ -288,6 +327,7 @@ fun ModelEditDialog(
                     onValueChange = { apiKey = it },
                     label = { Text("API密钥") },
                     modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions.Default
                 )
@@ -365,7 +405,7 @@ fun ModelEditDialog(
 
 private fun getDefaultEndpoint(modelType: ModelType): String {
     return when (modelType) {
-        ModelType.OPENAI -> "https://api.longcat.chat/openai"
+        ModelType.OPENAI -> "https://api.longcat.chat/openai/v1/chat/completions"
         ModelType.CLAUDE -> "https://api.anthropic.com/v1/messages"
         ModelType.ZHIPU -> "https://open.bigmodel.cn/api/paas/v4/chat/completions"
         ModelType.TONGYI -> "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
