@@ -16,7 +16,9 @@ import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.Process
 import android.os.SystemClock
 import android.net.Uri
@@ -53,6 +55,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -849,10 +852,53 @@ class FloatingWindowService : Service() {
             return
         }
 
-        val sendStatus = temporarilyYieldOverlayFocus {
-            ChatAutomationAccessibilityService.sendReply(reply, data.targetPackage)
-        }
+        // 在后台线程执行发送操作，避免阻塞主线程
+        serviceScope.launch {
+            var sendStatus: ChatAutomationAccessibilityService.SendReplyStatus = ChatAutomationAccessibilityService.SendReplyStatus.SERVICE_UNAVAILABLE
+            var operationStartTime = SystemClock.uptimeMillis()
+            val timeoutMs = 8000L // 8秒超时
 
+            // 先让悬浮窗失去焦点（减少干扰）
+            try {
+                temporarilyYieldOverlayFocus { ChatAutomationAccessibilityService.SendReplyStatus.SERVICE_UNAVAILABLE }
+            } catch (_: Exception) { }
+
+            // 在后台线程执行发送，同时监控超时
+            try {
+                withContext(Dispatchers.Main) {
+                    sendStatus = ChatAutomationAccessibilityService.sendReply(reply, data.targetPackage)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "sendSuggestedReply exception: ${e.message}", e)
+                sendStatus = ChatAutomationAccessibilityService.SendReplyStatus.SERVICE_UNAVAILABLE
+            }
+
+            // 检查是否超时
+            val elapsed = SystemClock.uptimeMillis() - operationStartTime
+            Log.e("SendReply", "sendStatus=$sendStatus, elapsed=${elapsed}ms, targetPackage=${data.targetPackage}")
+
+            // 如果超时但没返回结果，认为是 ANR，返回失败
+            if (elapsed > timeoutMs && sendStatus == ChatAutomationAccessibilityService.SendReplyStatus.SERVICE_UNAVAILABLE) {
+                Log.e("SendReply", "Operation timed out after ${elapsed}ms")
+                copyReplyToClipboard(reply)
+                Handler(Looper.getMainLooper()).post {
+                    Toast.makeText(this@FloatingWindowService, "操作超时，请手动粘贴发送", Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+
+            // 处理结果（回到主线程）
+            withContext(Dispatchers.Main) {
+                handleSendResult(sendStatus, data, reply)
+            }
+        }
+    }
+
+    private fun handleSendResult(
+        sendStatus: ChatAutomationAccessibilityService.SendReplyStatus,
+        data: DisplayData,
+        reply: String
+    ) {
         when (sendStatus) {
             ChatAutomationAccessibilityService.SendReplyStatus.SUCCESS -> {
                 recordSentReply(data, reply)
@@ -873,12 +919,10 @@ class FloatingWindowService : Service() {
                 copyReplyToClipboard(reply)
                 Toast.makeText(this, "未找到聊天输入框，请确保停留在聊天页面并点击一下输入区域后重试，回复已复制", Toast.LENGTH_LONG).show()
             }
-
             ChatAutomationAccessibilityService.SendReplyStatus.SEND_BUTTON_NOT_FOUND -> {
                 copyReplyToClipboard(reply)
                 Toast.makeText(this, "已填入内容但未找到发送按钮，请手动检查当前聊天界面", Toast.LENGTH_LONG).show()
             }
-
             ChatAutomationAccessibilityService.SendReplyStatus.INPUT_FAILED,
             ChatAutomationAccessibilityService.SendReplyStatus.CLICK_FAILED,
             ChatAutomationAccessibilityService.SendReplyStatus.SERVICE_UNAVAILABLE -> {

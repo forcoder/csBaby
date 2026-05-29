@@ -15,6 +15,11 @@ import com.csbaby.kefu.infrastructure.backup.BackupManager
 import com.csbaby.kefu.infrastructure.ota.OtaManager
 import com.csbaby.kefu.infrastructure.style.StyleLearningEngine
 import com.csbaby.kefu.presentation.theme.ThemeMode
+import com.csbaby.kefu.data.local.dao.AIModelConfigDao
+import com.csbaby.kefu.data.local.dao.AppConfigDao
+import com.csbaby.kefu.data.local.dao.KeywordRuleDao
+import com.csbaby.kefu.data.local.dao.MessageBlacklistDao
+import com.csbaby.kefu.data.local.dao.ScenarioDao
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -40,13 +45,12 @@ data class ProfileUiState(
     val currentTenantId: String? = null,
     val pendingSyncCount: Int = 0,
     val lastSyncTime: Long = 0L,
-    // 同步统计
     val syncStats: String = "",
-    // 数据备份与恢复
+    val lastSyncStats: String = "",
+    val dataStats: DataStats = DataStats(),
     val backupStatus: BackupStatus = BackupStatus.IDLE,
     val backupMessage: String = "",
     val backupRecords: List<BackupRecord> = emptyList(),
-    // 主题
     val themeMode: String = "system"
 )
 
@@ -58,6 +62,24 @@ data class OtaUpdateInfo(
     val isForceUpdate: Boolean = false
 )
 
+data class DataStats(
+    val knowledgeCount: Int = 0,
+    val blacklistCount: Int = 0,
+    val modelCount: Int = 0,
+    val appCount: Int = 0,
+    val scenarioCount: Int = 0
+) {
+    fun toDisplayString(): String {
+        val parts = mutableListOf<String>()
+        if (knowledgeCount > 0) parts.add("知识库${knowledgeCount}条")
+        if (blacklistCount > 0) parts.add("黑名单${blacklistCount}条")
+        if (modelCount > 0) parts.add("模型${modelCount}条")
+        if (appCount > 0) parts.add("监控应用${appCount}条")
+        if (scenarioCount > 0) parts.add("场景${scenarioCount}条")
+        return parts.joinToString("、")
+    }
+}
+
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val preferencesManager: PreferencesManager,
@@ -66,7 +88,12 @@ class ProfileViewModel @Inject constructor(
     private val otaManager: OtaManager,
     private val syncManager: SyncManager,
     private val authManager: AuthManager,
-    private val backupManager: BackupManager
+    private val backupManager: BackupManager,
+    private val keywordRuleDao: KeywordRuleDao,
+    private val messageBlacklistDao: MessageBlacklistDao,
+    private val aiModelConfigDao: AIModelConfigDao,
+    private val appConfigDao: AppConfigDao,
+    private val scenarioDao: ScenarioDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -82,6 +109,29 @@ class ProfileViewModel @Inject constructor(
         observeSyncQueue()
         observeLastSyncTime()
         observeBackupState()
+        loadDataStats()
+    }
+
+    private fun loadDataStats() {
+        viewModelScope.launch {
+            val tenantId = authManager.currentTenantId() ?: return@launch
+            val knowledgeCount = runCatching { keywordRuleDao.getRuleCount() }.getOrDefault(0)
+            val blacklistCount = runCatching { messageBlacklistDao.getEnabledCount() }.getOrDefault(0)
+            val modelCount = aiModelConfigDao.getModelsByTenantSync(tenantId).size
+            val appCount = appConfigDao.getAppsByTenantSync(tenantId).size
+            val scenarioCount = scenarioDao.getScenariosByTenantSync(tenantId).size
+            _uiState.update {
+                it.copy(
+                    dataStats = DataStats(
+                        knowledgeCount = knowledgeCount,
+                        blacklistCount = blacklistCount,
+                        modelCount = modelCount,
+                        appCount = appCount,
+                        scenarioCount = scenarioCount
+                    )
+                )
+            }
+        }
     }
 
     private fun observeSyncState() {
@@ -90,7 +140,8 @@ class ProfileViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         syncState = state,
-                        syncStats = if (state is SyncState.Success) state.stats else it.syncStats
+                        syncStats = if (state is SyncState.Success) state.stats else it.syncStats,
+                        lastSyncStats = if (state is SyncState.Success) state.stats else it.lastSyncStats
                     )
                 }
             }
@@ -275,7 +326,7 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    // ========== 云端同步 ==========
+    // 云端同步
 
     fun login(email: String, password: String) {
         Log.d("ProfileViewModel", "login() 调用: email=$email")
@@ -316,7 +367,7 @@ class ProfileViewModel @Inject constructor(
 
     fun logout() { syncManager.logout() }
 
-    // ========== 数据备份与恢复 ==========
+    // 数据备份与恢复
 
     private fun observeBackupState() {
         viewModelScope.launch {
@@ -336,24 +387,16 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 上传本地数据备份到云端
-     */
     fun uploadBackup() {
         viewModelScope.launch {
             val result = backupManager.uploadBackup()
-            // 操作完成后（无论成功或失败）都重置状态，使按钮恢复正常
             backupManager.clearStatus()
-            // 如果失败，状态重置后显示错误消息由 UI 层处理
             result.onFailure { e ->
                 Timber.e(e, "备份失败")
             }
         }
     }
 
-    /**
-     * 获取云端备份列表
-     */
     fun fetchBackupList() {
         viewModelScope.launch {
             backupManager.clearStatus()
@@ -361,27 +404,18 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 从云端恢复备份
-     */
     fun restoreBackup(backupId: Int) {
         viewModelScope.launch {
             backupManager.downloadAndRestore(backupId)
         }
     }
 
-    /**
-     * 删除云端备份
-     */
     fun deleteBackup(backupId: Int) {
         viewModelScope.launch {
             backupManager.deleteBackup(backupId)
         }
     }
 
-    /**
-     * 清除备份状态
-     */
     fun clearBackupStatus() {
         backupManager.clearStatus()
     }

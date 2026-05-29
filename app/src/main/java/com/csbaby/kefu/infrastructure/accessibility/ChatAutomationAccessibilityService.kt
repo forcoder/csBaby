@@ -43,27 +43,40 @@ class ChatAutomationAccessibilityService : AccessibilityService() {
     }
 
     private fun sendReplyInternal(reply: String, targetPackage: String?): SendReplyStatus {
+        Log.e(TAG, "sendReplyInternal: start, targetPackage=$targetPackage, replyLength=${reply.length}")
         val root = resolveRootForPackage(targetPackage)
         if (root == null) {
-            Log.w(TAG, "sendReplyInternal: root is null, targetPackage=$targetPackage")
+            Log.e(TAG, "sendReplyInternal: root is null, targetPackage=$targetPackage")
             return SendReplyStatus.NO_ACTIVE_WINDOW
         }
         val activePackage = root.packageName?.toString().orEmpty()
-        Log.d(TAG, "sendReplyInternal: activePackage=$activePackage, targetPackage=$targetPackage")
+        Log.e(TAG, "sendReplyInternal: activePackage=$activePackage, targetPackage=$targetPackage, rootChildCount=${root.childCount}")
 
         if (!targetPackage.isNullOrBlank() && activePackage != targetPackage) {
-            Log.w(TAG, "Active window package mismatch. expected=$targetPackage actual=$activePackage")
+            Log.e(TAG, "Active window package mismatch. expected=$targetPackage actual=$activePackage")
             return SendReplyStatus.WRONG_WINDOW
         }
 
         val preparedRoot = ensureChatComposerReady(root, activePackage, targetPackage)
+
+        // 在输入文本前，先尝试找到发送按钮位置（用于后续定位）
+        // 这样即使输入后节点变化，也能通过相对位置找到发送按钮
+        var sendButton: AccessibilityNodeInfo? = null
+        try {
+            sendButton = findSendButton(preparedRoot, activePackage, inputNode = null, shouldLog = false)
+            Log.e(TAG, "Pre-found send button: ${if (sendButton != null) describeNode(sendButton) else "null"}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error finding send button", e)
+        }
+
         val inputNode = findInputNode(preparedRoot, activePackage)
         if (inputNode == null) {
-            Log.w(TAG, "sendReplyInternal: inputNode not found for package=$activePackage")
+            Log.e(TAG, "sendReplyInternal: inputNode not found for package=$activePackage")
             // 打印窗口层级帮助调试
             logAllRelevantWindows(targetPackage = activePackage)
             return SendReplyStatus.INPUT_NOT_FOUND
         }
+
         prepareInputNode(inputNode)
         SystemClock.sleep(80)
         if (!setInputText(inputNode, reply)) {
@@ -77,9 +90,25 @@ class ChatAutomationAccessibilityService : AccessibilityService() {
         }
 
         SystemClock.sleep(120)
-        val latestRoot = resolveRootForPackage(targetPackage) ?: preparedRoot
-        val latestInputNode = findInputNode(latestRoot, activePackage, shouldLogFailure = false)
-        val sendButton = findSendButton(latestRoot, activePackage, latestInputNode) ?: return SendReplyStatus.SEND_BUTTON_NOT_FOUND
+        // 验证文本是否真的设置成功
+        inputNode.refresh()
+        val verifiedText = inputNode.text?.toString().orEmpty()
+        if (!verifiedText.contains(reply) && verifiedText.isNotBlank()) {
+            Log.w(TAG, "Text verification failed: expected='$reply', got='$verifiedText'")
+        }
+
+        // 如果之前没找到发送按钮，现在重新找
+        if (sendButton == null) {
+            val latestRoot = resolveRootForPackage(targetPackage) ?: preparedRoot
+            sendButton = findSendButton(latestRoot, activePackage, inputNode)
+        }
+
+        if (sendButton == null) {
+            Log.e(TAG, "sendReplyInternal: sendButton still null after text input")
+            return SendReplyStatus.SEND_BUTTON_NOT_FOUND
+        }
+
+        Log.e(TAG, "Clicking send button: ${describeNode(sendButton)}")
         if (!performClick(sendButton)) {
             return SendReplyStatus.CLICK_FAILED
         }
@@ -92,32 +121,50 @@ class ChatAutomationAccessibilityService : AccessibilityService() {
     private fun resolveRootForPackage(targetPackage: String?): AccessibilityNodeInfo? {
         val activeRoot = rootInActiveWindow
         val activePackage = activeRoot?.packageName?.toString().orEmpty()
-        if (targetPackage.isNullOrBlank()) {
-            return activeRoot
-        }
+
+        Log.e(TAG, "resolveRootForPackage: activeRoot package=$activePackage, targetPackage=$targetPackage")
+
+        // 如果当前焦点应用就是目标包，优先使用 rootInActiveWindow
         if (activePackage == targetPackage) {
-            return activeRoot
+            val childCount = try { activeRoot?.childCount } catch (_: Exception) { 0 }
+            if (childCount != null && childCount > 0) {
+                Log.e(TAG, "resolveRootForPackage: using activeRoot with childCount=$childCount")
+                return activeRoot
+            }
         }
 
+        // 收集所有候选根节点
         val candidateRoots = buildList {
-            activeRoot?.let(::add)
-            windows
-                .asSequence()
-                .mapNotNull { it.root }
-                .filter { it.packageName?.toString() == targetPackage }
-                .forEach(::add)
+            try {
+                windows
+                    .asSequence()
+                    .mapNotNull { window ->
+                        try {
+                            @Suppress("DEPRECATION")
+                            window.root
+                        } catch (_: Exception) { null }
+                    }
+                    .filter { it.packageName?.toString() == targetPackage }
+                    .forEach { add(it) }
+            } catch (e: Exception) {
+                Log.e(TAG, "resolveRootForPackage: error accessing windows", e)
+            }
         }.distinctBy { System.identityHashCode(it) }
 
-        val bestMatch = candidateRoots
-            .filter { it.packageName?.toString() == targetPackage }
-            .maxByOrNull { scoreWindowRoot(it, targetPackage) }
+        // 优先选择目标包中 childCount 最大的节点
+        val targetRoots = candidateRoots
+            .sortedByDescending { try { it.childCount } catch (_: Exception) { 0 } }
 
-        if (bestMatch == null) {
-            Log.w(TAG, "Target package window not found in interactive windows. expected=$targetPackage active=$activePackage")
-        } else {
-            Log.d(TAG, "Resolved window root for package=$targetPackage score=${scoreWindowRoot(bestMatch, targetPackage)}")
+        if (targetRoots.isNotEmpty()) {
+            val best = targetRoots.first()
+            val childCount = try { best.childCount } catch (_: Exception) { 0 }
+            Log.e(TAG, "resolveRootForPackage: found $targetPackage with childCount=$childCount")
+            return best
         }
-        return bestMatch ?: activeRoot
+
+        // 如果找不到目标包，回退到 activeRoot
+        Log.e(TAG, "resolveRootForPackage: falling back to activeRoot")
+        return activeRoot
     }
 
     private fun ensureChatComposerReady(
@@ -191,17 +238,40 @@ class ChatAutomationAccessibilityService : AccessibilityService() {
         }
 
         if (shouldLogFailure) {
-            Log.w(TAG, "Failed to find input node in package=$activePackage, rootChildCount=${root.childCount}")
+            Log.e(TAG, "Failed to find input node in package=$activePackage, rootChildCount=${root.childCount}")
             // 轻量级打印可编辑节点（限制深度和数量，避免ANR）
             val editableNodes = mutableListOf<String>()
             collectEditableNodes(root, editableNodes, depth = 0, maxDepth = 3, maxNodes = 20)
-            Log.w(TAG, "Editable nodes found: ${editableNodes.size}")
-            editableNodes.forEach { Log.w(TAG, "  editable: $it") }
+            Log.e(TAG, "Editable nodes found: ${editableNodes.size}")
+            editableNodes.forEach { Log.e(TAG, "  editable: $it") }
         }
         return null
     }
 
 
+
+    private fun collectEditableNodes(
+        node: AccessibilityNodeInfo?,
+        results: MutableList<String>,
+        depth: Int,
+        maxDepth: Int,
+        maxNodes: Int
+    ) {
+        node ?: return
+        if (depth > maxDepth || results.size >= maxNodes) return
+
+        val className = node.className?.toString().orEmpty()
+        val viewId = node.viewIdResourceName.orEmpty()
+        val isEditable = node.isEditable
+        val supportsSetText = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SET_TEXT }
+        if (isEditable || supportsSetText) {
+            results += "class=$className, id=$viewId, editable=$isEditable, desc=${node.contentDescription}"
+        }
+
+        for (index in 0 until node.childCount.coerceAtMost(30)) {
+            collectEditableNodes(node.getChild(index), results, depth + 1, maxDepth, maxNodes)
+        }
+    }
 
     private fun collectInputCandidates(
         node: AccessibilityNodeInfo?,
@@ -427,40 +497,61 @@ class ChatAutomationAccessibilityService : AccessibilityService() {
 
 
     private fun prepareInputNode(node: AccessibilityNodeInfo) {
-        node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        // 直接尝试点击，然后焦点会自动获取
         performClick(node)
+        SystemClock.sleep(50)
+        node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
     }
 
     private fun setInputText(node: AccessibilityNodeInfo, reply: String): Boolean {
-        val arguments = Bundle().apply {
-            putCharSequence(
-                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
-                reply
-            )
-        }
+        Log.e(TAG, "setInputText: node=${describeNode(node)}, replyLength=${reply.length}")
 
-        if (node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)) {
-            SystemClock.sleep(60)
-            if (verifyInputText(node, reply, allowUnknownState = true)) {
+        // 直接使用剪贴板粘贴（更可靠）
+        Log.e(TAG, "setInputText: using clipboard paste")
+        if (pasteFromClipboard(node, reply)) {
+            SystemClock.sleep(150)
+            node.refresh()
+            val pastedText = node.text?.toString().orEmpty()
+            Log.e(TAG, "setInputText: clipboard paste result='$pastedText'")
+            if (pastedText.contains(reply) || pastedText.isNotBlank()) {
+                Log.e(TAG, "setInputText: SUCCESS via clipboard")
                 return true
             }
         }
 
-        if (pasteFromClipboard(node, reply)) {
-            SystemClock.sleep(60)
-            return verifyInputText(node, reply, allowUnknownState = true)
+        // 剪贴板失败，尝试 ACTION_SET_TEXT
+        val arguments = Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, reply)
+        }
+        val setTextSuccess = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+        Log.e(TAG, "setInputText: ACTION_SET_TEXT result=$setTextSuccess")
+
+        SystemClock.sleep(100)
+        node.refresh()
+        val currentText = node.text?.toString().orEmpty()
+        Log.e(TAG, "setInputText: currentText='$currentText', expected='$reply'")
+
+        if (currentText.contains(reply)) {
+            Log.e(TAG, "setInputText: SUCCESS")
+            return true
         }
 
+        Log.e(TAG, "setInputText: FAILED")
         return false
     }
 
     private fun verifyInputText(node: AccessibilityNodeInfo, reply: String, allowUnknownState: Boolean): Boolean {
-        runCatching { node.refresh() }
+        val refreshed = runCatching { node.refresh() }.getOrNull()
         val currentText = node.text?.toString().orEmpty()
+        Log.e(TAG, "verifyInputText: refreshed=$refreshed, currentText='$currentText', expected='$reply'")
         if (currentText.contains(reply)) {
             return true
         }
-        return allowUnknownState && currentText.isBlank()
+        if (allowUnknownState && currentText.isBlank()) {
+            Log.w(TAG, "verifyInputText: text is blank but allowing unknown state")
+            return true
+        }
+        return false
     }
 
     private fun pasteFromClipboard(node: AccessibilityNodeInfo, reply: String): Boolean {
@@ -655,14 +746,12 @@ class ChatAutomationAccessibilityService : AccessibilityService() {
 
 
         fun isEnabled(context: Context): Boolean {
-            // 优先通过 instance 引用判断（服务已连接且运行中）
-            Log.d(TAG, "isEnabled: instance=$instance")
+            Log.e(TAG, "isEnabled: instance=$instance")
             if (instance != null) {
-                Log.d(TAG, "isEnabled: instance is not null, returning true")
+                Log.e(TAG, "isEnabled: instance is not null, returning true")
                 return true
             }
 
-            // 回退：通过系统设置检查服务是否在已启用列表中
             val enabledServicesSetting = try {
                 android.provider.Settings.Secure.getString(
                     context.contentResolver,
@@ -673,28 +762,55 @@ class ChatAutomationAccessibilityService : AccessibilityService() {
                 null
             }
 
-            Log.d(TAG, "isEnabled: enabledServicesSetting=$enabledServicesSetting")
-
+            Log.e(TAG, "isEnabled: enabledServicesSetting=$enabledServicesSetting")
             if (enabledServicesSetting.isNullOrBlank()) return false
 
             val expectedComponent = ComponentName(context, ChatAutomationAccessibilityService::class.java)
-            val colonSplitter = enabledServicesSetting.split(':')
-            val result = colonSplitter.any { componentStr ->
-                val component = ComponentName.unflattenFromString(componentStr.trim())
-                Log.d(TAG, "isEnabled: comparing $component with $expectedComponent, match=${component == expectedComponent}")
-                component == expectedComponent
+            val result = enabledServicesSetting.split(':').any { componentStr ->
+                ComponentName.unflattenFromString(componentStr.trim()) == expectedComponent
             }
-            Log.d(TAG, "isEnabled: result=$result")
+            Log.e(TAG, "isEnabled: result=$result")
             return result
         }
 
+        @Volatile
+        private var pendingReply: String? = null
+        @Volatile
+        private var pendingTargetPackage: String? = null
+        @Volatile
+        private var replyStartTime: Long = 0L
+
         fun sendReply(reply: String, targetPackage: String?): SendReplyStatus {
-            Log.d(TAG, "sendReply: instance=$instance, replyLength=${reply.length}, targetPackage=$targetPackage")
+            Log.e(TAG, "sendReply: instance=$instance, replyLength=${reply.length}, targetPackage=$targetPackage")
             val service = instance ?: run {
                 Log.e(TAG, "sendReply: instance is null, service not connected")
                 return SendReplyStatus.SERVICE_UNAVAILABLE
             }
-            return service.sendReplyInternal(reply, targetPackage)
+
+            // 设置待处理回复，让主线程定时检查超时
+            pendingReply = reply
+            pendingTargetPackage = targetPackage
+            replyStartTime = SystemClock.uptimeMillis()
+
+            try {
+                return service.sendReplyInternal(reply, targetPackage)
+            } catch (e: Exception) {
+                Log.e(TAG, "sendReply: exception in sendReplyInternal", e)
+                return SendReplyStatus.SERVICE_UNAVAILABLE
+            } finally {
+                pendingReply = null
+                pendingTargetPackage = null
+            }
+        }
+
+        /**
+         * 检查是否有操作超时（用于外部监控）
+         */
+        fun checkOperationTimeout(timeoutMs: Long = 8000): Boolean {
+            if (pendingReply != null && replyStartTime > 0) {
+                return SystemClock.uptimeMillis() - replyStartTime > timeoutMs
+            }
+            return false
         }
     }
 

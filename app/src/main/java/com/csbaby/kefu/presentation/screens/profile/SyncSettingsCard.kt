@@ -34,6 +34,7 @@ fun SyncSettingsCard(
     pendingSyncCount: Int,
     lastSyncTime: Long,
     syncStats: String = "",
+    dataStats: String = "",
     // 备份相关参数
     backupStatus: BackupStatus = BackupStatus.IDLE,
     backupMessage: String = "",
@@ -157,7 +158,17 @@ fun SyncSettingsCard(
                     )
                 }
 
-                // 同步统计信息（成功后显示）
+                // 数据统计信息（未登录时显示本地统计，已登录且同步后显示同步统计）
+                if (!isLoggedIn && dataStats.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "本地数据：$dataStats",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // 同步统计信息（同步成功后显示）
                 if (syncState is SyncState.Success && syncStats.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
