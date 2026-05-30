@@ -80,12 +80,14 @@ jobs:
           APK_SIZE=$(stat -c%s "$APK_PATH")
           APK_MD5=$(md5sum "$APK_PATH" | cut -d' ' -f1)
 
-          # Create version info JSON
-          VERSION_JSON="{\"versionCode\":$VERSION_CODE,\"versionName\":\"$VERSION_NAME\",\"releaseDate\":\"$RELEASE_DATE\",\"fileSize\":$APK_SIZE,\"md5\":\"$APK_MD5\",\"downloadUrl\":\"https://shz.al/~csBabyApk\",\"releaseNotes\":\"v$VERSION_NAME 更新\",\"forceUpdate\":false}"
+          # Create version info JSON (use temp file instead of process substitution)
+          cat > /tmp/version.json << 'VERSION_EOF'
+          {"versionCode":$VERSION_CODE,"versionName":"$VERSION_NAME","releaseDate":"$RELEASE_DATE","fileSize":$APK_SIZE,"md5":"$APK_MD5","downloadUrl":"https://shz.al/~csBabyApk","releaseNotes":"v$VERSION_NAME 更新","forceUpdate":false}
+          VERSION_EOF
 
           # Upload version info
           echo "[1/2] Uploading version info..."
-          curl -s -X POST -F "n=csBabyLog" -F "c=@<(echo \"$VERSION_JSON\")" -F "e=7d" https://shz.al
+          curl -s -X POST -F "n=csBabyLog" -F "c=@/tmp/version.json" -F "e=7d" https://shz.al
 
           # Upload APK
           echo "[2/2] Uploading APK..."
