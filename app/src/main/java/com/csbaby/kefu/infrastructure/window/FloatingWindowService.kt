@@ -1817,6 +1817,16 @@ class FloatingWindowService : Service() {
             knowledgeResultsRecyclerContainer = null
             suggestionPanel = null
             knowledgePanel = null
+
+            // 清理搜索联想相关资源
+            suggestionPopup?.dismiss()
+            suggestionPopup = null
+            suggestionListView = null
+            suggestionAdapter = null
+            searchDebounceRunnable?.let { searchDebounceHandler.removeCallbacks(it) }
+            searchDebounceRunnable = null
+            lastSearchQuery = ""
+
             windowLayoutParams = null
 
             isExpanded = false
