@@ -1602,7 +1602,8 @@ class FloatingWindowService : Service() {
         suggestionListView = ListView(this).apply {
             divider = null
             dividerHeight = 0
-            scrollBarStyle = ListView.SCROLLBARS_NONE
+            isVerticalScrollBarEnabled = false
+            isHorizontalScrollBarEnabled = false
         }
 
         suggestionAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, mutableListOf())
