@@ -69,8 +69,6 @@ jobs:
           echo "APK_NAME=csBaby-v${{ steps.version.outputs.name }}-debug.apk" >> $GITHUB_ENV
 
       - name: Upload APK to shz.al
-        env:
-          SHZAL_PASSWORD: ${{ secrets.SHZAL_PASSWORD }}
         run: |
           APK_PATH="${{ env.APK_PATH }}"
           APK_NAME="${{ env.APK_NAME }}"
@@ -82,23 +80,18 @@ jobs:
           APK_SIZE=$(stat -c%s "$APK_PATH")
           APK_MD5=$(md5sum "$APK_PATH" | cut -d' ' -f1)
 
-          # Create version info JSON (use temp file instead of process substitution)
+          # Create version info JSON
+          # downloadUrl 指向版本专用文件，客户端应该读取 csBabyLog_v{VERSION_CODE} 获取最新版本信息
           cat > /tmp/version.json << 'VERSION_EOF'
-          {"versionCode":$VERSION_CODE,"versionName":"$VERSION_NAME","releaseDate":"$RELEASE_DATE","fileSize":$APK_SIZE,"md5":"$APK_MD5","downloadUrl":"https://shz.al/~csBabyApk","releaseNotes":"v$VERSION_NAME 更新","forceUpdate":false}
+          {"versionCode":$VERSION_CODE,"versionName":"$VERSION_NAME","releaseDate":"$RELEASE_DATE","fileSize":$APK_SIZE,"md5":"$APK_MD5","downloadUrl":"https://shz.al/~csBabyApk_v${VERSION_CODE}","releaseNotes":"v$VERSION_NAME 更新","forceUpdate":false}
           VERSION_EOF
 
-          # Delete old version info and APK, then upload new ones
-          echo "[1/3] Deleting old files..."
-          curl -s -X DELETE "https://shz.al/~csBabyLog:${SHZAL_PASSWORD}" || true
-          curl -s -X DELETE "https://shz.al/~csBabyApk:${SHZAL_PASSWORD}" || true
+          # 使用版本专用文件名上传
+          echo "[1/2] Uploading version info (csBabyLog_v${VERSION_CODE})..."
+          curl -s -X POST -F "n=csBabyLog_v${VERSION_CODE}" -F "c=@/tmp/version.json" -F "e=30d" https://shz.al
 
-          # Upload version info
-          echo "[2/3] Uploading version info..."
-          curl -s -X POST -F "n=csBabyLog" -F "c=@/tmp/version.json" -F "e=30d" -F "s=${SHZAL_PASSWORD}" https://shz.al
-
-          # Upload APK
-          echo "[3/3] Uploading APK..."
-          curl -s -X POST -F "n=csBabyApk" -F "filename=$APK_NAME" -F "c=@$APK_PATH" -F "e=30d" -F "s=${SHZAL_PASSWORD}" https://shz.al
+          echo "[2/3] Uploading APK (csBabyApk_v${VERSION_CODE})..."
+          curl -s -X POST -F "n=csBabyApk_v${VERSION_CODE}" -F "filename=$APK_NAME" -F "c=@$APK_PATH" -F "e=30d" https://shz.al
 
       - name: Output APK download URL
         run: |
