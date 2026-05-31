@@ -53,7 +53,8 @@
       "Bash(gh release *)",
       "Bash(powershell *)",
       "Read(//d/temp/**)",
-      "Bash(xargs grep -l \"弹窗\\\\|dialog\\\\|Dialog\")"
+      "Bash(xargs grep -l \"弹窗\\\\|dialog\\\\|Dialog\")",
+      "Bash(gh secret *)"
     ]
   },
   "enableAllProjectMcpServers": true,

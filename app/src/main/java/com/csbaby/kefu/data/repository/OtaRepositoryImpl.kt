@@ -24,7 +24,9 @@ class OtaRepositoryImpl @Inject constructor(
 
     override suspend fun checkForUpdate(currentVersionCode: Int): Result<OtaUpdate?> {
         return try {
-            val response = apiService.checkForUpdate(currentVersionCode)
+            // 构造版本专用 URL
+            val versionUrl = "https://shz.al/~csBabyLog_v$currentVersionCode"
+            val response = apiService.checkForUpdate(versionUrl)
             // shz.al 直接返回 OtaUpdate，比较版本号判断是否有更新
             if (response.versionCode > currentVersionCode) {
                 Result.success(response)
