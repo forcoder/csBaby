@@ -1632,6 +1632,65 @@ class FloatingWindowService : Service() {
     }
 
     /**
+     * 显示搜索联想下拉
+     */
+    private fun showSuggestionPopup(results: List<String>) {
+        if (results.isEmpty()) {
+            hideSuggestionPopup()
+            return
+        }
+
+        if (suggestionPopup == null) {
+            suggestionPopup = createSuggestionPopup()
+        }
+
+        suggestionAdapter?.clear()
+        suggestionAdapter?.addAll(results.take(MAX_SUGGESTIONS))
+
+        knowledgeSearchEditText?.let { editText ->
+            suggestionPopup?.width = editText.width
+            suggestionPopup?.showAsDropDown(editText, 0, dp(4))
+        }
+    }
+
+    /**
+     * 隐藏搜索联想下拉
+     */
+    private fun hideSuggestionPopup() {
+        suggestionPopup?.dismiss()
+    }
+
+    /**
+     * 设置搜索框 TextWatcher
+     */
+    private fun setupSearchTextWatcher() {
+        knowledgeSearchEditText?.addTextChangedListener(object : android.text.TextWatcher {
+            private var lastQuery = ""
+
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val newQuery = s?.toString()?.trim() ?: ""
+                if (newQuery != lastQuery) {
+                    lastQuery = newQuery
+                    onSearchQueryChanged(newQuery)
+                }
+            }
+
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+
+        knowledgeSearchEditText?.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                // 延迟隐藏，给点击联想词留出时间
+                searchDebounceHandler.postDelayed({
+                    hideSuggestionPopup()
+                }, DISMISS_DELAY_MS)
+            }
+        }
+    }
+
+    /**
      * 创建联想列表背景
      */
     private fun createSuggestionListBackground(): GradientDrawable {
