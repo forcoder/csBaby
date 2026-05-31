@@ -727,7 +727,10 @@ class FloatingWindowService : Service() {
             isSingleLine = true
             background = createMessageCardBackground()
         }
-        
+
+        // 设置搜索输入监听
+        setupSearchTextWatcher()
+
         val searchButton = createBottomActionButton(
             text = "搜索",
             background = createSolidButtonBackground("#1E293B", "#334155"),
