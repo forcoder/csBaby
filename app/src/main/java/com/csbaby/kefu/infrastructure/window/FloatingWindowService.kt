@@ -30,10 +30,13 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ListView
+import android.widget.PopupWindow
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -106,6 +109,19 @@ class FloatingWindowService : Service() {
     private var suggestionPanel: LinearLayout? = null
     private var knowledgePanel: LinearLayout? = null
     private var currentTab: String = "suggestion" // "suggestion" 或 "knowledge"
+
+    // 搜索联想相关变量
+    private var suggestionPopup: PopupWindow? = null
+    private var suggestionListView: ListView? = null
+    private var suggestionAdapter: ArrayAdapter<String>? = null
+
+    // 防抖相关变量
+    private val searchDebounceHandler = Handler(Looper.getMainLooper())
+    private var searchDebounceRunnable: Runnable? = null
+    private var lastSearchQuery: String = ""
+    private val DEBOUNCE_DELAY_MS = 300L
+    private val DISMISS_DELAY_MS = 200L
+    private val MAX_SUGGESTIONS = 5
 
     // SharedPreferences 用于保存悬浮窗位置
     private val floatingPrefs: SharedPreferences by lazy {
