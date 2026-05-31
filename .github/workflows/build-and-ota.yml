@@ -85,9 +85,12 @@ jobs:
           {"versionCode":$VERSION_CODE,"versionName":"$VERSION_NAME","releaseDate":"$RELEASE_DATE","fileSize":$APK_SIZE,"md5":"$APK_MD5","downloadUrl":"https://shz.al/~csBabyApk","releaseNotes":"v$VERSION_NAME 更新","forceUpdate":false}
           VERSION_EOF
 
-          # Upload version info
+          # Upload version info (use unique name with timestamp to force update)
           echo "[1/2] Uploading version info..."
-          curl -s -X POST -F "n=csBabyLog" -F "c=@/tmp/version.json" -F "e=7d" https://shz.al
+          LOG_NAME="csBabyLog_$(date +%Y%m%d%H%M%S)"
+          curl -s -X POST -F "n=$LOG_NAME" -F "c=@/tmp/version.json" -F "e=7d" https://shz.al
+          # Also update the main reference URL
+          curl -s -X POST -F "n=csBabyLog" -F "c=@/tmp/version.json" -F "e=30d" https://shz.al || true
 
           # Upload APK
           echo "[2/2] Uploading APK..."
