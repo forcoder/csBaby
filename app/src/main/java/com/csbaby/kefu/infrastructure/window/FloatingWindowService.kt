@@ -1586,6 +1586,76 @@ class FloatingWindowService : Service() {
         startActivity(intent)
     }
 
+    /**
+     * 创建搜索联想下拉 PopupWindow
+     */
+    private fun createSuggestionPopup(): PopupWindow {
+        val popupView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            background = createSuggestionListBackground()
+        }
+
+        suggestionListView = ListView(this).apply {
+            divider = null
+            dividerHeight = 0
+            scrollBarStyle = ListView.SCROLLBARS_NONE
+        }
+
+        suggestionAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, mutableListOf())
+        suggestionListView?.adapter = suggestionAdapter
+
+        suggestionListView?.setOnItemClickListener { _, _, position, _ ->
+            val keyword = suggestionAdapter?.getItem(position) ?: return@setOnItemClickListener
+            hideSuggestionPopup()
+            fillSearchInputAndSearch(keyword)
+        }
+
+        popupView.addView(suggestionListView)
+
+        return PopupWindow(
+            popupView,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            true
+        ).apply {
+            elevation = dp(8).toFloat()
+            setBackgroundDrawable(GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(12).toFloat()
+                setColor(Color.parseColor("#1E293B"))
+                setStroke(dp(1), Color.parseColor("#334155"))
+            })
+            isOutsideTouchable = true
+            inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
+        }
+    }
+
+    /**
+     * 创建联想列表背景
+     */
+    private fun createSuggestionListBackground(): GradientDrawable {
+        return GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            intArrayOf(
+                Color.parseColor("#1E293B"),
+                Color.parseColor("#0F172A")
+            )
+        ).apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(12).toFloat()
+        }
+    }
+
+    /**
+     * 填充搜索框并执行搜索
+     */
+    private fun fillSearchInputAndSearch(keyword: String) {
+        knowledgeSearchEditText?.setText(keyword)
+        knowledgeSearchEditText?.setSelection(keyword.length)
+        performKnowledgeSearch()
+    }
+
     private fun removeFloatingView() {
         try {
             floatingView?.let { view ->
