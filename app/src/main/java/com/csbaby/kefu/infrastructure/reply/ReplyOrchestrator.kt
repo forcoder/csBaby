@@ -325,6 +325,28 @@ class ReplyOrchestrator @Inject constructor(
         }
     }
 
+    /**
+     * 获取所有知识库规则（用于搜索联想）
+     */
+    suspend fun getAllKnowledgeRules(): List<FloatingWindowService.KnowledgeRuleItem> {
+        return try {
+            knowledgeBaseManager.getAllRules()
+                .first()
+                .filter { it.enabled }
+                .map { rule ->
+                    FloatingWindowService.KnowledgeRuleItem(
+                        keyword = rule.keyword,
+                        replyTemplate = rule.replyTemplate,
+                        matchType = rule.matchType.name,
+                        targetNames = rule.targetNames
+                    )
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "获取所有知识库规则失败", e)
+            emptyList()
+        }
+    }
+
     private fun extractPropertyName(message: MessageMonitor.MonitoredMessage): String? {
         if (message.packageName != PreferencesManager.BAIJUYI_PACKAGE) {
             return null

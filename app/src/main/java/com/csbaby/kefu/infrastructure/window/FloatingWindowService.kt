@@ -1691,6 +1691,78 @@ class FloatingWindowService : Service() {
     }
 
     /**
+     * 处理搜索输入变化
+     * 1. 取消之前的防抖任务
+     * 2. 延迟执行搜索（300ms 防抖）
+     * 3. 同时更新联想列表
+     */
+    private fun onSearchQueryChanged(query: String) {
+        // 取消之前的防抖任务
+        searchDebounceRunnable?.let { searchDebounceHandler.removeCallbacks(it) }
+
+        if (query.isBlank()) {
+            lastSearchQuery = ""
+            hideSuggestionPopup()
+            return
+        }
+
+        // 如果查询没变化，不重复搜索
+        if (query == lastSearchQuery) return
+
+        // 创建新的防抖任务
+        searchDebounceRunnable = Runnable {
+            lastSearchQuery = query
+            performKnowledgeSearch()
+            updateSearchSuggestions(query)
+        }
+
+        // 延迟执行搜索
+        searchDebounceHandler.postDelayed(searchDebounceRunnable!!, DEBOUNCE_DELAY_MS)
+    }
+
+    /**
+     * 更新搜索联想列表
+     */
+    private fun updateSearchSuggestions(query: String) {
+        if (query.isBlank()) {
+            hideSuggestionPopup()
+            return
+        }
+
+        serviceScope.launch {
+            try {
+                val keywords = getMatchingKeywords(query)
+                android.os.Handler(Looper.getMainLooper()).post {
+                    showSuggestionPopup(keywords)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "获取联想词失败", e)
+            }
+        }
+    }
+
+    /**
+     * 获取匹配的关键词列表
+     */
+    private suspend fun getMatchingKeywords(query: String): List<String> {
+        val keywords = mutableListOf<String>()
+        try {
+            // 从 replyOrchestrator 获取所有关键词
+            val allRules = replyOrchestrator.getAllKnowledgeRules()
+            keywords.addAll(
+                allRules
+                    .map { it.keyword }
+                    .filter { it.contains(query, ignoreCase = true) }
+                    .distinct()
+                    .take(MAX_SUGGESTIONS)
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "获取知识库关键词失败", e)
+        }
+        return keywords
+    }
+
+    /**
      * 创建联想列表背景
      */
     private fun createSuggestionListBackground(): GradientDrawable {
