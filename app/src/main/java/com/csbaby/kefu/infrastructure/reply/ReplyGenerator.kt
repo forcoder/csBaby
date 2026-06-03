@@ -176,7 +176,9 @@ class ReplyGenerator @Inject constructor(
         )
 
         return result.fold(
-            onSuccess = { reply ->
+            onSuccess = { rawReply ->
+                // 清理 AI 回复，移除推理过程、英文、前缀、格式标记等
+                val reply = sanitizeAiReply(rawReply)
                 // Apply style adjustment if enabled
                 val finalReply = if (preferences.styleLearningEnabled && styleProfile != null) {
                     styleLearningEngine.applyStyle(reply, context.userId).getOrDefault(reply)
@@ -214,15 +216,20 @@ class ReplyGenerator @Inject constructor(
      */
     private fun buildSystemPrompt(context: ReplyContext, styleProfile: UserStyleProfile?): String {
         val basePrompt = """
-            你是一位专业的客服助手。
+            你是一位专业的中文客服助手。
 
-            严格规则：
-            - 只输出回复内容本身，禁止添加任何前缀（如"回复："、"建议您："、"您好："等）
-            - 禁止输出任何解释、说明、分析或额外文字
-            - 必须使用中文，禁止使用英文
-            - 语气专业且友好，符合客服身份
-            - 回复简洁明了，不超过100字
-            - 直接输出回复文本，不要加引号或任何格式标记
+            绝对规则（违反任何规则视为失败）：
+            - 只输出最终的客服回复文本本身
+            - 禁止输出任何英文单词、短语或术语（包括但不限于"OK"、"sure"、"hello"、"thanks"、"AI"、"language model"等）
+            - 禁止输出任何解释、说明、分析、推理、思考过程或额外文字
+            - 禁止输出任何前缀（如"回复："、"建议您："、"您好："、"好的："、"亲："等）
+            - 禁止输出任何 markdown 格式标记（如 **、*、#、-、1. 等）
+            - 禁止使用引号（单引号、双引号、反引号）包裹回复内容
+            - 禁止输出表情符号或特殊符号
+            - 回复必须全部使用简体中文，符合客服身份
+            - 语气专业、友好、简洁
+            - 回复长度控制在100字以内
+            - 直接输出纯文本回复，不要有任何其他内容
         """.trimIndent()
 
         return if (styleProfile != null) {
@@ -243,8 +250,29 @@ class ReplyGenerator @Inject constructor(
             应用上下文：${context.appPackage}
             ${context.scenarioId?.let { "场景：$it" } ?: ""}
 
-            请用中文生成一条简洁、专业、符合语境的客服回复。只输出回复内容。
+            请生成一条简洁、专业、全中文的客服回复。只输出回复文本本身，不要有任何其他内容。
         """.trimIndent()
+    }
+
+    /**
+     * 清理 AI 回复，移除推理过程、英文、前缀、格式标记等。
+     */
+    private fun sanitizeAiReply(raw: String): String {
+        var reply = raw.trim()
+        // 移除 <think>...</think> 或类似推理块
+        reply = Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE).replace(reply, "")
+        reply = Regex("<reasoning>[\\s\\S]*?</reasoning>", RegexOption.IGNORE_CASE).replace(reply, "")
+        reply = Regex("\\[思考\\][\\s\\S]*?\\[/思考\\]", RegexOption.IGNORE_CASE).replace(reply, "")
+        // 移除 markdown 格式标记
+        reply = Regex("[#*_~`>\\-]+").replace(reply, "")
+        // 移除前缀
+        reply = Regex("^(回复|建议您|您好|好的|亲|答复|回答|解决方案|建议|说明|备注|备注一下|总结|总结一下)[：:：\\s]*", RegexOption.IGNORE_CASE).replace(reply, "")
+        // 移除开头的引号
+        reply = reply.trimStart('"', '「', '『', '“', '‘', '`')
+        reply = reply.trimEnd('"', '」', '』', '”', '’', '`')
+        // 移除中英文混合中的英文部分（如果整行都是英文则保留）
+        reply = reply.trim()
+        return reply
     }
 
     /**

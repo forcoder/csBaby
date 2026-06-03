@@ -1,0 +1,410 @@
+{
+  "version": "1.0.0",
+  "kind": "knowledge",
+  "project": {
+    "name": "csBaby Wiki",
+    "languages": [
+      "markdown"
+    ],
+    "frameworks": [
+      "karpathy-wiki"
+    ],
+    "description": "Knowledge graph for csBaby Wiki",
+    "analyzedAt": "2026-05-31T14:15:14.682806+00:00",
+    "gitCommitHash": "b01e164369347d66f4513cf5656a441d0480fb74"
+  },
+  "nodes": [
+    {
+      "id": "article:AI-Integration",
+      "type": "article",
+      "name": "AI Integration",
+      "filePath": "AI-Integration.md",
+      "summary": "| Provider | Model | API | |----------|-------|-----| | OpenAI | GPT-4, GPT-3.5 | chat.completions | | Anthropic | Claude-3 | messages | | \u667a\u8c31AI | GLM-4 | glm-4 | | \u901a\u4e49\u5343\u95ee | qwen-turbo | dashscope | |...",
+      "tags": [],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "Style Learning",
+          "Style Learning",
+          "Reply Generator",
+          "Database Schema",
+          "Coding Standards"
+        ],
+        "content": "# AI Integration\n\n## Supported Providers\n\n| Provider | Model | API |\n|----------|-------|-----|\n| OpenAI | GPT-4, GPT-3.5 | chat.completions |\n| Anthropic | Claude-3 | messages |\n| \u667a\u8c31AI | GLM-4 | glm-4 |\n| \u901a\u4e49\u5343\u95ee | qwen-turbo | dashscope |\n| \u6587\u5fc3\u4e00\u8a00 | ernie-bot | yiyan |\n\n## Architecture\n\n```\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502           AIService                  \u2502\n\u2502  (\u7edf\u4e00\u63a5\u53e3\uff0c\u5de5\u5382\u6a21\u5f0f)                  \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502  OpenAI Client \u2502 Claude Client \u2502 ... \u2502\n\u2502     AIClient.kt                      \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n## Usage\n\n```kotlin\ninterface AIService {\n    suspend fun generateReply(\n        context: String,\n        style: UserStyleProfile?\n    ): Result<String>\n}\n```\n\n## Prompt Engineering\n\n### System Prompt\n```\n\u4f60\u662f\u4e00\u4e2a\u4e13\u4e1a\u7684\u5ba2\u670d\u52a9\u624b\uff0c\u56de\u590d\u8981\uff1a\n1. \u4e13\u4e1a\u4e14\u53cb\u597d\n2. \u7b80\u6d01\u660e\u4e86\n3. \u89e3\u51b3\u95ee\u9898\u5bfc\u5411\n```\n\n### Style Integration\n- \u6574\u5408 [[Style Learning]] \u7684\u7528\u6237\u98ce\u683c\n- \u8c03\u6574\u6b63\u5f0f\u5ea6\u3001\u70ed\u60c5\u5ea6\n- \u907f\u514d\u7279\u5b9a\u77ed\u8bed\n\n## Error Handling\n\n- \u8d85\u65f6\u91cd\u8bd5 (3\u6b21)\n- \u964d\u7ea7\u7b56\u7565 (\u5207\u6362\u6a21\u578b)\n- \u4f18\u96c5\u964d\u7ea7 (\u8fd4\u56de\u9ed8\u8ba4\u56de\u590d)\n\n## Related\n- [[Style Learning]]\n- [[Reply Generator]]\n- [[Database Schema]]\n- [[Coding Standards]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "article:Architecture-Overview",
+      "type": "article",
+      "name": "Architecture Overview",
+      "filePath": "Architecture-Overview.md",
+      "summary": "csBaby\u91c7\u7528Clean Architecture + MVVM\u6a21\u5f0f\u6784\u5efa\uff0c\u5206\u4e3a\u4e94\u5c42\uff1a",
+      "tags": [],
+      "complexity": "moderate",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "Notification Service",
+          "Knowledge Base",
+          "AI Integration",
+          "Reply Generator",
+          "Reply Generator",
+          "Style Learning",
+          "Database Schema",
+          "Sync Protocol",
+          "Repository Pattern",
+          "Clean Architecture",
+          "MVVM Pattern",
+          "OTA Update",
+          "Cloud Sync"
+        ],
+        "content": "# Architecture Overview\n\n## System Architecture\n\ncsBaby\u91c7\u7528Clean Architecture + MVVM\u6a21\u5f0f\u6784\u5efa\uff0c\u5206\u4e3a\u4e94\u5c42\uff1a\n\n```\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502         PRESENTATION LAYER                  \u2502\n\u2502  (Activities, ViewModels, Compose UI)      \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502           DOMAIN LAYER                       \u2502\n\u2502  (Entities, UseCases, Repository Interfaces)\u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502            DATA LAYER                        \u2502\n\u2502  (Repositories, DAOs, Remote APIs)         \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502       INFRASTRUCTURE LAYER                   \u2502\n\u2502  (Notification, AI, Knowledge, Sync)        \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502         DEPENDENCY INJECTION                 \u2502\n\u2502  (Hilt Modules)                             \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n## Package Structure\n\n```\ncom.csbaby.kefu\n\u251c\u2500\u2500 presentation/      # \u5c55\u793a\u5c42\n\u2502   \u251c\u2500\u2500 screens/       # UI\u9875\u9762\n\u2502   \u251c\u2500\u2500 navigation/     # \u5bfc\u822a\n\u2502   \u2514\u2500\u2500 theme/         # \u4e3b\u9898\n\u251c\u2500\u2500 domain/           # \u9886\u57df\u5c42\n\u2502   \u251c\u2500\u2500 model/        # \u9886\u57df\u6a21\u578b\n\u2502   \u2514\u2500\u2500 repository/   # \u4ed3\u50a8\u63a5\u53e3\n\u251c\u2500\u2500 data/             # \u6570\u636e\u5c42\n\u2502   \u251c\u2500\u2500 local/        # \u672c\u5730\u6570\u636e\u5e93\n\u2502   \u251c\u2500\u2500 remote/       # \u8fdc\u7a0bAPI\n\u2502   \u2514\u2500\u2500 repository/   # \u4ed3\u50a8\u5b9e\u73b0\n\u251c\u2500\u2500 infrastructure/   # \u57fa\u7840\u8bbe\u65bd\n\u2502   \u251c\u2500\u2500 notification/ # \u901a\u77e5\u670d\u52a1\n\u2502   \u251c\u2500\u2500 ai/          # AI\u670d\u52a1\n\u2502   \u2514\u2500\u2500 sync/        # \u540c\u6b65\u670d\u52a1\n\u2514\u2500\u2500 di/              # \u4f9d\u8d56\u6ce8\u5165\n```\n\n## Core Components\n\n### Message Flow\n1. [[Notification Service]] \u68c0\u6d4b\u65b0\u6d88\u606f\n2. [[Knowledge Base]] \u8fdb\u884c\u5173\u952e\u8bcd\u5339\u914d\n3. \u5339\u914d\u6210\u529f \u2192 \u5e94\u7528\u89c4\u5219\u56de\u590d\n4. \u5339\u914d\u5931\u8d25 \u2192 [[AI Integration]] \u751f\u6210\u56de\u590d\n5. [[Reply Generator]] \u751f\u6210\u56de\u590d\u5185\u5bb9\n6. \u663e\u793a\u6d6e\u52a8\u7a97\u53e3\u4f9b\u7528\u6237\u786e\u8ba4\n7. \u7528\u6237\u786e\u8ba4\u540e\u53d1\u9001\n8. \u8bb0\u5f55\u5230 [[Reply Generator]] \u5386\u53f2\n9. [[Style Learning]] \u5b66\u4e60\u7528\u6237\u98ce\u683c\n\n### Data Flow\n- [[Database Schema]] \u5b58\u50a8\u672c\u5730\u6570\u636e\n- [[Sync Protocol]] \u4e0e\u4e91\u7aef\u540c\u6b65\n- [[Repository Pattern]] \u5c01\u88c5\u6570\u636e\u8bbf\u95ee\n\n## Related\n- [[Clean Architecture]]\n- [[MVVM Pattern]]\n- [[OTA Update]]\n- [[Cloud Sync]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "article:Clean-Architecture",
+      "type": "article",
+      "name": "Clean Architecture",
+      "filePath": "Clean-Architecture.md",
+      "summary": "csBaby\u9075\u5faaClean Architecture\u539f\u5219\uff0c\u5c06\u4ee3\u7801\u5206\u4e3a\u660e\u786e\u7684\u5c42\u6b21\uff1a",
+      "tags": [],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "Architecture Overview",
+          "MVVM Pattern",
+          "Repository Pattern",
+          "Database Schema"
+        ],
+        "content": "# Clean Architecture\n\n## Layer Structure\n\ncsBaby\u9075\u5faaClean Architecture\u539f\u5219\uff0c\u5c06\u4ee3\u7801\u5206\u4e3a\u660e\u786e\u7684\u5c42\u6b21\uff1a\n\n### 1. Presentation Layer (\u5c55\u793a\u5c42)\n- **\u804c\u8d23**: UI\u6e32\u67d3\u3001\u7528\u6237\u4ea4\u4e92\u3001\u72b6\u6001\u7ba1\u7406\n- **\u7ec4\u4ef6**: Activities, Fragments, ViewModels, Compose UI\n- **\u89c4\u5219**: \u4e0d\u5305\u542b\u4e1a\u52a1\u903b\u8f91\uff0c\u4ec5\u5904\u7406UI\u4e8b\u4ef6\n\n### 2. Domain Layer (\u9886\u57df\u5c42)\n- **\u804c\u8d23**: \u4e1a\u52a1\u903b\u8f91\u3001\u9886\u57df\u89c4\u5219\u3001\u5b9e\u4f53\u5b9a\u4e49\n- **\u7ec4\u4ef6**:\n  - `model/` - \u7eaf\u6570\u636e\u6a21\u578b\uff0c\u4e0d\u4f9d\u8d56Android\n  - `repository/` - \u4ed3\u50a8\u62bd\u8c61\u63a5\u53e3\n  - `usecase/` - \u4e1a\u52a1\u7528\u4f8b\n- **\u89c4\u5219**: \u65e0Android\u4f9d\u8d56\uff0c\u53ef\u72ec\u7acb\u6d4b\u8bd5\n\n### 3. Data Layer (\u6570\u636e\u5c42)\n- **\u804c\u8d23**: \u6570\u636e\u8bbf\u95ee\u3001\u6570\u636e\u6620\u5c04\u3001API\u8c03\u7528\n- **\u7ec4\u4ef6**:\n  - `local/` - Room\u6570\u636e\u5e93\u3001DAOs\u3001Entity\n  - `remote/` - Retrofit API\u3001\u6570\u636e\u4f20\u8f93\u5bf9\u8c61\n  - `repository/` - \u4ed3\u50a8\u63a5\u53e3\u5b9e\u73b0\n\n### 4. Infrastructure Layer (\u57fa\u7840\u8bbe\u65bd\u5c42)\n- **\u804c\u8d23**: \u7cfb\u7edf\u7ea7\u670d\u52a1\u3001\u5916\u90e8\u96c6\u6210\n- **\u7ec4\u4ef6**:\n  - `notification/` - \u6d88\u606f\u76d1\u542c\u670d\u52a1\n  - `ai/` - AI\u670d\u52a1\u96c6\u6210\n  - `knowledge/` - \u77e5\u8bc6\u5e93\u7ba1\u7406\n  - `sync/` - \u4e91\u7aef\u540c\u6b65\n\n## Dependency Rule\n\n```\n\u5916\u5c42 \u2192 \u5185\u5c42\u4f9d\u8d56\n\u5c55\u793a\u5c42 \u2192 \u9886\u57df\u5c42 \u2192 \u6570\u636e\u5c42\n```\n\n**\u7981\u6b62\u53cd\u5411\u4f9d\u8d56**: \u5185\u5c42\u4e0d\u80fd\u4f9d\u8d56\u5916\u5c42\n\n## Implementation\n\n### Domain Model (Example)\n```kotlin\ndata class KeywordRule(\n    val id: Long,\n    val keyword: String,\n    val matchType: MatchType,\n    val replyTemplate: String,\n    val priority: Int,\n    val isEnabled: Boolean\n)\n```\n\n### Repository Interface\n```kotlin\ninterface KeywordRuleRepository {\n    fun getAllRules(): Flow<List<KeywordRule>>\n    suspend fun addRule(rule: KeywordRule)\n    suspend fun updateRule(rule: KeywordRule)\n    suspend fun deleteRule(id: Long)\n}\n```\n\n## Related\n- [[Architecture Overview]]\n- [[MVVM Pattern]]\n- [[Repository Pattern]]\n- [[Database Schema]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "article:Cloud-Sync",
+      "type": "article",
+      "name": "Cloud Sync",
+      "filePath": "Cloud-Sync.md",
+      "summary": "\u4e91\u7aef\u540c\u6b65\u5b9e\u73b0\u591a\u8bbe\u5907\u6570\u636e\u4e00\u81f4\uff1a",
+      "tags": [],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "OTA Update",
+          "Database Schema",
+          "Repository Pattern",
+          "Sync Protocol"
+        ],
+        "content": "# Cloud Sync\n\n## Sync Architecture\n\n\u4e91\u7aef\u540c\u6b65\u5b9e\u73b0\u591a\u8bbe\u5907\u6570\u636e\u4e00\u81f4\uff1a\n\n### Sync Entities\n\n| \u5b9e\u4f53 | \u8bf4\u660e |\n|------|------|\n| KeywordRule | \u77e5\u8bc6\u5e93\u89c4\u5219 |\n| UserStyleProfile | \u98ce\u683c\u914d\u7f6e |\n| AIModelConfig | AI\u6a21\u578b\u914d\u7f6e |\n| ReplyHistory | \u56de\u590d\u5386\u53f2 |\n\n## Sync Protocol\n\n```\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510         \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510         \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502  Client  \u2502 \u2500\u2500\u2500\u2500\u2500\u2500\u25ba \u2502   Server   \u2502 \u25c4\u2500\u2500\u2500\u2500\u2500\u2500 \u2502  Other   \u2502\n\u2502          \u2502 \u25c4\u2500\u2500\u2500\u2500\u2500\u2500 \u2502            \u2502 \u2500\u2500\u2500\u2500\u2500\u2500\u25ba \u2502 Devices  \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518         \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518         \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n### Sync Flow\n1. \u672c\u5730\u53d8\u66f4 \u2192 \u5199\u5165\u672c\u5730\u6570\u636e\u5e93\n2. \u540c\u6b65\u961f\u5217 \u2192 \u6dfb\u52a0\u5f85\u540c\u6b65\u4efb\u52a1\n3. \u540e\u53f0worker \u2192 \u6279\u91cf\u540c\u6b65\n4. \u51b2\u7a81\u89e3\u51b3 \u2192 \u65f6\u95f4\u6233\u4f18\u5148\n\n## Authentication\n\n```kotlin\ndata class AuthState(\n    val userId: String,\n    val token: String,\n    val expiresAt: Long\n)\n```\n\n### Token Refresh\n- \u81ea\u52a8\u5237\u65b0\u8fc7\u671ftoken\n- \u79bb\u7ebf\u7f13\u5b58\n- \u5b89\u5168\u5b58\u50a8\n\n## Sync Manager\n\n```kotlin\nclass SyncManager @Inject constructor(\n    private val authManager: AuthManager,\n    private val syncWorker: SyncWorker,\n    private val queue: SyncQueue\n) {\n    suspend fun triggerSync() {\n        if (!authManager.isAuthenticated()) return\n        queue.flush()\n    }\n}\n```\n\n## Related\n- [[OTA Update]]\n- [[Database Schema]]\n- [[Repository Pattern]]\n- [[Sync Protocol]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "article:Coding-Standards",
+      "type": "article",
+      "name": "Coding Standards",
+      "filePath": "Coding-Standards.md",
+      "summary": "| \u7c7b\u578b | \u89c4\u5219 | \u793a\u4f8b | |------|------|------| | \u5305\u540d | \u5168\u5c0f\u5199 | `com.csbaby.kefu.data` | | \u7c7b\u540d | PascalCase | `KeywordRuleRepository` | | \u51fd\u6570 | camelCase | `getAllRules()` | | \u5e38\u91cf | UPPER_SNAKE | `MAX_RETRY_COUN...",
+      "tags": [],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "Clean Architecture",
+          "MVVM Pattern",
+          "Testing Strategy"
+        ],
+        "content": "# Coding Standards\n\n## Kotlin\u7f16\u7801\u89c4\u8303\n\n### \u547d\u540d\u89c4\u8303\n\n| \u7c7b\u578b | \u89c4\u5219 | \u793a\u4f8b |\n|------|------|------|\n| \u5305\u540d | \u5168\u5c0f\u5199 | `com.csbaby.kefu.data` |\n| \u7c7b\u540d | PascalCase | `KeywordRuleRepository` |\n| \u51fd\u6570 | camelCase | `getAllRules()` |\n| \u5e38\u91cf | UPPER_SNAKE | `MAX_RETRY_COUNT` |\n| \u8d44\u6e90ID | snake_case | `btn_send` |\n\n### \u4ee3\u7801\u683c\u5f0f\n\n- \u7f29\u8fdb: 4\u7a7a\u683c\n- \u5355\u884c\u957f\u5ea6: \u2264120\u5b57\u7b26\n- \u5927\u62ec\u53f7: \u7d27\u8ddf\u4ee3\u7801\u8bed\u53e5\n\n### \u7a7a\u5b89\u5168 (\u94c1\u5f8b)\n\n```kotlin\n// \u2705 \u6b63\u786e\nval result: String? = getValue()\nresult?.let { process(it) }\n\n// \u274c \u7981\u6b62\nval result: String = getValue()!!  // \u9664\u975e\u786e\u5b9a\u975e\u7a7a\n```\n\n### \u51fd\u6570\u89c4\u8303\n\n- \u5355\u51fd\u6570 \u226420\u884c\n- \u5355\u4e00\u804c\u8d23\n- \u5f3a\u5236\u65e9\u671f\u8fd4\u56de\n\n```kotlin\nfun processMessage(msg: String): Result<String> {\n    if (msg.isBlank()) return Result.failure(IllegalArgumentException())\n    // ... \u4e1a\u52a1\u903b\u8f91\n}\n```\n\n## Architecture Rules\n\n### \u5c42\u7ea7\u4f9d\u8d56\n- \u5c55\u793a\u5c42 \u2192 \u9886\u57df\u5c42 \u2192 \u6570\u636e\u5c42\n- \u7981\u6b62\u53cd\u5411\u4f9d\u8d56\n\n### ViewModel \u89c4\u5219\n- \u7981\u6b62\u6301\u6709 View/Context\n- \u4f7f\u7528 StateFlow \u7ba1\u7406\u72b6\u6001\n- \u5904\u7406\u4e1a\u52a1\u903b\u8f91\n\n### Repository \u89c4\u5219\n- \u63a5\u53e3\u5728 domain \u5c42\n- \u5b9e\u73b0\u5728 data \u5c42\n- \u7edf\u4e00\u8fd4\u56de Flow/Result\n\n## Testing Requirements\n\n- \u5355\u5143\u6d4b\u8bd5\u8986\u76d6\u7387 \u226585%\n- TDD \u5f00\u53d1\u6d41\u7a0b\n- \u6bcf\u529f\u80fd\u5fc5\u987b\u6709\u6d4b\u8bd5\n\n## Related\n- [[Clean Architecture]]\n- [[MVVM Pattern]]\n- [[Testing Strategy]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "article:Database-Schema",
+      "type": "article",
+      "name": "Database Schema",
+      "filePath": "Database-Schema.md",
+      "summary": "csBaby\u4f7f\u7528Room\u6570\u636e\u5e93\u5b58\u50a8\u672c\u5730\u6570\u636e\uff1a",
+      "tags": [],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "Clean Architecture",
+          "Repository Pattern",
+          "Cloud Sync",
+          "Message Monitoring"
+        ],
+        "content": "# Database Schema\n\n## Overview\n\ncsBaby\u4f7f\u7528Room\u6570\u636e\u5e93\u5b58\u50a8\u672c\u5730\u6570\u636e\uff1a\n\n### Entity List\n\n| Entity | \u8bf4\u660e |\n|--------|------|\n| AppConfig | \u76d1\u542c\u5e94\u7528\u914d\u7f6e |\n| KeywordRule | \u5173\u952e\u8bcd\u89c4\u5219 |\n| Scenario | \u573a\u666f\u914d\u7f6e |\n| AIModelConfig | AI\u6a21\u578b\u914d\u7f6e |\n| UserStyleProfile | \u7528\u6237\u98ce\u683c |\n| ReplyHistory | \u56de\u590d\u5386\u53f2 |\n| MessageBlacklist | \u6d88\u606f\u9ed1\u540d\u5355 |\n| SyncCheckpoint | \u540c\u6b65\u68c0\u67e5\u70b9 |\n\n## Schema Definition\n\n### AppConfig\n```kotlin\n@Entity(tableName = \"app_config\")\ndata class AppConfigEntity(\n    @PrimaryKey val packageName: String,\n    val appName: String,\n    val isMonitored: Boolean\n)\n```\n\n### KeywordRule\n```kotlin\n@Entity(tableName = \"keyword_rules\")\ndata class KeywordRuleEntity(\n    @PrimaryKey(autoGenerate = true) val id: Long,\n    val keyword: String,\n    val matchType: String,\n    val replyTemplate: String,\n    val priority: Int,\n    val isEnabled: Boolean\n)\n```\n\n### ReplyHistory\n```kotlin\n@Entity(tableName = \"reply_history\")\ndata class ReplyHistoryEntity(\n    @PrimaryKey(autoGenerate = true) val id: Long,\n    val originalMessage: String,\n    val reply: String,\n    val timestamp: Long,\n    val sourceApp: String,\n    val usedTemplate: Boolean\n)\n```\n\n## DAOs\n\n| DAO | \u64cd\u4f5c |\n|-----|------|\n| AppConfigDao | \u76d1\u542c\u5e94\u7528CRUD |\n| KeywordRuleDao | \u5173\u952e\u8bcdCRUD |\n| ReplyHistoryDao | \u5386\u53f2\u8bb0\u5f55CRUD |\n| SyncCheckpointDao | \u540c\u6b65\u70b9\u7ba1\u7406 |\n\n## Related\n- [[Clean Architecture]]\n- [[Repository Pattern]]\n- [[Cloud Sync]]\n- [[Message Monitoring]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "article:Knowledge-Base",
+      "type": "article",
+      "name": "Knowledge Base",
+      "filePath": "Knowledge-Base.md",
+      "summary": "\u77e5\u8bc6\u5e93\u7ba1\u7406\u5173\u952e\u8bcd\u89c4\u5219\uff0c\u5b9e\u73b0\u7cbe\u51c6\u5339\u914d\u548c\u56de\u590d\uff1a",
+      "tags": [],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "AI Integration",
+          "Message Monitoring",
+          "Reply Generator",
+          "Database Schema",
+          "MVVM Pattern"
+        ],
+        "content": "# Knowledge Base\n\n## Overview\n\n\u77e5\u8bc6\u5e93\u7ba1\u7406\u5173\u952e\u8bcd\u89c4\u5219\uff0c\u5b9e\u73b0\u7cbe\u51c6\u5339\u914d\u548c\u56de\u590d\uff1a\n\n### Match Types\n\n| \u7c7b\u578b | \u8bf4\u660e | \u793a\u4f8b |\n|------|------|------|\n| EXACT | \u7cbe\u786e\u5339\u914d | \"\u9000\u8d27\" \u5b8c\u5168\u5339\u914d |\n| FUZZY | \u6a21\u7cca\u5339\u914d | \"\u9000\u8d27*\" \u652f\u6301\u901a\u914d\u7b26 |\n| REGEX | \u6b63\u5219\u5339\u914d | `\\d+\u5143` \u5339\u914d\u91d1\u989d |\n\n## Rule Structure\n\n```kotlin\ndata class KeywordRule(\n    val id: Long,\n    val keyword: String,\n    val matchType: MatchType,\n    val replyTemplate: String,\n    val priority: Int,\n    val isEnabled: Boolean,\n    val scenarios: List<Scenario> = emptyList()\n)\n```\n\n## Matching Algorithm\n\n### Trie Tree Optimization\n```\n              \u9000\n             /\n            \u8d27 \u2500\u2500 \u8d27\n           /\n          \u6362\n```\n- O(n) \u65f6\u95f4\u590d\u6742\u5ea6\n- \u652f\u6301\u524d\u7f00\u5339\u914d\n- \u7a7a\u95f4\u4f18\u5316\n\n### Priority Resolution\n1. \u9ad8\u4f18\u5148\u7ea7\u89c4\u5219\u4f18\u5148\n2. \u540c\u4f18\u5148\u7ea7\u6309\u521b\u5efa\u65f6\u95f4\n3. \u672a\u5339\u914d\u5219\u8f6c [[AI Integration]]\n\n## Scenario Filter\n\n\u89c4\u5219\u53ef\u5173\u8054\u573a\u666f\uff1a\n- \u5168\u5c40\u89c4\u5219\n- \u7279\u5b9a\u4ea7\u54c1\n- \u7279\u5b9a\u65f6\u95f4\n\n## Related\n- [[Message Monitoring]]\n- [[Reply Generator]]\n- [[Database Schema]]\n- [[MVVM Pattern]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "article:Message-Monitoring",
+      "type": "article",
+      "name": "Message Monitoring",
+      "filePath": "Message-Monitoring.md",
+      "summary": "\u6d88\u606f\u76d1\u63a7\u662fcsBaby\u7684\u6838\u5fc3\u529f\u80fd\uff0c\u901a\u8fc7NotificationListenerService\u5b9e\u73b0\uff1a",
+      "tags": [],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "Database Schema",
+          "Knowledge Base",
+          "Reply Generator",
+          "Notification Service",
+          "Database Schema"
+        ],
+        "content": "# Message Monitoring\n\n## Service Overview\n\n\u6d88\u606f\u76d1\u63a7\u662fcsBaby\u7684\u6838\u5fc3\u529f\u80fd\uff0c\u901a\u8fc7NotificationListenerService\u5b9e\u73b0\uff1a\n\n### Core Components\n\n1. **NotificationListenerService**\n   - \u76d1\u542c\u7cfb\u7edf\u901a\u77e5\n   - \u8fc7\u6ee4\u6307\u5b9a\u5e94\u7528\n   - \u63d0\u53d6\u6d88\u606f\u5185\u5bb9\n\n2. **AccessibilityService**\n   - \u8bfb\u53d6\u901a\u77e5\u5185\u5bb9\n   - \u5904\u7406\u590d\u6742\u573a\u666f\n\n3. **FloatingWindowManager**\n   - \u7ba1\u7406\u6d6e\u52a8\u56de\u590d\u7a97\u53e3\n   - \u7528\u6237\u4ea4\u4e92\u5904\u7406\n\n## Message Flow\n\n```\n\u7cfb\u7edf\u901a\u77e5 \u2192 NotificationListener \u2192 \u6d88\u606f\u8fc7\u6ee4 \u2192 \u5173\u952e\u8bcd\u5339\u914d\n    \u2193\n\u5339\u914d\u7ed3\u679c \u2192 AI\u751f\u6210(\u53ef\u9009) \u2192 \u6d6e\u52a8\u7a97\u53e3 \u2192 \u7528\u6237\u786e\u8ba4 \u2192 \u53d1\u9001\u56de\u590d\n```\n\n## Implementation\n\n### NotificationListenerService\n```kotlin\nclass KefuNotificationListenerService : NotificationListenerService() {\n    override fun onNotificationPosted(sbn: StatusBarNotification) {\n        if (isMonitoredApp(sbn.packageName)) {\n            val message = extractMessage(sbn)\n            triggerReplyWindow(message)\n        }\n    }\n}\n```\n\n### App Filter\n- \u4ece [[Database Schema]] \u8bfb\u53d6\u5df2\u914d\u7f6e\u5e94\u7528\n- \u652f\u6301\u542f\u7528/\u7981\u7528\u5207\u6362\n- \u5b9e\u65f6\u751f\u6548\n\n## Configuration\n\n| \u914d\u7f6e\u9879 | \u8bf4\u660e |\n|--------|------|\n| monitoredApps | \u76d1\u542c\u7684\u5e94\u7528\u5217\u8868 |\n| autoReply | \u662f\u5426\u81ea\u52a8\u53d1\u9001 |\n| confirmBeforeSend | \u53d1\u9001\u524d\u786e\u8ba4 |\n\n## Related\n- [[Knowledge Base]]\n- [[Reply Generator]]\n- [[Notification Service]]\n- [[Database Schema]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "article:MVVM-Pattern",
+      "type": "article",
+      "name": "MVVM Pattern",
+      "filePath": "MVVM-Pattern.md",
+      "summary": "csBaby\u4f7f\u7528MVVM\u6a21\u5f0f\u7ba1\u7406UI\u72b6\u6001\u548c\u6570\u636e\u6d41\uff1a",
+      "tags": [],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "Architecture Overview",
+          "Clean Architecture",
+          "Repository Pattern",
+          "Coding Standards"
+        ],
+        "content": "# MVVM Pattern\n\n## Pattern Overview\n\ncsBaby\u4f7f\u7528MVVM\u6a21\u5f0f\u7ba1\u7406UI\u72b6\u6001\u548c\u6570\u636e\u6d41\uff1a\n\n```\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510     \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510     \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502    View     \u2502 \u25c4\u2500\u2500 \u2502  ViewModel   \u2502 \u25c4\u2500\u2500 \u2502    Model    \u2502\n\u2502 (Composable)\u2502     \u2502 (StateFlow)  \u2502     \u2502 (Repository)\u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518     \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518     \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n     UI Events            State              Data\n```\n\n## State Management\n\n### UiState Pattern\n```kotlin\ndata class KnowledgeUiState(\n    val rules: List<KeywordRule> = emptyList(),\n    val isLoading: Boolean = false,\n    val error: String? = null\n)\n```\n\n### StateFlow Usage\n```kotlin\nclass KnowledgeViewModel @Inject constructor(\n    private val repository: KeywordRuleRepository\n) : ViewModel() {\n\n    private val _uiState = MutableStateFlow(KnowledgeUiState())\n    val uiState: StateFlow<KnowledgeUiState> = _uiState.asStateFlow()\n\n    fun loadRules() {\n        viewModelScope.launch {\n            _uiState.update { it.copy(isLoading = true) }\n            repository.getAllRules().collect { rules ->\n                _uiState.update {\n                    it.copy(rules = rules, isLoading = false)\n                }\n            }\n        }\n    }\n}\n```\n\n## Unidirectional Data Flow\n\n1. **User Action** \u2192 View\u53d1\u9001\u4e8b\u4ef6\n2. **ViewModel** \u2192 \u5904\u7406\u4e1a\u52a1\u903b\u8f91\n3. **Repository** \u2192 \u8bbf\u95ee\u6570\u636e\n4. **State Update** \u2192 ViewModel\u66f4\u65b0State\n5. **UI Render** \u2192 Compose\u89c2\u5bdfState\u53d8\u5316\n\n## ViewModel Guidelines\n\n- **\u7981\u6b62\u6301\u6709**: View\u5f15\u7528\u3001Context\u5f15\u7528\n- **\u5fc5\u987b\u6301\u6709**: Repository\u5f15\u7528\u3001StateFlow\n- **\u751f\u547d\u5468\u671f**: \u81ea\u52a8\u5904\u7406\u914d\u7f6e\u53d8\u66f4\n\n## Related\n- [[Architecture Overview]]\n- [[Clean Architecture]]\n- [[Repository Pattern]]\n- [[Coding Standards]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "article:Notification-Service",
+      "type": "article",
+      "name": "Notification Service",
+      "filePath": "Notification-Service.md",
+      "summary": "```kotlin class KefuNotificationListenerService : NotificationListenerService() { override fun onNotificationPosted(sbn: StatusBarNotification) { processNotification(sbn) }",
+      "tags": [],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "Message Monitoring",
+          "Reply Generator",
+          "Database Schema"
+        ],
+        "content": "# Notification Service\n\n## Service Types\n\n### 1. NotificationListenerService\n```kotlin\nclass KefuNotificationListenerService : NotificationListenerService() {\n    override fun onNotificationPosted(sbn: StatusBarNotification) {\n        processNotification(sbn)\n    }\n\n    override fun onNotificationRemoved(sbn: StatusBarNotification) {\n        // \u5904\u7406\u901a\u77e5\u79fb\u9664\n    }\n}\n```\n\n### 2. AccessibilityService\n- \u8bfb\u53d6\u901a\u77e5\u8be6\u60c5\n- \u6a21\u62df\u7528\u6237\u64cd\u4f5c\n- \u5904\u7406\u7279\u6b8a\u573a\u666f\n\n## Permission Requirements\n\n| Permission | \u7528\u9014 |\n|------------|------|\n| BIND_NOTIFICATION_LISTENER_SERVICE | \u76d1\u542c\u901a\u77e5 |\n| SYSTEM_ALERT_WINDOW | \u60ac\u6d6e\u7a97 |\n| FOREGROUND_SERVICE | \u524d\u53f0\u670d\u52a1 |\n| RECEIVE_BOOT_COMPLETED | \u5f00\u673a\u81ea\u542f |\n\n## Message Extraction\n\n### Extract Strategy\n```kotlin\nfun extractMessage(sbn: StatusBarNotification): String? {\n    val extras = sbn.notification.extras\n    return extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()\n}\n```\n\n## Package Filtering\n\n```kotlin\nfun isMonitoredPackage(packageName: String): Boolean {\n    return monitoredApps.any { it.packageName == packageName }\n}\n```\n\n## Related\n- [[Message Monitoring]]\n- [[Reply Generator]]\n- [[Database Schema]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "article:OTA-Update",
+      "type": "article",
+      "name": "OTA Update",
+      "filePath": "OTA-Update.md",
+      "summary": "OTA (Over-The-Air) \u70ed\u66f4\u65b0\u7cfb\u7edf\u5b9e\u73b0\u5e94\u7528\u5185\u65e0\u611f\u66f4\u65b0\uff1a",
+      "tags": [],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "Cloud Sync",
+          "Database Schema",
+          "Coding Standards"
+        ],
+        "content": "# OTA Update\n\n## System Overview\n\nOTA (Over-The-Air) \u70ed\u66f4\u65b0\u7cfb\u7edf\u5b9e\u73b0\u5e94\u7528\u5185\u65e0\u611f\u66f4\u65b0\uff1a\n\n### Features\n\n| \u529f\u80fd | \u8bf4\u660e |\n|------|------|\n| \u589e\u91cf\u66f4\u65b0 | \u652f\u6301\u5dee\u5206\u5305\u4e0b\u8f7d |\n| \u5f3a\u5236\u66f4\u65b0 | \u53ef\u914d\u7f6e\u5f3a\u5236\u5347\u7ea7 |\n| \u7070\u5ea6\u53d1\u5e03 | \u652f\u6301\u90e8\u5206\u7528\u6237\u5148\u66f4\u65b0 |\n| \u65ad\u70b9\u7eed\u4f20 | \u652f\u6301\u4e0b\u8f7d\u4e2d\u65ad\u6062\u590d |\n\n## Update Flow\n\n```\n\u68c0\u67e5\u66f4\u65b0 \u2192 \u4e0b\u8f7dAPK \u2192 \u9a8c\u7b7e \u2192 \u5b89\u88c5 \u2192 \u91cd\u542f\n```\n\n## Configuration\n\n```kotlin\ndata class OtaConfig(\n    val checkIntervalHours: Int = 24,\n    val autoDownload: Boolean = true,\n    val forceUpdate: Boolean = false\n)\n```\n\n## Implementation\n\n### UpdateChecker\n```kotlin\nclass UpdateChecker @Inject constructor(\n    private val api: OtaApiService\n) {\n    suspend fun checkForUpdate(): OtaUpdate? {\n        val currentVersion = getCurrentVersion()\n        return api.checkUpdate(currentVersion)\n    }\n}\n```\n\n### DownloadManager\n- \u540e\u53f0\u4e0b\u8f7d\n- \u8fdb\u5ea6\u901a\u77e5\n- \u65ad\u70b9\u7eed\u4f20\n\n### Signature Verification\n- APK\u7b7e\u540d\u6821\u9a8c\n- \u5b8c\u6574\u6027\u68c0\u67e5\n\n## Security\n\n- HTTPS\u4f20\u8f93\n- \u7b7e\u540d\u9a8c\u8bc1\n- \u6743\u9650\u63a7\u5236\n\n## Related\n- [[Cloud Sync]]\n- [[Database Schema]]\n- [[Coding Standards]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "article:Reply-Generator",
+      "type": "article",
+      "name": "Reply Generator",
+      "filePath": "Reply-Generator.md",
+      "summary": "\u56de\u590d\u751f\u6210\u5668\u534f\u8c03\u77e5\u8bc6\u5e93\u5339\u914d\u548cAI\u751f\u6210\uff1a",
+      "tags": [],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "Knowledge Base",
+          "AI Integration",
+          "Style Learning",
+          "Message Monitoring"
+        ],
+        "content": "# Reply Generator\n\n## Overview\n\n\u56de\u590d\u751f\u6210\u5668\u534f\u8c03\u77e5\u8bc6\u5e93\u5339\u914d\u548cAI\u751f\u6210\uff1a\n\n### Flow\n\n```\n\u6d88\u606f \u2192 \u77e5\u8bc6\u5e93\u5339\u914d \u2192 \u547d\u4e2d? \u2192 \u662f \u2192 \u6a21\u677f\u66ff\u6362 \u2192 \u8fd4\u56de\n                    \u2193 \u5426\n              AI\u751f\u6210 \u2192 \u98ce\u683c\u5e94\u7528 \u2192 \u8fd4\u56de\n```\n\n## Template Engine\n\n### \u53d8\u91cf\u66ff\u6362\n```\n\u60a8\u597d{{user}}\uff0c\u60a8\u7684\u8ba2\u5355{{orderId}}\u5df2{{status}}\n```\n\n### \u53d8\u91cf\u6765\u6e90\n- \u7528\u6237\u4fe1\u606f\n- \u8ba2\u5355\u8be6\u60c5\n- \u65f6\u95f4\u4e0a\u4e0b\u6587\n\n## Quality Scoring\n\n```kotlin\ndata class QualityScore(\n    val relevance: Float,      // 0-1\n    val completeness: Float,   // 0-1\n    val appropriateness: Float // 0-1\n)\n```\n\n### \u8bc4\u5206\u89c4\u5219\n- \u5173\u952e\u8bcd\u8986\u76d6\u7387\n- \u4e0a\u4e0b\u6587\u76f8\u5173\u6027\n- \u8bed\u6c14\u9002\u914d\u5ea6\n\n## Fallback Strategy\n\n1. \u77e5\u8bc6\u5e93\u7cbe\u786e\u5339\u914d\n2. \u77e5\u8bc6\u5e93\u6a21\u7cca\u5339\u914d\n3. AI\u751f\u6210 (\u9ed8\u8ba4\u6a21\u578b)\n4. AI\u751f\u6210 (\u5907\u7528\u6a21\u578b)\n5. \u9ed8\u8ba4\u56de\u590d\n\n## History Management\n\n- \u8bb0\u5f55\u6bcf\u6b21\u751f\u6210\n- \u652f\u6301\u7528\u6237\u7f16\u8f91\n- \u5b66\u4e60\u7528\u6237\u504f\u597d\n\n## Related\n- [[Knowledge Base]]\n- [[AI Integration]]\n- [[Style Learning]]\n- [[Message Monitoring]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "article:Repository-Pattern",
+      "type": "article",
+      "name": "Repository Pattern",
+      "filePath": "Repository-Pattern.md",
+      "summary": "\u4ed3\u50a8\u6a21\u5f0f\u5c01\u88c5\u6570\u636e\u8bbf\u95ee\uff0c\u63d0\u4f9b\u7edf\u4e00\u63a5\u53e3\uff1a",
+      "tags": [],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "Clean Architecture",
+          "MVVM Pattern",
+          "Database Schema",
+          "Cloud Sync"
+        ],
+        "content": "# Repository Pattern\n\n## Pattern Overview\n\n\u4ed3\u50a8\u6a21\u5f0f\u5c01\u88c5\u6570\u636e\u8bbf\u95ee\uff0c\u63d0\u4f9b\u7edf\u4e00\u63a5\u53e3\uff1a\n\n```\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510      \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502    ViewModel     \u2502 \u25c4\u2500\u2500\u2500 \u2502   Repository     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518      \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                                  \u2502\n              \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n              \u25bc                   \u25bc                   \u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510      \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510      \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502    Room    \u2502      \u2502   Remote   \u2502      \u2502   Cache    \u2502\n       \u2502  Database  \u2502      \u2502    API     \u2502      \u2502            \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518      \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518      \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n## Interface Definition\n\n```kotlin\ninterface KeywordRuleRepository {\n    fun getAllRules(): Flow<List<KeywordRule>>\n    fun getEnabledRules(): Flow<List<KeywordRule>>\n    suspend fun addRule(rule: KeywordRule)\n    suspend fun updateRule(rule: KeywordRule)\n    suspend fun deleteRule(id: Long)\n    suspend fun syncRules()\n}\n```\n\n## Implementation\n\n```kotlin\nclass KeywordRuleRepositoryImpl @Inject constructor(\n    private val dao: KeywordRuleDao,\n    private val remote: RemoteDataSource\n) : KeywordRuleRepository {\n\n    override fun getAllRules(): Flow<List<KeywordRule>> {\n        return dao.getAllFlow().map { entities ->\n            entities.map { it.toDomain() }\n        }\n    }\n\n    override suspend fun addRule(rule: KeywordRule) {\n        dao.insert(rule.toEntity())\n    }\n}\n```\n\n## Benefits\n\n- **\u6570\u636e\u6e90\u62bd\u8c61**: \u5c4f\u853d\u6570\u636e\u6765\u6e90\u7ec6\u8282\n- **\u53ef\u6d4b\u8bd5\u6027**: \u53ef\u7528Mock\u66ff\u6362\u771f\u5b9e\u6570\u636e\u6e90\n- **\u53ef\u66ff\u6362\u6027**: \u4fbf\u4e8e\u5207\u6362\u6570\u636e\u5b58\u50a8\u65b9\u6848\n- **\u804c\u8d23\u5206\u79bb**: \u6e05\u6670\u7684\u6570\u636e\u8bbf\u95ee\u8fb9\u754c\n\n## Related\n- [[Clean Architecture]]\n- [[MVVM Pattern]]\n- [[Database Schema]]\n- [[Cloud Sync]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "article:Style-Learning",
+      "type": "article",
+      "name": "Style Learning",
+      "filePath": "Style-Learning.md",
+      "summary": "\u98ce\u683c\u5b66\u4e60\u5f15\u64ce\u5206\u6790\u7528\u6237\u5386\u53f2\u56de\u590d\uff0c\u63d0\u53d6\u98ce\u683c\u7279\u5f81\uff1a",
+      "tags": [],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "Database Schema",
+          "AI Integration",
+          "Reply Generator",
+          "Cloud Sync",
+          "Database Schema"
+        ],
+        "content": "# Style Learning\n\n## Overview\n\n\u98ce\u683c\u5b66\u4e60\u5f15\u64ce\u5206\u6790\u7528\u6237\u5386\u53f2\u56de\u590d\uff0c\u63d0\u53d6\u98ce\u683c\u7279\u5f81\uff1a\n\n### Style Dimensions\n\n| \u7ef4\u5ea6 | \u8303\u56f4 | \u8bf4\u660e |\n|------|------|------|\n| formality | 0.0 - 1.0 | \u6b63\u5f0f\u7a0b\u5ea6 |\n| enthusiasm | 0.0 - 1.0 | \u70ed\u60c5\u7a0b\u5ea6 |\n| professionalism | 0.0 - 1.0 | \u4e13\u4e1a\u7a0b\u5ea6 |\n\n### Phrase Management\n- commonPhrases - \u5e38\u7528\u77ed\u8bed\n- avoidPhrases - \u907f\u514d\u77ed\u8bed\n\n## Learning Algorithm\n\n### Data Collection\n```kotlin\ndata class StyleSample(\n    val originalMessage: String,\n    val reply: String,\n    val timestamp: Long\n)\n```\n\n### Feature Extraction\n1. \u53e5\u5b50\u957f\u5ea6\u5206\u6790\n2. \u8868\u60c5\u7b26\u53f7\u7edf\u8ba1\n3. \u6b63\u5f0f/\u975e\u6b63\u5f0f\u8bcd\u6c47\n4. \u95ee\u5019\u8bed/\u7ed3\u675f\u8bed\n\n### Profile Update\n- \u589e\u91cf\u5b66\u4e60\n- \u6743\u91cd\u8870\u51cf\n- \u5b9a\u671f\u540c\u6b65\n\n## Usage in AI\n\n\u751f\u6210\u56de\u590d\u65f6\u5e94\u7528\u98ce\u683c\uff1a\n```kotlin\nval profile = styleRepository.getProfile()\nval prompt = buildPrompt(context, profile)\nval reply = aiService.generateReply(prompt)\n```\n\n## Storage\n\n\u5b58\u50a8\u5728 [[Database Schema]] \u7684 `user_style_profiles` \u8868\n\n## Related\n- [[AI Integration]]\n- [[Reply Generator]]\n- [[Cloud Sync]]\n- [[Database Schema]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "article:Sync-Protocol",
+      "type": "article",
+      "name": "Sync Protocol",
+      "filePath": "Sync-Protocol.md",
+      "summary": "\u4e91\u7aef\u540c\u6b65\u534f\u8bae\u5b9a\u4e49\u6570\u636e\u4ea4\u6362\u683c\u5f0f\uff1a",
+      "tags": [],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "Cloud Sync",
+          "Repository Pattern",
+          "Database Schema"
+        ],
+        "content": "# Sync Protocol\n\n## Protocol Overview\n\n\u4e91\u7aef\u540c\u6b65\u534f\u8bae\u5b9a\u4e49\u6570\u636e\u4ea4\u6362\u683c\u5f0f\uff1a\n\n### Message Format\n\n```json\n{\n  \"type\": \"sync\",\n  \"entity\": \"keyword_rule\",\n  \"action\": \"create|update|delete\",\n  \"timestamp\": 1717180800000,\n  \"data\": {\n    \"id\": 1,\n    \"keyword\": \"\u9000\u8d27\",\n    \"matchType\": \"EXACT\"\n  }\n}\n```\n\n## Conflict Resolution\n\n### Strategy: Last-Write-Wins\n```kotlin\nfun resolveConflict(local: Entity, remote: Entity): Entity {\n    return if (local.timestamp > remote.timestamp) local else remote\n}\n```\n\n### Merge Scenarios\n- \u65b0\u5efa + \u65b0\u5efa \u2192 \u4fdd\u7559\u4e24\u8005\n- \u4fee\u6539 + \u4fee\u6539 \u2192 \u65f6\u95f4\u6233\u4f18\u5148\n- \u5220\u9664 + \u4fee\u6539 \u2192 \u5220\u9664\u4f18\u5148\n\n## Sync Queue\n\n```kotlin\nclass SyncQueue {\n    fun enqueue(entity: Entity, action: SyncAction)\n    fun dequeue(): SyncItem?\n    fun flush(): Result<Unit>\n}\n```\n\n### Offline Support\n- \u79bb\u7ebf\u65f6\u5165\u961f\n- \u4e0a\u7ebf\u540e\u6279\u91cf\u540c\u6b65\n- \u91cd\u8bd5\u673a\u5236\n\n## Error Handling\n\n| \u9519\u8bef\u7c7b\u578b | \u5904\u7406\u7b56\u7565 |\n|----------|----------|\n| \u7f51\u7edc\u8d85\u65f6 | \u91cd\u8bd53\u6b21 |\n| \u8ba4\u8bc1\u5931\u6548 | \u5237\u65b0token |\n| \u51b2\u7a81 | \u81ea\u52a8\u5408\u5e76 |\n| \u670d\u52a1\u5668\u9519\u8bef | \u5ef6\u8fdf\u91cd\u8bd5 |\n\n## Related\n- [[Cloud Sync]]\n- [[Repository Pattern]]\n- [[Database Schema]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "article:Testing-Strategy",
+      "type": "article",
+      "name": "Testing Strategy",
+      "filePath": "Testing-Strategy.md",
+      "summary": "**\u2265 85%** \u5355\u5143\u6d4b\u8bd5\u8986\u76d6\u7387",
+      "tags": [],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [
+          "Coding Standards",
+          "Repository Pattern",
+          "Cloud Sync"
+        ],
+        "content": "# Testing Strategy\n\n## Test Coverage Target\n\n**\u2265 85%** \u5355\u5143\u6d4b\u8bd5\u8986\u76d6\u7387\n\n## Test Categories\n\n### 1. Unit Tests\n- \u72ec\u7acb\u51fd\u6570\u6d4b\u8bd5\n- ViewModel\u6d4b\u8bd5\n- Repository\u6d4b\u8bd5\n\n### 2. Integration Tests\n- DAO + Database\n- Repository + Remote\n- \u540c\u6b65\u6d41\u7a0b\n\n### 3. UI Tests\n- Compose\u7ec4\u4ef6\n- \u5bfc\u822a\u6d41\u7a0b\n- \u4ea4\u4e92\u9a8c\u8bc1\n\n## Test Structure (AAA)\n\n```kotlin\n@Test\nfun `keyword matching returns correct result`() {\n    // Arrange\n    val matcher = KeywordMatcher()\n    val rule = KeywordRule(keyword = \"\u9000\u8d27\", matchType = EXACT)\n\n    // Act\n    val result = matcher.match(\"\u6211\u60f3\u9000\u8d27\", rule)\n\n    // Assert\n    assertTrue(result.isMatched)\n}\n```\n\n## Key Test Scenarios\n\n### Knowledge Base Tests\n- \u7cbe\u786e\u5339\u914d\n- \u6a21\u7cca\u5339\u914d\n- \u6b63\u5219\u5339\u914d\n- \u4f18\u5148\u7ea7\u6392\u5e8f\n\n### AI Integration Tests\n- \u6b63\u5e38\u8c03\u7528\n- \u8d85\u65f6\u91cd\u8bd5\n- \u964d\u7ea7\u5904\u7406\n\n### Sync Tests\n- \u4e0a\u4f20\u6210\u529f\n- \u4e0b\u8f7d\u540c\u6b65\n- \u51b2\u7a81\u89e3\u51b3\n\n## CI Integration\n\n```yaml\ntest:\n  script:\n    - ./gradlew test\n    - ./gradlew jacocoTestReport\n  coverage:\n    check:\n      minimum: 85%\n```\n\n## Related\n- [[Coding Standards]]\n- [[Repository Pattern]]\n- [[Cloud Sync]]",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "topic:categories",
+      "type": "topic",
+      "name": "Categories",
+      "summary": "Category from index: Categories (16 articles)",
+      "tags": [
+        "category"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "topic:statistics",
+      "type": "topic",
+      "name": "Statistics",
+      "summary": "Category from index: Statistics (0 articles)",
+      "tags": [
+        "category"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [],
+  "layers": [
+    {
+      "id": "layer:categories",
+      "name": "Categories",
+      "description": "Categories (1 nodes)",
+      "nodeIds": [
+        "topic:categories"
+      ]
+    },
+    {
+      "id": "layer:statistics",
+      "name": "Statistics",
+      "description": "Statistics (1 nodes)",
+      "nodeIds": [
+        "topic:statistics"
+      ]
+    },
+    {
+      "id": "layer:other",
+      "name": "Other",
+      "description": "Uncategorized nodes (16)",
+      "nodeIds": [
+        "article:AI-Integration",
+        "article:Architecture-Overview",
+        "article:Clean-Architecture",
+        "article:Cloud-Sync",
+        "article:Coding-Standards",
+        "article:Database-Schema",
+        "article:Knowledge-Base",
+        "article:Message-Monitoring",
+        "article:MVVM-Pattern",
+        "article:Notification-Service",
+        "article:OTA-Update",
+        "article:Reply-Generator",
+        "article:Repository-Pattern",
+        "article:Style-Learning",
+        "article:Sync-Protocol",
+        "article:Testing-Strategy"
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "order": 1,
+      "title": "Categories",
+      "description": "Explore the Categories section (16 articles)",
+      "nodeIds": [
+        "topic:categories"
+      ]
+    },
+    {
+      "order": 2,
+      "title": "Statistics",
+      "description": "Explore the Statistics section (0 articles)",
+      "nodeIds": [
+        "topic:statistics"
+      ]
+    }
+  ]
+}

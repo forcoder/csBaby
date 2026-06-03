@@ -1,5 +1,6 @@
 package com.csbaby.kefu.presentation.screens.model
 
+import android.content.Context
 import com.csbaby.kefu.data.sync.SyncManager
 import com.csbaby.kefu.domain.model.AIModelConfig
 import com.csbaby.kefu.domain.model.ModelType
@@ -49,6 +50,7 @@ class ModelViewModelTest {
 
     private fun createViewModel(): ModelViewModel {
         return ModelViewModel(
+            appContext = mockk(relaxed = true),
             aiModelRepository = aiModelRepository,
             aiService = aiService,
             syncManager = syncManager

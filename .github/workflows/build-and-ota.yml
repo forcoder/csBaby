@@ -80,17 +80,15 @@ jobs:
           APK_SIZE=$(stat -c%s "$APK_PATH")
           APK_MD5=$(md5sum "$APK_PATH" | cut -d' ' -f1)
 
-          # Create version info JSON
-          # downloadUrl 指向版本专用文件，客户端应该读取 csBabyLog_v{VERSION_CODE} 获取最新版本信息
-          cat > /tmp/version.json << 'VERSION_EOF'
-          {"versionCode":$VERSION_CODE,"versionName":"$VERSION_NAME","releaseDate":"$RELEASE_DATE","fileSize":$APK_SIZE,"md5":"$APK_MD5","downloadUrl":"https://shz.al/~csBabyApk_v${VERSION_CODE}","releaseNotes":"v$VERSION_NAME 更新","forceUpdate":false}
-          VERSION_EOF
+          # Create version info JSON (use printf to properly expand variables)
+          printf '{"versionCode":%s,"versionName":"%s","releaseDate":"%s","fileSize":%s,"md5":"%s","downloadUrl":"https://shz.al/~csBabyApk_v%s","releaseNotes":"v%s 更新","forceUpdate":false}' \
+            "$VERSION_CODE" "$VERSION_NAME" "$RELEASE_DATE" "$APK_SIZE" "$APK_MD5" "$VERSION_CODE" "$VERSION_NAME" > /tmp/version.json
 
           # 使用版本专用文件名上传
           echo "[1/2] Uploading version info (csBabyLog_v${VERSION_CODE})..."
           curl -s -X POST -F "n=csBabyLog_v${VERSION_CODE}" -F "c=@/tmp/version.json" -F "e=30d" https://shz.al
 
-          echo "[2/3] Uploading APK (csBabyApk_v${VERSION_CODE})..."
+          echo "[2/2] Uploading APK (csBabyApk_v${VERSION_CODE})..."
           curl -s -X POST -F "n=csBabyApk_v${VERSION_CODE}" -F "filename=$APK_NAME" -F "c=@$APK_PATH" -F "e=30d" https://shz.al
 
       - name: Output APK download URL

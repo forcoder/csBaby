@@ -40,9 +40,13 @@ class AIClientImpl @Inject constructor(
         maxTokens: Int
     ): Result<String> {
         return try {
+            val resolvedEndpoint = resolveEndpoint(config)
+                ?: return Result.failure(
+                    IllegalStateException("API endpoint 未配置，且 ${config.modelType} 类型无默认 endpoint")
+                )
             val (requestBody, headers) = buildRequest(config, messages, temperature, maxTokens)
             val requestBuilder = Request.Builder()
-                .url(config.apiEndpoint)
+                .url(resolvedEndpoint)
                 .post(requestBody)
                 .addHeader("Content-Type", "application/json")
 
@@ -53,7 +57,7 @@ class AIClientImpl @Inject constructor(
 
             val request = requestBuilder.build()
             check(!android.os.Looper.getMainLooper().isCurrentThread()) { "AIClient 必须在非主线程调用" }
-            Timber.d("AI Request: url=${config.apiEndpoint}, model=${getModelName(config)}, apiKey=${config.apiKey.take(8)}...")
+            Timber.d("AI Request: url=$resolvedEndpoint, model=${getModelName(config)}, apiKey=${config.apiKey.take(8)}...")
             val response = okHttpClient.newCall(request).execute()
             val responseBody = response.body?.string() ?: return Result.failure(Exception("Empty response"))
 
@@ -319,6 +323,39 @@ class AIClientImpl @Inject constructor(
             }
         } catch (e: Exception) {
             responseBody
+        }
+    }
+
+    companion object {
+        private const val DEFAULT_OPENAI_ENDPOINT = "https://api.longcat.chat/openai/v1/chat/completions"
+        private const val DEFAULT_CLAUDE_ENDPOINT = "https://api.anthropic.com/v1/messages"
+        private const val DEFAULT_ZHIPU_ENDPOINT = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        private const val DEFAULT_TONGYI_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
+
+        /**
+         * 解析 AI 请求实际使用的 endpoint。
+         *
+         * 当 [AIModelConfig.apiEndpoint] 为空或仅含空白字符时，按 [ModelType] 退回到已知 provider 的默认 URL。
+         * 这样可以避免 OkHttp 在 `.url("")` 时抛 IllegalArgumentException，
+         * 进而导致 ReplyGenerator 中的 AI 兜底被静默吞掉、用户感知为"AI 未启用"。
+         *
+         * - OPENAI → LongCat 默认 endpoint（历史数据中 modelType=OPENAI / modelName=LongCat-* 即此场景）
+         * - CLAUDE / ZHIPU / TONGYI → 各 provider 官方 endpoint
+         * - CUSTOM → 没有合理默认，返回 null 由调用方显式报错
+         */
+        @JvmStatic
+        fun resolveEndpoint(config: AIModelConfig): String? {
+            val configured = config.apiEndpoint.trim()
+            if (configured.isNotEmpty()) {
+                return configured
+            }
+            return when (config.modelType) {
+                ModelType.OPENAI -> DEFAULT_OPENAI_ENDPOINT
+                ModelType.CLAUDE -> DEFAULT_CLAUDE_ENDPOINT
+                ModelType.ZHIPU -> DEFAULT_ZHIPU_ENDPOINT
+                ModelType.TONGYI -> DEFAULT_TONGYI_ENDPOINT
+                ModelType.CUSTOM -> null
+            }
         }
     }
 }

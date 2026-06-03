@@ -93,7 +93,12 @@ class ProfileViewModelTest {
             otaManager = otaManager,
             syncManager = syncManager,
             authManager = authManager,
-            backupManager = backupManager
+            backupManager = backupManager,
+            keywordRuleDao = mockk(relaxed = true),
+            messageBlacklistDao = mockk(relaxed = true),
+            aiModelConfigDao = mockk(relaxed = true),
+            appConfigDao = mockk(relaxed = true),
+            scenarioDao = mockk(relaxed = true)
         )
     }
 
