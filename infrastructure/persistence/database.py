@@ -336,6 +336,32 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_admin_sessions_phone ON admin_sessions(phone);
         CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at);
+
+        CREATE TABLE IF NOT EXISTS sync_outbox (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            table_name TEXT NOT NULL,
+            op TEXT NOT NULL CHECK(op IN ('INSERT','UPDATE','DELETE')),
+            row_id INTEGER,
+            payload TEXT NOT NULL,
+            attempts INTEGER DEFAULT 0,
+            last_error TEXT,
+            next_retry_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_outbox_next_retry ON sync_outbox(next_retry_at);
+
+        CREATE TABLE IF NOT EXISTS sync_outbox_dead (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            table_name TEXT NOT NULL,
+            op TEXT NOT NULL,
+            row_id INTEGER,
+            payload TEXT NOT NULL,
+            attempts INTEGER,
+            last_error TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            moved_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
     """)
 
     # Run migration for existing databases
