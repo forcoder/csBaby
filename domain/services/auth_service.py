@@ -12,9 +12,10 @@ class AuthService:
         self._secret = jwt_secret
         self._expire_days = jwt_expire_days
 
-    def generate_token(self, user_id: str) -> str:
+    def generate_token(self, user_id: str, token_type: str = "access") -> str:
         payload = {
             "user_id": user_id,
+            "type": token_type,
             "exp": int(time.time()) + self._expire_days * 86400,
             "iat": int(time.time()),
         }
