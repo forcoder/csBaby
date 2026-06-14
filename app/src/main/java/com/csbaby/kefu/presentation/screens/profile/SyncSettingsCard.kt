@@ -448,7 +448,8 @@ fun LoginDialog(
     onDismiss: () -> Unit,
     onLogin: (String, String) -> Unit
 ) {
-    var email by remember { mutableStateOf("") }
+    // 同时支持 phone 或 email 登录 (auto-detected by presence of '@')
+    var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
     AlertDialog(
@@ -457,9 +458,10 @@ fun LoginDialog(
         text = {
             Column {
                 OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text("邮箱") },
+                    value = identifier,
+                    onValueChange = { identifier = it },
+                    label = { Text("邮箱或手机号") },
+                    placeholder = { Text("user@example.com 或 13800138000") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -477,8 +479,8 @@ fun LoginDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onLogin(email, password) },
-                enabled = email.trim().contains("@") && password.length >= 6
+                onClick = { onLogin(identifier, password) },
+                enabled = identifier.trim().isNotEmpty() && password.length >= 6
             ) {
                 Text("登录")
             }
@@ -496,7 +498,8 @@ fun RegisterDialog(
     onDismiss: () -> Unit,
     onRegister: (String, String, String) -> Unit
 ) {
-    var email by remember { mutableStateOf("") }
+    // 同时支持 phone 或 email 注册 (后端按 '@' 自动检测)
+    var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
 
@@ -514,9 +517,10 @@ fun RegisterDialog(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text("邮箱") },
+                    value = identifier,
+                    onValueChange = { identifier = it },
+                    label = { Text("邮箱或手机号") },
+                    placeholder = { Text("user@example.com 或 13800138000") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -535,8 +539,8 @@ fun RegisterDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onRegister(email, password, displayName) },
-                enabled = email.trim().contains("@") && password.length >= 6 && displayName.trim().isNotBlank()
+                onClick = { onRegister(identifier, password, displayName) },
+                enabled = identifier.trim().isNotEmpty() && password.length >= 6 && displayName.trim().isNotBlank()
             ) {
                 Text("注册")
             }
