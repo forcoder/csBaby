@@ -1,10 +1,10 @@
 {
-  "versionCode": 12,
-  "versionName": "1.4.1",
-  "releaseDate": "2026-05-23",
-  "fileSize": 17262163,
-  "md5": "4a6d90cb2e8419f23443452f9984f1b8",
+  "versionCode": 13,
+  "versionName": "1.4.2",
+  "releaseDate": "2026-06-14",
+  "fileSize": 17510422,
+  "md5": "f17bb781b191f6145067890ae7983fee",
   "downloadUrl": "https://shz.al/~csBabyApk",
-  "releaseNotes": "v1.4.1 修复云端登录401错误",
+  "releaseNotes": "v1.4.2 同步服务器切换至自建部署 sync.agentai0.com",
   "forceUpdate": false
 }
