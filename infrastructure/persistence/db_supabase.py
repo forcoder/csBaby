@@ -117,7 +117,9 @@ def put_connection(conn) -> None:
 def health_check() -> bool:
     try:
         with get_connection() as conn:
-            conn.execute("SELECT 1")
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            cur.fetchone()
         return True
     except Exception:
         return False
