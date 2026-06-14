@@ -146,23 +146,12 @@ def after_request(response):
 # ========== 健康检查 ==========
 @app.route("/health", methods=["GET"])
 def health_check():
-    import datetime
-    health: dict = {
+    from infrastructure.persistence.db_supabase import health_check as supa_health
+    return {
         "status": "ok",
-        "service": "csBaby-api",
-        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-    }
-    db_status = "ok"
-    try:
-        conn = get_connection()
-        conn.execute("SELECT 1")
-        conn.close()
-    except Exception as exc:
-        db_status = str(exc)
-        health["status"] = "degraded"
-    health["database"] = db_status
-    status_code = 200 if health["status"] == "ok" else 503
-    return jsonify(health), status_code
+        "service": "csbaby-app",
+        "supabase": "up" if supa_health() else "down",
+    }, 200
 
 # ========== 认证 API ==========
 @app.route("/api/auth/user/register", methods=["POST"])
