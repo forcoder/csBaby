@@ -13,4 +13,17 @@ services:
       - key: PORT
         value: 8080
     autoDeploy: yes
+  - type: worker
+    name: csbaby-sync-retry-worker
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m infrastructure.sync.retry_worker
+    envVars:
+      - key: DATABASE_PATH
+        sync: false
+      - key: SUPABASE_DB_URL
+        sync: false
+      - key: SYNC_RETRY_INTERVAL_SECONDS
+        value: "30"
 # Force rebuild - clear cache
