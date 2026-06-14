@@ -27,10 +27,14 @@ def test_health_check_returns_true_when_ping_ok():
     from infrastructure.persistence.db_supabase import health_check
     with patch("infrastructure.persistence.db_supabase.get_connection") as mock_gc:
         mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
         mock_gc.return_value.__enter__.return_value = mock_conn
         result = health_check()
         assert result is True
-        mock_conn.execute.assert_called()
+        # health_check uses cursor().execute() (psycopg2 connection has no execute method)
+        mock_conn.cursor.assert_called()
+        mock_cursor.execute.assert_called()
 
 
 def test_health_check_returns_false_on_error():

@@ -173,51 +173,69 @@ def health_check():
 def user_register():
     data = request.get_json() or {}
     phone = (data.get("phone") or "").strip()
+    email = (data.get("email") or "").strip().lower() or None
     password = data.get("password", "")
     name = (data.get("name") or "").strip()
-    if not phone or not password:
-        return jsonify({"error": "phone and password are required"}), 400
+    if not password:
+        return jsonify({"error": "password is required"}), 400
     if len(password) < 6:
         return jsonify({"error": "password must be at least 6 chars"}), 400
-    if len(phone) > 20:
+    if not phone and not email:
+        return jsonify({"error": "phone or email is required"}), 400
+    if phone and len(phone) > 20:
         return jsonify({"error": "phone too long (max 20 chars)"}), 400
-    # Check if phone already exists
-    db = get_connection()
-    try:
-        existing = db.execute("SELECT id FROM users WHERE phone=?", (phone,)).fetchone()
-        if existing:
-            return jsonify({"error": "phone already registered"}), 409
-        user_id = str(__import__("uuid").uuid4())
-        pw_hash, salt = UserAuthService.hash_password(password)
-        db.execute(
-            "INSERT INTO users (id, phone, password_hash, salt, name) VALUES (?, ?, ?, ?, ?)",
-            (user_id, phone, pw_hash, salt, name or phone),
-        )
-        db.commit()
-    finally:
-        db.close()
+    if email and ("@" not in email or len(email) > 254):
+        return jsonify({"error": "invalid email format"}), 400
+    # phone column is UNIQUE NOT NULL — synthesize from email when absent
+    if not phone:
+        phone = f"email:{email}"
+
+    from infrastructure.persistence.user_repo_sqlite import SqliteUserRepository
+    repo = SqliteUserRepository()
+    if repo.get_by_phone(phone):
+        return jsonify({"error": "phone already registered"}), 409
+    if email and repo.get_by_email(email):
+        return jsonify({"error": "email already registered"}), 409
+
+    user_id = str(__import__("uuid").uuid4())
+    pw_hash, salt = UserAuthService.hash_password(password)
+    repo.create(user_id=user_id, phone=phone, password_hash=pw_hash,
+                salt=salt, name=name or email or phone, email=email)
     token = auth_service.generate_token(user_id)
-    return jsonify({"user_id": user_id, "token": token, "expires_in": 30 * 86400}), 201
+    return jsonify({
+        "user_id": user_id, "email": email,
+        "phone": phone if "@" not in phone else None,
+        "token": token, "expires_in": 30 * 86400,
+    }), 201
 
 
 @app.route("/api/auth/user/login", methods=["POST"])
 @rate_limit(max_requests=5, window_seconds=300)
 def user_login():
+    """Login a user by phone OR email.
+
+    Body accepts any of:
+      {"phone": "138...", "password": "..."}      (legacy)
+      {"email": "a@b.com", "password": "..."}
+      {"identifier": "any-of-the-above", "password": "..."}
+    """
     data = request.get_json() or {}
-    phone = (data.get("phone") or "").strip()
+    identifier = (data.get("identifier") or data.get("phone") or data.get("email") or "").strip()
     password = data.get("password", "")
-    if not phone or not password:
-        return jsonify({"error": "phone and password are required"}), 400
-    db = get_connection()
-    try:
-        row = db.execute("SELECT id, password_hash, salt FROM users WHERE phone=?", (phone,)).fetchone()
-    finally:
-        db.close()
+    if not identifier or not password:
+        return jsonify({"error": "phone or email and password are required"}), 400
+
+    from infrastructure.persistence.user_repo_sqlite import SqliteUserRepository
+    repo = SqliteUserRepository()
+    row = repo.get_by_identifier(identifier)
     if not row or not UserAuthService.verify_password(password, row["salt"], row["password_hash"]):
-        return jsonify({"error": "Invalid phone or password"}), 401
+        return jsonify({"error": "Invalid phone/email or password"}), 401
     user_id = row["id"]
     token = auth_service.generate_token(user_id)
-    return jsonify({"user_id": user_id, "token": token, "expires_in": 30 * 86400})
+    return jsonify({
+        "user_id": user_id, "phone": row.get("phone"), "email": row.get("email"),
+        "token": token, "expires_in": 30 * 86400,
+    })
 
 
 @app.route("/api/auth/register", methods=["POST"])

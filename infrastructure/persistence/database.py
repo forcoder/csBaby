@@ -122,16 +122,29 @@ def _migrate_device_to_user(db: sqlite3.Connection):
 
 def init_db():
     db = get_connection()
+    # users 表加 email 列 (UNIQUE, nullable) 以支持 email 登录
+    # SQLite ALTER TABLE ADD COLUMN 支持但不支持 UNIQUE 约束, 用 UNIQUE INDEX 替代
     db.executescript("""
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
             phone TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             salt TEXT NOT NULL,
+            email TEXT DEFAULT NULL,
             name TEXT DEFAULT '',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
+    """)
+    # Add email column if upgrading from older schema
+    cols = [r["name"] for r in db.execute("PRAGMA table_info(users)").fetchall()]
+    if "email" not in cols:
+        db.execute("ALTER TABLE users ADD COLUMN email TEXT DEFAULT NULL")
+    db.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email) "
+        "WHERE email IS NOT NULL"
+    )
 
+    db.executescript("""
         CREATE TABLE IF NOT EXISTS user_devices (
             user_id TEXT NOT NULL,
             device_id TEXT NOT NULL,
