@@ -3,6 +3,7 @@ from typing import List, Optional
 from domain.entities.keyword_rule import KeywordRule
 from domain.repositories.rule_repo import RuleRepository
 from infrastructure.persistence.database import get_connection
+from infrastructure.sync.sync_writer import SyncWriter
 
 
 class SqliteRuleRepository(RuleRepository):
@@ -17,6 +18,19 @@ class SqliteRuleRepository(RuleRepository):
         )
         rule.id = cursor.lastrowid
         db.commit()
+        sync_payload = {
+            "id": rule.id,
+            "user_id": rule.user_id,
+            "keyword": rule.keyword,
+            "match_type": rule.match_type,
+            "reply_template": rule.reply_template,
+            "category": rule.category,
+            "target_type": rule.target_type,
+            "target_names": json.dumps(rule.target_names),
+            "priority": rule.priority,
+            "enabled": 1 if rule.enabled else 0,
+        }
+        SyncWriter(db).push("keyword_rules", "INSERT", rule.id, sync_payload)
         db.close()
         return rule
 
@@ -71,6 +85,19 @@ class SqliteRuleRepository(RuleRepository):
              int(rule.enabled), rule.id, rule.user_id),
         )
         db.commit()
+        sync_payload = {
+            "id": rule.id,
+            "user_id": rule.user_id,
+            "keyword": rule.keyword,
+            "match_type": rule.match_type,
+            "reply_template": rule.reply_template,
+            "category": rule.category,
+            "target_type": rule.target_type,
+            "target_names": json.dumps(rule.target_names),
+            "priority": rule.priority,
+            "enabled": 1 if rule.enabled else 0,
+        }
+        SyncWriter(db).push("keyword_rules", "UPDATE", rule.id, sync_payload)
         db.close()
         return rule
 
@@ -78,6 +105,7 @@ class SqliteRuleRepository(RuleRepository):
         db = get_connection()
         cursor = db.execute("DELETE FROM keyword_rules WHERE id=? AND user_id=?", (rule_id, user_id))
         db.commit()
+        SyncWriter(db).push("keyword_rules", "DELETE", rule_id, None)
         db.close()
         return cursor.rowcount > 0
 
