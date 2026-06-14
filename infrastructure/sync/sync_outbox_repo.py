@@ -10,11 +10,12 @@ class SyncOutboxRepository:
     def __init__(self, db):
         self.db = db
 
-    def enqueue(self, table_name: str, op: str, row_id: Optional[int], payload: dict) -> int:
+    def enqueue(self, table_name: str, op: str, row_id: Optional[int], payload: dict,
+                last_error: Optional[str] = None) -> int:
         cursor = self.db.execute(
-            """INSERT INTO sync_outbox (table_name, op, row_id, payload)
-               VALUES (?, ?, ?, ?)""",
-            (table_name, op, row_id, json.dumps(payload, ensure_ascii=False)),
+            """INSERT INTO sync_outbox (table_name, op, row_id, payload, last_error)
+               VALUES (?, ?, ?, ?, ?)""",
+            (table_name, op, row_id, json.dumps(payload, ensure_ascii=False), last_error),
         )
         self.db.commit()
         return cursor.lastrowid
