@@ -1,0 +1,50 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: csbaby/api:latest
+    container_name: csbaby-api
+    restart: always
+    env_file: .env
+    environment:
+      - PORT=8080
+      - SERVICE_NAME=csbaby-api
+      - DATABASE_PATH=/data/csbaby.db
+    volumes:
+      - api-data:/data
+    networks: [csnet]
+
+  sync:
+    build:
+      context: ../csBaby-server-py
+      dockerfile: Dockerfile
+    image: csbaby/sync:latest
+    container_name: csbaby-sync
+    restart: always
+    env_file: .env
+    environment:
+      - PORT=8080
+      - SERVICE_NAME=csbaby-sync-server-py
+    networks: [csnet]
+
+  admin:
+    build:
+      context: ../admin
+      dockerfile: Dockerfile
+    image: csbaby/admin:latest
+    container_name: csbaby-admin
+    restart: always
+    env_file: .env
+    environment:
+      - PORT=8080
+      - SERVICE_NAME=csbaby-admin
+    networks: [csnet]
+
+networks:
+  csnet:
+    external: true
+    name: csnet
+
+volumes:
+  api-data:
