@@ -2,7 +2,6 @@ from typing import Optional
 from domain.entities.device import Device
 from domain.repositories.device_repo import DeviceRepository
 from infrastructure.persistence.database import get_connection
-from infrastructure.sync.sync_writer import SyncWriter
 
 
 class SqliteDeviceRepository(DeviceRepository):
@@ -13,10 +12,6 @@ class SqliteDeviceRepository(DeviceRepository):
             (device.id, device.token, device.name, device.platform, device.app_version),
         )
         db.commit()
-        # Sync payload excludes token (sensitive auth credential); keep local-only
-        sync_payload = {"id": device.id, "name": device.name,
-                        "platform": device.platform, "app_version": device.app_version}
-        SyncWriter(db).push("devices", "INSERT", None, sync_payload)
         db.close()
         return device
 
@@ -36,6 +31,4 @@ class SqliteDeviceRepository(DeviceRepository):
         db = get_connection()
         db.execute("UPDATE devices SET last_heartbeat = CURRENT_TIMESTAMP WHERE id = ?", (device_id,))
         db.commit()
-        sync_payload = {"id": device_id}
-        SyncWriter(db).push("devices", "UPDATE", None, sync_payload)
         db.close()

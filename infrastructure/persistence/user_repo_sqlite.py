@@ -1,7 +1,6 @@
 from typing import Optional
 
 from infrastructure.persistence.database import get_connection
-from infrastructure.sync.sync_writer import SyncWriter
 
 
 class SqliteUserRepository:
@@ -14,10 +13,6 @@ class SqliteUserRepository:
             (user_id, phone, password_hash, salt, email, name),
         )
         db.commit()
-        # Sync payload MUST NOT include password_hash/salt — sensitive credentials
-        # stay in the local SQLite only. Supabase holds identity fields for analytics.
-        sync_payload = {"id": user_id, "phone": phone, "email": email, "name": name}
-        SyncWriter(db).push("users", "INSERT", None, sync_payload)
         db.close()
         return {"id": user_id, "phone": phone, "email": email, "name": name}
 
@@ -25,11 +20,6 @@ class SqliteUserRepository:
         db = get_connection()
         db.execute("UPDATE users SET name=? WHERE id=?", (name, user_id))
         db.commit()
-        row = db.execute("SELECT id, phone, email, name FROM users WHERE id=?", (user_id,)).fetchone()
-        if row:
-            sync_payload = {"id": row["id"], "phone": row["phone"],
-                           "email": row["email"], "name": row["name"]}
-            SyncWriter(db).push("users", "UPDATE", None, sync_payload)
         db.close()
 
     def get_by_id(self, user_id: str) -> Optional[dict]:
