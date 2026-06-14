@@ -14,22 +14,21 @@ class SqliteUserRepository:
             (user_id, phone, password_hash, salt, name),
         )
         db.commit()
-        payload = {"id": user_id, "phone": phone, "password_hash": password_hash,
-                   "salt": salt, "name": name}
-        SyncWriter(db).push("users", "INSERT", None, payload)
+        # Sync payload MUST NOT include password_hash/salt — sensitive credentials
+        # stay in the local SQLite only. Supabase holds identity fields for analytics.
+        sync_payload = {"id": user_id, "phone": phone, "name": name}
+        SyncWriter(db).push("users", "INSERT", None, sync_payload)
         db.close()
-        return payload
+        return {"id": user_id, "phone": phone, "name": name}
 
     def update(self, user_id: str, name: str) -> None:
         db = get_connection()
         db.execute("UPDATE users SET name=? WHERE id=?", (name, user_id))
         db.commit()
-        row = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        row = db.execute("SELECT id, phone, name FROM users WHERE id=?", (user_id,)).fetchone()
         if row:
-            payload = {"id": row["id"], "phone": row["phone"],
-                       "password_hash": row["password_hash"], "salt": row["salt"],
-                       "name": row["name"]}
-            SyncWriter(db).push("users", "UPDATE", None, payload)
+            sync_payload = {"id": row["id"], "phone": row["phone"], "name": row["name"]}
+            SyncWriter(db).push("users", "UPDATE", None, sync_payload)
         db.close()
 
     def get_by_id(self, user_id: str) -> Optional[dict]:
