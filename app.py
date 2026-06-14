@@ -14,6 +14,7 @@ import secrets
 import time
 from functools import wraps
 from threading import Lock
+from typing import Optional
 from flask import Flask, request, jsonify
 
 logger = logging.getLogger(__name__)
