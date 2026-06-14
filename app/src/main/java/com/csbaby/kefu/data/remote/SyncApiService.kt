@@ -18,13 +18,8 @@ import retrofit2.http.*
  */
 interface SyncApiService {
 
-    // ========== 认证 ==========
-
-    @POST("auth/login")
-    suspend fun login(@Body request: LoginRequest): ApiResponse<AuthResult>
-
-    @POST("auth/register")
-    suspend fun register(@Body request: RegisterRequest): ApiResponse<AuthResult>
+    // ========== 认证 (refresh token only) ==========
+    // login/register 已迁到主 API 的 AuthApiService
 
     @POST("auth/refresh")
     suspend fun refreshToken(@Body request: RefreshTokenRequest): ApiResponse<AuthResult>
@@ -66,16 +61,6 @@ interface SyncApiService {
 }
 
 // ========== 请求/响应数据模型 ==========
-
-// 登录请求 (邮箱+密码 - 匹配 Node.js Express 后端)
-data class LoginRequest(val email: String, val password: String)
-
-// 注册请求
-data class RegisterRequest(
-    val email: String,
-    val password: String,
-    val displayName: String = ""
-)
 
 // Token刷新请求
 data class RefreshTokenRequest(val refreshToken: String)
