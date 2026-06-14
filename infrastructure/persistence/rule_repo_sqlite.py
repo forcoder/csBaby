@@ -67,7 +67,7 @@ class SqliteRuleRepository(RuleRepository):
         except (json.JSONDecodeError, TypeError):
             target_names = []
         return KeywordRule(
-            id=row["id"], user_id=r["user_id"], keyword=row["keyword"],
+            id=row["id"], user_id=row["user_id"], keyword=row["keyword"],
             match_type=row["match_type"], reply_template=row["reply_template"],
             category=row["category"], target_type=row["target_type"],
             target_names=target_names, priority=row["priority"],

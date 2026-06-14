@@ -67,6 +67,9 @@ def registered_device(admin_client):
     })
     assert resp.status_code == 200
     data = resp.get_json()
+    # Mirror device_id into users so tenant_* FK constraints accept writes.
+    from tests._helpers import seed_user_for_device
+    seed_user_for_device(data.get("device_id") or data.get("user_id"))
     return data
 
 

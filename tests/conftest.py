@@ -1,7 +1,7 @@
 import os
 import sys
-import pytest
 import tempfile
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -51,4 +51,6 @@ def auth_headers(client):
     })
     data = resp.get_json()
     token = data["token"]
+    from tests._helpers import seed_user_for_device
+    seed_user_for_device(data.get("device_id") or data.get("user_id"))
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}

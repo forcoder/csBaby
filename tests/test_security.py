@@ -7,6 +7,10 @@ def _register_device(client, name="device"):
         "name": name, "platform": "android", "app_version": "1.0.0"
     })
     data = resp.get_json()
+    # Mirror device_id into users so business-table FK constraints accept
+    # writes made with the anonymous JWT. See tests._helpers.
+    from tests._helpers import seed_user_for_device
+    seed_user_for_device(data.get("device_id") or data.get("user_id"))
     return {"Authorization": f"Bearer {data['token']}", "Content-Type": "application/json"}
 
 
