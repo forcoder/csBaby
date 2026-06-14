@@ -2,6 +2,7 @@ from typing import List, Optional
 from domain.entities.model_config import ModelConfig
 from domain.repositories.model_repo import ModelRepository
 from infrastructure.persistence.database import get_connection
+from infrastructure.sync.sync_writer import SyncWriter
 
 
 class SqliteModelRepository(ModelRepository):
@@ -19,6 +20,20 @@ class SqliteModelRepository(ModelRepository):
         )
         config.id = cursor.lastrowid
         db.commit()
+        sync_payload = {
+            "id": config.id,
+            "user_id": config.user_id,
+            "name": config.name,
+            "model_type": config.model_type,
+            "model": config.model,
+            "api_key": config.api_key,
+            "api_endpoint": config.api_endpoint,
+            "temperature": config.temperature,
+            "max_tokens": config.max_tokens,
+            "is_default": 1 if config.is_default else 0,
+            "enabled": 1 if config.enabled else 0,
+        }
+        SyncWriter(db).push("model_configs", "INSERT", config.id, sync_payload)
         db.close()
         return config
 
@@ -65,6 +80,20 @@ class SqliteModelRepository(ModelRepository):
              config.id, config.user_id),
         )
         db.commit()
+        sync_payload = {
+            "id": config.id,
+            "user_id": config.user_id,
+            "name": config.name,
+            "model_type": config.model_type,
+            "model": config.model,
+            "api_key": config.api_key,
+            "api_endpoint": config.api_endpoint,
+            "temperature": config.temperature,
+            "max_tokens": config.max_tokens,
+            "is_default": 1 if config.is_default else 0,
+            "enabled": 1 if config.enabled else 0,
+        }
+        SyncWriter(db).push("model_configs", "UPDATE", config.id, sync_payload)
         db.close()
         return config
 
@@ -72,6 +101,7 @@ class SqliteModelRepository(ModelRepository):
         db = get_connection()
         cursor = db.execute("DELETE FROM model_configs WHERE id=? AND user_id=?", (model_id, user_id))
         db.commit()
+        SyncWriter(db).push("model_configs", "DELETE", model_id, None)
         db.close()
         return cursor.rowcount > 0
 
