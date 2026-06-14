@@ -250,9 +250,12 @@ def register():
             SyncWriter(db).push("user_devices", "INSERT", None, sync_payload)
         finally:
             db.close()
-    resp = {"user_id": device.user_id, "token": device.token, "expires_in": 30 * 86400}
-    if user_id:
-        resp["user_id"] = user_id
+    resp = {
+        "device_id": device.id,
+        "user_id": user_id,
+        "token": device.token,
+        "expires_in": 30 * 86400,
+    }
     return jsonify(resp)
 
 @app.route("/api/auth/heartbeat", methods=["POST"])
