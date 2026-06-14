@@ -3,6 +3,7 @@ from datetime import datetime
 from domain.entities.optimization_metrics import OptimizationMetrics
 from domain.repositories.metrics_repo import MetricsRepository
 from infrastructure.persistence.database import get_connection
+from infrastructure.sync.sync_writer import SyncWriter
 
 
 class SqliteMetricsRepository(MetricsRepository):
@@ -36,4 +37,15 @@ class SqliteMetricsRepository(MetricsRepository):
             (user_id, today),
         )
         db.commit()
+        row = db.execute(
+            "SELECT * FROM optimization_metrics WHERE user_id=? AND date=?",
+            (user_id, today),
+        ).fetchone()
+        if row:
+            payload = {"id": row["id"], "user_id": row["user_id"], "date": row["date"],
+                       "total_generated": row["total_generated"],
+                       "total_accepted": row["total_accepted"],
+                       "total_modified": row["total_modified"],
+                       "total_rejected": row["total_rejected"]}
+            SyncWriter(db).push("optimization_metrics", "UPDATE", row["id"], payload)
         db.close()

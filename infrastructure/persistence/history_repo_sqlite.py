@@ -2,6 +2,7 @@ from typing import List, Tuple
 from domain.entities.reply_history import ReplyHistory
 from domain.repositories.history_repo import HistoryRepository
 from infrastructure.persistence.database import get_connection
+from infrastructure.sync.sync_writer import SyncWriter
 
 
 class SqliteHistoryRepository(HistoryRepository):
@@ -18,6 +19,16 @@ class SqliteHistoryRepository(HistoryRepository):
         )
         entry.id = cursor.lastrowid
         db.commit()
+        payload = {"id": entry.id, "user_id": entry.user_id,
+                   "original_message": entry.original_message,
+                   "reply_content": entry.reply_content,
+                   "source": entry.source, "model_used": entry.model_used,
+                   "confidence": entry.confidence,
+                   "response_time_ms": entry.response_time_ms,
+                   "platform": entry.platform,
+                   "customer_name": entry.customer_name,
+                   "house_name": entry.house_name}
+        SyncWriter(db).push("reply_history", "INSERT", entry.id, payload)
         db.close()
         return entry
 

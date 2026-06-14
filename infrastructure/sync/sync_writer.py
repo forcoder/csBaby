@@ -18,6 +18,10 @@ _TABLE_NAME_MAP = {
     "blacklist": "blacklist",
     "tenant_style_config": "tenant_style_config",
     "tenant_app_config": "tenant_app_config",
+    "devices": "devices",
+    "feedback": "feedback",
+    "reply_history": "reply_history",
+    "optimization_metrics": "optimization_metrics",
 }
 
 

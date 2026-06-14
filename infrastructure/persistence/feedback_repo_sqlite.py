@@ -2,6 +2,7 @@ from typing import List
 from domain.entities.feedback import Feedback
 from domain.repositories.feedback_repo import FeedbackRepository
 from infrastructure.persistence.database import get_connection
+from infrastructure.sync.sync_writer import SyncWriter
 
 
 class SqliteFeedbackRepository(FeedbackRepository):
@@ -15,6 +16,11 @@ class SqliteFeedbackRepository(FeedbackRepository):
         )
         fb.id = cursor.lastrowid
         db.commit()
+        payload = {"id": fb.id, "user_id": fb.user_id,
+                   "reply_history_id": fb.reply_history_id, "action": fb.action,
+                   "modified_text": fb.modified_text, "rating": fb.rating,
+                   "comment": fb.comment}
+        SyncWriter(db).push("feedback", "INSERT", fb.id, payload)
         db.close()
         return fb
 
