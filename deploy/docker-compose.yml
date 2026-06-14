@@ -15,6 +15,23 @@ services:
       - api-data:/data
     networks: [csnet]
 
+  # Retry worker: processes sync_outbox to push failed items to Supabase
+  retry:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: csbaby/api:latest
+    container_name: csbaby-retry
+    restart: always
+    env_file: .env
+    environment:
+      - DATABASE_PATH=/data/csbaby.db
+      - SYNC_RETRY_INTERVAL_SECONDS=30
+    volumes:
+      - api-data:/data
+    networks: [csnet]
+    command: ["python", "-m", "infrastructure.sync.retry_worker"]
+
   sync:
     build:
       context: ../csBaby-server-py
