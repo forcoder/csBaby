@@ -31,7 +31,20 @@ def upsert_to_supabase(table: str, op: str, row_id: Optional[int], payload: Opti
     try:
         with conn.cursor() as cur:
             if op == "DELETE":
-                cur.execute(f"DELETE FROM {supa_table} WHERE id=%s", (row_id,))
+                if supa_table == "user_devices" and payload:
+                    cur.execute(
+                        "DELETE FROM user_devices WHERE user_id=%s AND device_id=%s",
+                        (payload.get("user_id"), payload.get("device_id")),
+                    )
+                elif supa_table == "users" and payload:
+                    cur.execute("DELETE FROM users WHERE id=%s", (payload.get("id"),))
+                elif supa_table in ("tenant_style_config", "tenant_app_config") and payload:
+                    cur.execute(
+                        f"DELETE FROM {supa_table} WHERE user_id=%s",
+                        (payload.get("user_id"),),
+                    )
+                else:
+                    cur.execute(f"DELETE FROM {supa_table} WHERE id=%s", (row_id,))
             else:
                 if not payload:
                     raise ValueError(f"INSERT/UPDATE requires payload, got empty for {table}")

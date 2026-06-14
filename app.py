@@ -34,6 +34,7 @@ from infrastructure.persistence.model_repo_sqlite import SqliteModelRepository
 from infrastructure.persistence.history_repo_sqlite import SqliteHistoryRepository
 from infrastructure.persistence.feedback_repo_sqlite import SqliteFeedbackRepository
 from infrastructure.persistence.metrics_repo_sqlite import SqliteMetricsRepository
+from infrastructure.sync.sync_writer import SyncWriter
 from domain.services.auth_service import AuthService as UserAuthService
 
 # ========== 配置 ==========
@@ -251,6 +252,13 @@ def register():
                 (user_id, device.id, platform, data.get("name", "")),
             )
             db.commit()
+            sync_payload = {
+                "user_id": user_id,
+                "device_id": device.id,
+                "platform": platform,
+                "device_name": data.get("name", ""),
+            }
+            SyncWriter(db).push("user_devices", "INSERT", None, sync_payload)
         finally:
             db.close()
     resp = {"user_id": device.user_id, "token": device.token, "expires_in": 30 * 86400}
