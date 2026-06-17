@@ -115,11 +115,13 @@ def put_connection(conn) -> None:
 
 
 def health_check() -> bool:
+    import logging
     try:
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute("SELECT 1")
             cur.fetchone()
         return True
-    except Exception:
+    except Exception as e:
+        logging.exception("supabase health_check failed: %s", e)
         return False

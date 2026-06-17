@@ -155,15 +155,38 @@ def health_check():
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
     db_status = "ok"
+    outbox_pending = 0
+    outbox_dead = 0
+    supa_error = None
     try:
         conn = get_connection()
         conn.execute("SELECT 1")
+        outbox_pending = conn.execute(
+            "SELECT COUNT(*) AS c FROM sync_outbox"
+        ).fetchone()["c"]
+        outbox_dead = conn.execute(
+            "SELECT COUNT(*) AS c FROM sync_outbox_dead"
+        ).fetchone()["c"]
         conn.close()
     except Exception as exc:
         db_status = str(exc)
         health["status"] = "degraded"
     health["database"] = db_status
-    health["supabase"] = "up" if supa_health() else "down"
+    try:
+        supa_ok = supa_health()
+        health["supabase"] = "up" if supa_ok else "down"
+    except Exception as exc:
+        supa_error = f"{type(exc).__name__}: {exc}"
+        health["supabase"] = "down"
+        health["supabase_error"] = supa_error
+    health["sync_outbox_pending"] = outbox_pending
+    health["sync_outbox_dead"] = outbox_dead
+    # 警告条件 (不降级, 只标记): outbox 堆积超过 100 条 或 死信 > 0
+    if outbox_pending > 100 or outbox_dead > 0:
+        health["sync_warning"] = (
+            f"sync_outbox 有 {outbox_pending} 条待重试"
+            + (f", 死信 {outbox_dead} 条" if outbox_dead else "")
+        )
     status_code = 200 if health["status"] == "ok" else 503
     return jsonify(health), status_code
 
