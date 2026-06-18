@@ -140,8 +140,10 @@ class ProfileViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         syncState = state,
-                        syncStats = if (state is SyncState.Success) state.stats else it.syncStats,
-                        lastSyncStats = if (state is SyncState.Success) state.stats else it.lastSyncStats
+                        // BUG-R8 续: 空 stats 不覆盖已有非空 stats,
+                        // 避免二次 fullSync 触发的空 stats 覆盖首次的具体同步内容
+                        syncStats = if (state is SyncState.Success) state.stats.ifEmpty { it.syncStats } else it.syncStats,
+                        lastSyncStats = if (state is SyncState.Success) state.stats.ifEmpty { it.lastSyncStats } else it.lastSyncStats
                     )
                 }
             }
@@ -331,8 +333,12 @@ class ProfileViewModel @Inject constructor(
     fun login(email: String, password: String) {
         Log.d("ProfileViewModel", "login() 调用: email=$email")
         viewModelScope.launch {
+            // BUG-R8 续: SyncManager.login() 内部已触发 fullSync,这里不再重复调用
+            // 二次 fullSync 会让 server 返回空 stats 覆盖首次的具体同步内容
             syncManager.login(email, password).fold(
-                onSuccess = { syncManager.fullSync(it.tenantId) },
+                onSuccess = { auth ->
+                    Log.d("ProfileViewModel", "登录成功: tenantId=${auth.tenantId}")
+                },
                 onFailure = { e ->
                     Timber.e(e, "登录失败")
                     _uiState.update { it.copy(syncState = SyncState.Error(e.message ?: "登录失败，请检查网络")) }

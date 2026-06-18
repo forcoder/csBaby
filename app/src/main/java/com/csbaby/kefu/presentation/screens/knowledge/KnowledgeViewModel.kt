@@ -215,6 +215,33 @@ class KnowledgeViewModel @Inject constructor(
     }
 
     /**
+     * 复制指定 id 的规则:生成新 id,keyword 追加" 副本"后缀,其他字段保持原值。
+     * 源规则不存在时通过 noticeMessage 提示用户,不抛异常。
+     */
+    fun duplicateRule(id: Long) {
+        viewModelScope.launch {
+            val source = knowledgeBaseManager.getRuleById(id)
+            if (source == null) {
+                _uiState.update { it.copy(noticeMessage = "规则不存在") }
+                return@launch
+            }
+
+            val now = System.currentTimeMillis()
+            val copy = source.copy(
+                id = 0L,
+                keyword = "${source.keyword} 副本",
+                createdAt = now,
+                updatedAt = now,
+                syncVersion = 0L
+            )
+            knowledgeBaseManager.createRule(copy)
+            _uiState.update { it.copy(noticeMessage = "已复制: ${source.keyword}") }
+
+            triggerAutoSyncForLoggedInUser()
+        }
+    }
+
+    /**
      * 写入操作后触发自动同步（debounce 2s，由 SyncManager.triggerSync 处理）
      */
     private fun triggerAutoSyncForLoggedInUser() {
