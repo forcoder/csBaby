@@ -293,6 +293,13 @@ class SyncManager @Inject constructor(
         }
 
         Timber.d("本地数据迁移完成")
+        // BUG-R12 fix: 迁移后必须触发增量同步, 把迁移过来的数据推到 sync server
+        // 否则 default_tenant 的数据迁过来后, syncVersion=0 永远不会被 pushChanges 推送
+        try {
+            incrementalSync(tenantId)
+        } catch (e: Exception) {
+            Timber.e(e, "迁移后增量同步失败")
+        }
     }
 
     // ========== 全量同步（首次登录 / 换手机恢复） ==========
