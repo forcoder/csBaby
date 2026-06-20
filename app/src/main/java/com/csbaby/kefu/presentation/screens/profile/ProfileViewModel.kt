@@ -5,21 +5,39 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.csbaby.kefu.BuildConfig
 import com.csbaby.kefu.data.local.PreferencesManager
-import com.csbaby.kefu.data.model.*
-import com.csbaby.kefu.data.sync.AuthManager
-import com.csbaby.kefu.data.sync.SyncManager
-import com.csbaby.kefu.data.sync.SyncState
-import com.csbaby.kefu.domain.model.UserStyleProfile
+import com.csbaby.kefu.data.model.BackupRecord
+import com.csbaby.kefu.data.model.BackupStatus
+import com.csbaby.kefu.data.model.UpdateStatus
+import com.csbaby.kefu.domain.model.SyncState
 import com.csbaby.kefu.domain.repository.UserStyleRepository
-import com.csbaby.kefu.infrastructure.backup.BackupManager
-import com.csbaby.kefu.infrastructure.ota.OtaManager
-import com.csbaby.kefu.infrastructure.style.StyleLearningEngine
+import com.csbaby.kefu.domain.usecase.auth.GetCurrentTenantIdUseCase
+import com.csbaby.kefu.domain.usecase.auth.ObserveAuthStateUseCase
+import com.csbaby.kefu.domain.usecase.backup.ClearBackupStatusUseCase
+import com.csbaby.kefu.domain.usecase.backup.DeleteBackupUseCase
+import com.csbaby.kefu.domain.usecase.backup.FetchBackupListUseCase
+import com.csbaby.kefu.domain.usecase.backup.ObserveBackupMessageUseCase
+import com.csbaby.kefu.domain.usecase.backup.ObserveBackupRecordsUseCase
+import com.csbaby.kefu.domain.usecase.backup.ObserveBackupStatusUseCase
+import com.csbaby.kefu.domain.usecase.backup.RestoreBackupUseCase
+import com.csbaby.kefu.domain.usecase.backup.UploadBackupUseCase
+import com.csbaby.kefu.domain.usecase.ota.CancelDownloadUseCase
+import com.csbaby.kefu.domain.usecase.ota.CheckForUpdateUseCase
+import com.csbaby.kefu.domain.usecase.ota.ObserveAvailableUpdateUseCase
+import com.csbaby.kefu.domain.usecase.ota.ObserveOtaErrorUseCase
+import com.csbaby.kefu.domain.usecase.ota.ObserveOtaStatusUseCase
+import com.csbaby.kefu.domain.usecase.ota.StartDownloadUpdateUseCase
+import com.csbaby.kefu.domain.usecase.stats.GetDataStatsUseCase
+import com.csbaby.kefu.domain.usecase.style.UpdateStyleParametersUseCase
+import com.csbaby.kefu.domain.usecase.sync.IsLoggedInUseCase
+import com.csbaby.kefu.domain.usecase.sync.LoginUseCase
+import com.csbaby.kefu.domain.usecase.sync.LogoutUseCase
+import com.csbaby.kefu.domain.usecase.sync.ObserveLastSyncTimeUseCase
+import com.csbaby.kefu.domain.usecase.sync.ObserveSyncQueueUseCase
+import com.csbaby.kefu.domain.usecase.sync.ObserveSyncStateUseCase
+import com.csbaby.kefu.domain.usecase.sync.RegisterUseCase
+import com.csbaby.kefu.domain.usecase.sync.SyncNowUseCase
+import com.csbaby.kefu.domain.usecase.sync.TriggerSyncUseCase
 import com.csbaby.kefu.presentation.theme.ThemeMode
-import com.csbaby.kefu.data.local.dao.AIModelConfigDao
-import com.csbaby.kefu.data.local.dao.AppConfigDao
-import com.csbaby.kefu.data.local.dao.KeywordRuleDao
-import com.csbaby.kefu.data.local.dao.MessageBlacklistDao
-import com.csbaby.kefu.data.local.dao.ScenarioDao
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -43,6 +61,7 @@ data class ProfileUiState(
     val syncState: SyncState = SyncState.Idle,
     val isLoggedIn: Boolean = false,
     val currentTenantId: String? = null,
+    val currentUserName: String? = null,
     val pendingSyncCount: Int = 0,
     val lastSyncTime: Long = 0L,
     val syncStats: String = "",
@@ -84,16 +103,45 @@ data class DataStats(
 class ProfileViewModel @Inject constructor(
     private val preferencesManager: PreferencesManager,
     private val userStyleRepository: UserStyleRepository,
-    private val styleLearningEngine: StyleLearningEngine,
-    private val otaManager: OtaManager,
-    private val syncManager: SyncManager,
-    private val authManager: AuthManager,
-    private val backupManager: BackupManager,
-    private val keywordRuleDao: KeywordRuleDao,
-    private val messageBlacklistDao: MessageBlacklistDao,
-    private val aiModelConfigDao: AIModelConfigDao,
-    private val appConfigDao: AppConfigDao,
-    private val scenarioDao: ScenarioDao
+
+    // 同步
+    private val loginUseCase: LoginUseCase,
+    private val registerUseCase: RegisterUseCase,
+    private val logoutUseCase: LogoutUseCase,
+    private val syncNowUseCase: SyncNowUseCase,
+    private val isLoggedInUseCase: IsLoggedInUseCase,
+    private val observeSyncStateUseCase: ObserveSyncStateUseCase,
+    private val observeSyncQueueUseCase: ObserveSyncQueueUseCase,
+    private val observeLastSyncTimeUseCase: ObserveLastSyncTimeUseCase,
+    private val triggerSyncUseCase: TriggerSyncUseCase,
+
+    // 认证
+    private val observeAuthStateUseCase: ObserveAuthStateUseCase,
+    private val getCurrentTenantIdUseCase: GetCurrentTenantIdUseCase,
+
+    // 备份
+    private val uploadBackupUseCase: UploadBackupUseCase,
+    private val fetchBackupListUseCase: FetchBackupListUseCase,
+    private val restoreBackupUseCase: RestoreBackupUseCase,
+    private val deleteBackupUseCase: DeleteBackupUseCase,
+    private val clearBackupStatusUseCase: ClearBackupStatusUseCase,
+    private val observeBackupStatusUseCase: ObserveBackupStatusUseCase,
+    private val observeBackupMessageUseCase: ObserveBackupMessageUseCase,
+    private val observeBackupRecordsUseCase: ObserveBackupRecordsUseCase,
+
+    // OTA
+    private val checkForUpdateUseCase: CheckForUpdateUseCase,
+    private val startDownloadUpdateUseCase: StartDownloadUpdateUseCase,
+    private val cancelDownloadUseCase: CancelDownloadUseCase,
+    private val observeOtaStatusUseCase: ObserveOtaStatusUseCase,
+    private val observeAvailableUpdateUseCase: ObserveAvailableUpdateUseCase,
+    private val observeOtaErrorUseCase: ObserveOtaErrorUseCase,
+
+    // 风格
+    private val updateStyleParametersUseCase: UpdateStyleParametersUseCase,
+
+    // 统计
+    private val getDataStatsUseCase: GetDataStatsUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -114,20 +162,16 @@ class ProfileViewModel @Inject constructor(
 
     private fun loadDataStats() {
         viewModelScope.launch {
-            val tenantId = authManager.currentTenantId() ?: return@launch
-            val knowledgeCount = runCatching { keywordRuleDao.getRuleCount() }.getOrDefault(0)
-            val blacklistCount = runCatching { messageBlacklistDao.getEnabledCount() }.getOrDefault(0)
-            val modelCount = aiModelConfigDao.getModelsByTenantSync(tenantId).size
-            val appCount = appConfigDao.getAppsByTenantSync(tenantId).size
-            val scenarioCount = scenarioDao.getScenariosByTenantSync(tenantId).size
+            val tenantId = getCurrentTenantIdUseCase() ?: return@launch
+            val stats = getDataStatsUseCase(tenantId)
             _uiState.update {
                 it.copy(
                     dataStats = DataStats(
-                        knowledgeCount = knowledgeCount,
-                        blacklistCount = blacklistCount,
-                        modelCount = modelCount,
-                        appCount = appCount,
-                        scenarioCount = scenarioCount
+                        knowledgeCount = stats.knowledgeCount,
+                        blacklistCount = stats.blacklistCount,
+                        modelCount = stats.modelCount,
+                        appCount = stats.appCount,
+                        scenarioCount = stats.scenarioCount
                     )
                 )
             }
@@ -136,7 +180,7 @@ class ProfileViewModel @Inject constructor(
 
     private fun observeSyncState() {
         viewModelScope.launch {
-            syncManager.syncState.collect { state ->
+            observeSyncStateUseCase().collect { state ->
                 _uiState.update {
                     it.copy(
                         syncState = state,
@@ -152,11 +196,12 @@ class ProfileViewModel @Inject constructor(
 
     private fun observeAuthState() {
         viewModelScope.launch {
-            authManager.authStateFlow.collect { auth ->
+            observeAuthStateUseCase().collect { auth ->
                 _uiState.update {
                     it.copy(
                         isLoggedIn = auth != null,
-                        currentTenantId = auth?.tenantId
+                        currentTenantId = auth?.tenantId,
+                        currentUserName = auth?.displayName?.takeIf { it.isNotBlank() }
                     )
                 }
             }
@@ -165,7 +210,7 @@ class ProfileViewModel @Inject constructor(
 
     private fun observeSyncQueue() {
         viewModelScope.launch {
-            syncManager.queue.pendingCount.collect { count ->
+            observeSyncQueueUseCase().collect { count ->
                 _uiState.update { it.copy(pendingSyncCount = count) }
             }
         }
@@ -173,7 +218,7 @@ class ProfileViewModel @Inject constructor(
 
     private fun observeLastSyncTime() {
         viewModelScope.launch {
-            syncManager.lastSyncTime.collect { time ->
+            observeLastSyncTimeUseCase().collect { time ->
                 _uiState.update { it.copy(lastSyncTime = time) }
             }
         }
@@ -214,7 +259,7 @@ class ProfileViewModel @Inject constructor(
 
     fun updateFormality(value: Float) {
         viewModelScope.launch {
-            styleLearningEngine.updateStyleParameters(userId = currentUserId, formality = value)
+            updateStyleParametersUseCase(userId = currentUserId, formality = value)
             _uiState.update { it.copy(formalityLevel = value) }
             triggerAutoSync()
         }
@@ -222,7 +267,7 @@ class ProfileViewModel @Inject constructor(
 
     fun updateEnthusiasm(value: Float) {
         viewModelScope.launch {
-            styleLearningEngine.updateStyleParameters(userId = currentUserId, enthusiasm = value)
+            updateStyleParametersUseCase(userId = currentUserId, enthusiasm = value)
             _uiState.update { it.copy(enthusiasmLevel = value) }
             triggerAutoSync()
         }
@@ -230,15 +275,15 @@ class ProfileViewModel @Inject constructor(
 
     fun updateProfessionalism(value: Float) {
         viewModelScope.launch {
-            styleLearningEngine.updateStyleParameters(userId = currentUserId, professionalism = value)
+            updateStyleParametersUseCase(userId = currentUserId, professionalism = value)
             _uiState.update { it.copy(professionalismLevel = value) }
             triggerAutoSync()
         }
     }
 
     private fun triggerAutoSync() {
-        if (syncManager.isLoggedIn()) {
-            syncManager.triggerSync()
+        if (isLoggedInUseCase()) {
+            triggerSyncUseCase()
         }
     }
 
@@ -265,7 +310,7 @@ class ProfileViewModel @Inject constructor(
 
     private fun setupOtaUpdates() {
         viewModelScope.launch {
-            otaManager.updateStatus.collect { status ->
+            observeOtaStatusUseCase().collect { status ->
                 val statusText = when (status) {
                     UpdateStatus.IDLE -> "空闲"
                     UpdateStatus.CHECKING -> "检查更新中..."
@@ -281,7 +326,7 @@ class ProfileViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            otaManager.availableUpdate.collect { update ->
+            observeAvailableUpdateUseCase().collect { update ->
                 _uiState.update { state ->
                     state.copy(
                         availableUpdate = update?.let {
@@ -299,23 +344,25 @@ class ProfileViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            otaManager.errorMessage.collect { error ->
+            observeOtaErrorUseCase().collect { error ->
                 _uiState.update { it.copy(errorMessage = error) }
             }
         }
     }
 
     fun checkForUpdate() {
-        viewModelScope.launch { otaManager.checkForUpdate() }
+        viewModelScope.launch { checkForUpdateUseCase() }
     }
 
     fun startDownloadUpdate() {
+        // 取最新 availableUpdate 启动下载
         viewModelScope.launch {
-            otaManager.availableUpdate.value?.let { otaManager.startDownload(it) }
+            val current = observeAvailableUpdateUseCase().firstOrNull()
+            current?.let { startDownloadUpdateUseCase(it) }
         }
     }
 
-    fun cancelDownload() { otaManager.cancelDownload() }
+    fun cancelDownload() { cancelDownloadUseCase() }
 
     fun getCurrentVersion(): String = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
 
@@ -333,9 +380,7 @@ class ProfileViewModel @Inject constructor(
     fun login(email: String, password: String) {
         Log.d("ProfileViewModel", "login() 调用: email=$email")
         viewModelScope.launch {
-            // BUG-R8 续: SyncManager.login() 内部已触发 fullSync,这里不再重复调用
-            // 二次 fullSync 会让 server 返回空 stats 覆盖首次的具体同步内容
-            syncManager.login(email, password).fold(
+            loginUseCase(email, password).fold(
                 onSuccess = { auth ->
                     Log.d("ProfileViewModel", "登录成功: tenantId=${auth.tenantId}")
                 },
@@ -350,8 +395,8 @@ class ProfileViewModel @Inject constructor(
     fun register(email: String, password: String, displayName: String) {
         Log.d("ProfileViewModel", "register() 调用: email=$email")
         viewModelScope.launch {
-            syncManager.register(email, password, displayName).fold(
-                onSuccess = { syncManager.fullSync(it.tenantId) },
+            registerUseCase(email, password, displayName).fold(
+                onSuccess = { /* SyncManager.register 内部已触发 fullSync */ },
                 onFailure = { e ->
                     Timber.e(e, "注册失败")
                     _uiState.update { it.copy(syncState = SyncState.Error(e.message ?: "注册失败，请检查网络")) }
@@ -362,32 +407,32 @@ class ProfileViewModel @Inject constructor(
 
     fun syncNow() {
         viewModelScope.launch {
-            val tenantId = authManager.currentTenantId()
-            if (tenantId == null) {
-                _uiState.update { it.copy(syncState = SyncState.Error("请先登录后再同步")) }
-                return@launch
-            }
-            syncManager.incrementalSync(tenantId)
+            syncNowUseCase().fold(
+                onSuccess = { /* 状态由 observeSyncState 收集 */ },
+                onFailure = { e ->
+                    _uiState.update { it.copy(syncState = SyncState.Error(e.message ?: "同步失败")) }
+                }
+            )
         }
     }
 
-    fun logout() { syncManager.logout() }
+    fun logout() { logoutUseCase() }
 
     // 数据备份与恢复
 
     private fun observeBackupState() {
         viewModelScope.launch {
-            backupManager.backupStatus.collect { status ->
+            observeBackupStatusUseCase().collect { status ->
                 _uiState.update { it.copy(backupStatus = status) }
             }
         }
         viewModelScope.launch {
-            backupManager.backupMessage.collect { msg ->
+            observeBackupMessageUseCase().collect { msg ->
                 _uiState.update { it.copy(backupMessage = msg) }
             }
         }
         viewModelScope.launch {
-            backupManager.backupRecords.collect { records ->
+            observeBackupRecordsUseCase().collect { records ->
                 _uiState.update { it.copy(backupRecords = records) }
             }
         }
@@ -395,8 +440,8 @@ class ProfileViewModel @Inject constructor(
 
     fun uploadBackup() {
         viewModelScope.launch {
-            val result = backupManager.uploadBackup()
-            backupManager.clearStatus()
+            val result = uploadBackupUseCase()
+            clearBackupStatusUseCase()
             result.onFailure { e ->
                 Timber.e(e, "备份失败")
             }
@@ -405,24 +450,24 @@ class ProfileViewModel @Inject constructor(
 
     fun fetchBackupList() {
         viewModelScope.launch {
-            backupManager.clearStatus()
-            backupManager.fetchBackupList()
+            clearBackupStatusUseCase()
+            fetchBackupListUseCase()
         }
     }
 
     fun restoreBackup(backupId: Int) {
         viewModelScope.launch {
-            backupManager.downloadAndRestore(backupId)
+            restoreBackupUseCase(backupId)
         }
     }
 
     fun deleteBackup(backupId: Int) {
         viewModelScope.launch {
-            backupManager.deleteBackup(backupId)
+            deleteBackupUseCase(backupId)
         }
     }
 
     fun clearBackupStatus() {
-        backupManager.clearStatus()
+        clearBackupStatusUseCase()
     }
 }

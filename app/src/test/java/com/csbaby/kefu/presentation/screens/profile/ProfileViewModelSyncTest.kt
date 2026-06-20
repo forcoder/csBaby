@@ -3,17 +3,34 @@ package com.csbaby.kefu.presentation.screens.profile
 import com.csbaby.kefu.data.local.PreferencesManager
 import com.csbaby.kefu.data.model.BackupStatus
 import com.csbaby.kefu.data.model.UpdateStatus
-import com.csbaby.kefu.data.sync.AuthManager
-import com.csbaby.kefu.data.sync.SyncManager
-import com.csbaby.kefu.data.sync.SyncState
+import com.csbaby.kefu.domain.model.SyncState
 import com.csbaby.kefu.domain.repository.UserStyleRepository
-import com.csbaby.kefu.infrastructure.backup.BackupManager
-import com.csbaby.kefu.infrastructure.ota.OtaManager
-import com.csbaby.kefu.infrastructure.style.StyleLearningEngine
+import com.csbaby.kefu.domain.usecase.auth.GetCurrentTenantIdUseCase
+import com.csbaby.kefu.domain.usecase.auth.ObserveAuthStateUseCase
+import com.csbaby.kefu.domain.usecase.backup.ClearBackupStatusUseCase
+import com.csbaby.kefu.domain.usecase.backup.ObserveBackupMessageUseCase
+import com.csbaby.kefu.domain.usecase.backup.ObserveBackupRecordsUseCase
+import com.csbaby.kefu.domain.usecase.backup.ObserveBackupStatusUseCase
+import com.csbaby.kefu.domain.usecase.ota.CancelDownloadUseCase
+import com.csbaby.kefu.domain.usecase.ota.CheckForUpdateUseCase
+import com.csbaby.kefu.domain.usecase.ota.ObserveAvailableUpdateUseCase
+import com.csbaby.kefu.domain.usecase.ota.ObserveOtaErrorUseCase
+import com.csbaby.kefu.domain.usecase.ota.ObserveOtaStatusUseCase
+import com.csbaby.kefu.domain.usecase.ota.StartDownloadUpdateUseCase
+import com.csbaby.kefu.domain.usecase.stats.GetDataStatsUseCase
+import com.csbaby.kefu.domain.usecase.style.UpdateStyleParametersUseCase
+import com.csbaby.kefu.domain.usecase.sync.IsLoggedInUseCase
+import com.csbaby.kefu.domain.usecase.sync.LoginUseCase
+import com.csbaby.kefu.domain.usecase.sync.LogoutUseCase
+import com.csbaby.kefu.domain.usecase.sync.ObserveLastSyncTimeUseCase
+import com.csbaby.kefu.domain.usecase.sync.ObserveSyncQueueUseCase
+import com.csbaby.kefu.domain.usecase.sync.ObserveSyncStateUseCase
+import com.csbaby.kefu.domain.usecase.sync.RegisterUseCase
+import com.csbaby.kefu.domain.usecase.sync.SyncNowUseCase
+import com.csbaby.kefu.domain.usecase.sync.TriggerSyncUseCase
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.*
@@ -32,11 +49,29 @@ class ProfileViewModelSyncTest {
 
     private lateinit var preferencesManager: PreferencesManager
     private lateinit var userStyleRepository: UserStyleRepository
-    private lateinit var styleLearningEngine: StyleLearningEngine
-    private lateinit var otaManager: OtaManager
-    private lateinit var syncManager: SyncManager
-    private lateinit var authManager: AuthManager
-    private lateinit var backupManager: BackupManager
+    private lateinit var loginUseCase: LoginUseCase
+    private lateinit var registerUseCase: RegisterUseCase
+    private lateinit var logoutUseCase: LogoutUseCase
+    private lateinit var syncNowUseCase: SyncNowUseCase
+    private lateinit var isLoggedInUseCase: IsLoggedInUseCase
+    private lateinit var observeSyncStateUseCase: ObserveSyncStateUseCase
+    private lateinit var observeSyncQueueUseCase: ObserveSyncQueueUseCase
+    private lateinit var observeLastSyncTimeUseCase: ObserveLastSyncTimeUseCase
+    private lateinit var triggerSyncUseCase: TriggerSyncUseCase
+    private lateinit var observeAuthStateUseCase: ObserveAuthStateUseCase
+    private lateinit var getCurrentTenantIdUseCase: GetCurrentTenantIdUseCase
+    private lateinit var clearBackupStatusUseCase: ClearBackupStatusUseCase
+    private lateinit var observeBackupStatusUseCase: ObserveBackupStatusUseCase
+    private lateinit var observeBackupMessageUseCase: ObserveBackupMessageUseCase
+    private lateinit var observeBackupRecordsUseCase: ObserveBackupRecordsUseCase
+    private lateinit var checkForUpdateUseCase: CheckForUpdateUseCase
+    private lateinit var startDownloadUpdateUseCase: StartDownloadUpdateUseCase
+    private lateinit var cancelDownloadUseCase: CancelDownloadUseCase
+    private lateinit var observeOtaStatusUseCase: ObserveOtaStatusUseCase
+    private lateinit var observeAvailableUpdateUseCase: ObserveAvailableUpdateUseCase
+    private lateinit var observeOtaErrorUseCase: ObserveOtaErrorUseCase
+    private lateinit var updateStyleParametersUseCase: UpdateStyleParametersUseCase
+    private lateinit var getDataStatsUseCase: GetDataStatsUseCase
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -54,11 +89,29 @@ class ProfileViewModelSyncTest {
 
         preferencesManager = mockk(relaxed = true)
         userStyleRepository = mockk(relaxed = true)
-        styleLearningEngine = mockk(relaxed = true)
-        otaManager = mockk(relaxed = true)
-        syncManager = mockk(relaxed = true)
-        authManager = mockk(relaxed = true)
-        backupManager = mockk(relaxed = true)
+        loginUseCase = mockk(relaxed = true)
+        registerUseCase = mockk(relaxed = true)
+        logoutUseCase = mockk(relaxed = true)
+        syncNowUseCase = mockk(relaxed = true)
+        isLoggedInUseCase = mockk(relaxed = true)
+        observeSyncStateUseCase = mockk(relaxed = true)
+        observeSyncQueueUseCase = mockk(relaxed = true)
+        observeLastSyncTimeUseCase = mockk(relaxed = true)
+        triggerSyncUseCase = mockk(relaxed = true)
+        observeAuthStateUseCase = mockk(relaxed = true)
+        getCurrentTenantIdUseCase = mockk(relaxed = true)
+        clearBackupStatusUseCase = mockk(relaxed = true)
+        observeBackupStatusUseCase = mockk(relaxed = true)
+        observeBackupMessageUseCase = mockk(relaxed = true)
+        observeBackupRecordsUseCase = mockk(relaxed = true)
+        checkForUpdateUseCase = mockk(relaxed = true)
+        startDownloadUpdateUseCase = mockk(relaxed = true)
+        cancelDownloadUseCase = mockk(relaxed = true)
+        observeOtaStatusUseCase = mockk(relaxed = true)
+        observeAvailableUpdateUseCase = mockk(relaxed = true)
+        observeOtaErrorUseCase = mockk(relaxed = true)
+        updateStyleParametersUseCase = mockk(relaxed = true)
+        getDataStatsUseCase = mockk(relaxed = true)
 
         // Default stubs
         every { preferencesManager.userPreferencesFlow } returns flowOf(
@@ -78,18 +131,20 @@ class ProfileViewModelSyncTest {
             )
         )
         every { userStyleRepository.getProfile(any()) } returns flowOf(null)
-        every { otaManager.updateStatus } returns MutableStateFlow(UpdateStatus.IDLE)
-        every { otaManager.availableUpdate } returns MutableStateFlow(null)
-        every { otaManager.errorMessage } returns MutableStateFlow(null)
-        every { syncManager.syncState } returns syncStateFlow
-        every { syncManager.lastSyncTime } returns flowOf(0L)
-        every { syncManager.isLoggedIn() } returns false
-        coEvery { authManager.authStateFlow } returns MutableStateFlow(null)
-        coEvery { authManager.currentTenantId() } returns null
-        every { backupManager.backupStatus } returns MutableStateFlow(BackupStatus.IDLE)
-        every { backupManager.backupMessage } returns MutableStateFlow("")
-        every { backupManager.backupRecords } returns MutableStateFlow(emptyList())
-        every { backupManager.clearStatus() } just Runs
+        every { observeOtaStatusUseCase() } returns MutableStateFlow(UpdateStatus.IDLE)
+        every { observeAvailableUpdateUseCase() } returns MutableStateFlow(null)
+        every { observeOtaErrorUseCase() } returns MutableStateFlow(null)
+        every { observeSyncStateUseCase() } returns syncStateFlow
+        every { observeLastSyncTimeUseCase() } returns flowOf(0L)
+        every { observeSyncQueueUseCase() } returns flowOf(0)
+        every { isLoggedInUseCase() } returns false
+        every { observeAuthStateUseCase() } returns MutableStateFlow(null)
+        coEvery { getCurrentTenantIdUseCase() } returns null
+        coEvery { getDataStatsUseCase(any()) } returns GetDataStatsUseCase.Stats()
+        every { observeBackupStatusUseCase() } returns MutableStateFlow(BackupStatus.IDLE)
+        every { observeBackupMessageUseCase() } returns MutableStateFlow("")
+        every { observeBackupRecordsUseCase() } returns MutableStateFlow(emptyList())
+        every { clearBackupStatusUseCase() } returns Unit
     }
 
     @After
@@ -102,16 +157,33 @@ class ProfileViewModelSyncTest {
         return ProfileViewModel(
             preferencesManager = preferencesManager,
             userStyleRepository = userStyleRepository,
-            styleLearningEngine = styleLearningEngine,
-            otaManager = otaManager,
-            syncManager = syncManager,
-            authManager = authManager,
-            backupManager = backupManager,
-            keywordRuleDao = mockk(relaxed = true),
-            messageBlacklistDao = mockk(relaxed = true),
-            aiModelConfigDao = mockk(relaxed = true),
-            appConfigDao = mockk(relaxed = true),
-            scenarioDao = mockk(relaxed = true)
+            loginUseCase = loginUseCase,
+            registerUseCase = registerUseCase,
+            logoutUseCase = logoutUseCase,
+            syncNowUseCase = syncNowUseCase,
+            isLoggedInUseCase = isLoggedInUseCase,
+            observeSyncStateUseCase = observeSyncStateUseCase,
+            observeSyncQueueUseCase = observeSyncQueueUseCase,
+            observeLastSyncTimeUseCase = observeLastSyncTimeUseCase,
+            triggerSyncUseCase = triggerSyncUseCase,
+            observeAuthStateUseCase = observeAuthStateUseCase,
+            getCurrentTenantIdUseCase = getCurrentTenantIdUseCase,
+            uploadBackupUseCase = mockk(relaxed = true),
+            fetchBackupListUseCase = mockk(relaxed = true),
+            restoreBackupUseCase = mockk(relaxed = true),
+            deleteBackupUseCase = mockk(relaxed = true),
+            clearBackupStatusUseCase = clearBackupStatusUseCase,
+            observeBackupStatusUseCase = observeBackupStatusUseCase,
+            observeBackupMessageUseCase = observeBackupMessageUseCase,
+            observeBackupRecordsUseCase = observeBackupRecordsUseCase,
+            checkForUpdateUseCase = checkForUpdateUseCase,
+            startDownloadUpdateUseCase = startDownloadUpdateUseCase,
+            cancelDownloadUseCase = cancelDownloadUseCase,
+            observeOtaStatusUseCase = observeOtaStatusUseCase,
+            observeAvailableUpdateUseCase = observeAvailableUpdateUseCase,
+            observeOtaErrorUseCase = observeOtaErrorUseCase,
+            updateStyleParametersUseCase = updateStyleParametersUseCase,
+            getDataStatsUseCase = getDataStatsUseCase
         )
     }
 
@@ -129,7 +201,7 @@ class ProfileViewModelSyncTest {
             refreshToken = "ref",
             expiresAt = System.currentTimeMillis() + 86400000
         )
-        coEvery { syncManager.login(any(), any()) } returns Result.success(auth)
+        coEvery { loginUseCase(any(), any()) } returns Result.success(auth)
 
         val viewModel = createViewModel()
         advanceUntilIdle()
@@ -137,9 +209,9 @@ class ProfileViewModelSyncTest {
         viewModel.login("user@example.com", "pass")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { syncManager.login("user@example.com", "pass") }
-        // 关键断言: 不应该再额外调一次 fullSync
-        coVerify(exactly = 0) { syncManager.fullSync(any()) }
+        coVerify(exactly = 1) { loginUseCase("user@example.com", "pass") }
+        // 关键断言: 不应该再额外调一次 SyncManager.fullSync（通过 SyncNowUseCase 也未调用）
+        coVerify(exactly = 0) { syncNowUseCase() }
     }
 
     /**

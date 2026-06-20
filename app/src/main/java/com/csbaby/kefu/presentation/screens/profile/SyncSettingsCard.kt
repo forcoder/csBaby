@@ -18,7 +18,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import android.util.Log
 import com.csbaby.kefu.data.model.BackupRecord
 import com.csbaby.kefu.data.model.BackupStatus
-import com.csbaby.kefu.data.sync.SyncState
+import com.csbaby.kefu.domain.model.SyncState
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -31,6 +31,7 @@ fun SyncSettingsCard(
     syncState: SyncState,
     isLoggedIn: Boolean,
     currentTenantId: String?,
+    currentUserName: String? = null,
     pendingSyncCount: Int,
     lastSyncTime: Long,
     syncStats: String = "",
@@ -97,8 +98,9 @@ fun SyncSettingsCard(
                             style = MaterialTheme.typography.bodyMedium
                         )
                         currentTenantId?.let { tenantId ->
+                            val displayName = currentUserName ?: ""
                             Text(
-                                text = "租户: $tenantId",
+                                text = if (displayName.isNotBlank()) "账号: $displayName" else "租户: ${tenantId.take(8)}...",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

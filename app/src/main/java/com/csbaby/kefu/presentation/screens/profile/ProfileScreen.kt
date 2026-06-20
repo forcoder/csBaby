@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.csbaby.kefu.R
-import com.csbaby.kefu.data.sync.SyncState
+import com.csbaby.kefu.domain.model.SyncState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,15 +30,33 @@ fun ProfileScreen(
     LaunchedEffect(uiState.syncState) {
         when (val state = uiState.syncState) {
             is SyncState.Success -> {
-                val message = if (uiState.syncStats.isNotEmpty()) {
-                    "同步完成：${uiState.syncStats}"
-                } else {
-                    "同步完成"
+                // 汇总成一条简短信息
+                val stats = uiState.syncStats
+                val summary = when {
+                    stats.isBlank() -> "同步完成"
+                    else -> {
+                        // 从 stats 中提取数量最多的类型
+                        // 例: "知识库50条，模型2条" → "同步完成，知识库+50"
+                        val counts = mutableListOf<String>()
+                        val patterns = listOf("知识库", "黑名单", "模型", "监控应用", "场景", "回复历史", "风格画像")
+                        for (p in patterns) {
+                            val m = Regex("${p}(\\d+)条").find(stats)
+                            if (m != null) counts.add("${p}${m.groupValues[1]}")
+                        }
+                        if (counts.isEmpty()) "同步完成"
+                        else "同步完成，${counts.first()}"
+                    }
                 }
-                snackbarHostState.showSnackbar(message)
+                snackbarHostState.showSnackbar(
+                    message = summary,
+                    duration = SnackbarDuration.Short
+                )
             }
             is SyncState.Error -> {
-                snackbarHostState.showSnackbar("同步失败：${state.message}")
+                snackbarHostState.showSnackbar(
+                    message = "同步失败：${state.message}",
+                    duration = SnackbarDuration.Short
+                )
             }
             else -> {}
         }
@@ -213,6 +231,7 @@ fun ProfileScreen(
                     syncState = uiState.syncState,
                     isLoggedIn = uiState.isLoggedIn,
                     currentTenantId = uiState.currentTenantId,
+                    currentUserName = uiState.currentUserName,
                     pendingSyncCount = uiState.pendingSyncCount,
                     lastSyncTime = uiState.lastSyncTime,
                     syncStats = if (uiState.syncStats.isNotEmpty()) uiState.syncStats else uiState.lastSyncStats,
