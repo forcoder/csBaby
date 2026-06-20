@@ -97,9 +97,9 @@ class LoginSyncTriggerTest {
             code = 0, message = "ok",
             data = SyncAllData(
                 keywordRules = listOf(
-                    SyncKeywordRule(id = 1L, keyword = "k1"),
-                    SyncKeywordRule(id = 2L, keyword = "k2"),
-                    SyncKeywordRule(id = 3L, keyword = "k3")
+                    SyncKeywordRule(id = "1", keyword = "k1"),
+                    SyncKeywordRule(id = "2", keyword = "k2"),
+                    SyncKeywordRule(id = "3", keyword = "k3")
                 ),
                 aiModelConfigs = emptyList(),
                 appConfigs = emptyList(),

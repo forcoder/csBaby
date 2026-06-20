@@ -4,6 +4,7 @@ import com.csbaby.kefu.data.local.dao.*
 import com.csbaby.kefu.data.local.entity.*
 import com.csbaby.kefu.data.remote.*
 import com.csbaby.kefu.data.model.SyncAuthState
+import com.csbaby.kefu.domain.model.SyncState
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,7 +76,7 @@ class SyncManagerRegressionTest {
     fun `BUG-R2 regression - SyncKeywordRule使用camelCase序列化`() {
         // 验证 SyncKeywordRule 的 @SerializedName 使用 camelCase
         val rule = SyncKeywordRule(
-            id = 1L,
+            id = "1",
             keyword = "测试",
             matchType = "CONTAINS",  // 不是 match_type
             replyTemplate = "回复模板",  // 不是 reply_template
