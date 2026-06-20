@@ -1,5 +1,6 @@
 package com.csbaby.kefu.data.sync
 
+import android.database.sqlite.SQLiteDatabase
 import com.csbaby.kefu.BuildConfig
 import com.csbaby.kefu.data.local.dao.*
 import com.csbaby.kefu.data.local.entity.MessageBlacklistEntity
@@ -7,6 +8,7 @@ import com.csbaby.kefu.data.remote.SyncMessageBlacklist
 import com.csbaby.kefu.data.local.entity.*
 import com.csbaby.kefu.data.model.SyncAuthState
 import com.csbaby.kefu.data.remote.*
+import com.csbaby.kefu.domain.model.SyncState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import android.util.Log
@@ -39,7 +41,13 @@ class SyncManager @Inject constructor(
 ) {
     // 带 JWT 认证的 API 客户端，Token 从 AuthManager 运行时读取
     val syncClient = AuthenticatedSyncClient(authManager)
-    private val syncApiService: SyncApiService = syncClient.apiService
+    // syncApiService 用 lateinit var: 保持字段名 syncApiService 让测试反射可设值
+    // 真正的取值函数: 字段未初始化时 fallback 到 syncClient.apiService (兼容 LoginSyncTriggerTest)
+    @Suppress("LateinitUsageOverridesNothing")
+    private lateinit var syncApiService: SyncApiService
+
+    private fun getSyncApiService(): SyncApiService =
+        if (::syncApiService.isInitialized) syncApiService else syncClient.apiService
     private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
     val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
 
@@ -49,6 +57,9 @@ class SyncManager @Inject constructor(
     private var syncJob: Job? = null
     private var _lastSyncStats: String = ""
 
+    /** 避免 migrateLocalDataIfNeeded 反复推送遗留数据 (按 tenantId 记录, 支持多账号) */
+    private val legacyPushAttemptedTenants = mutableSetOf<String>()
+
     /** 上次同步统计信息 */
     fun getLastSyncStats(): String? = _lastSyncStats.takeIf { it.isNotEmpty() }
 
@@ -56,6 +67,7 @@ class SyncManager @Inject constructor(
     val queue: SyncQueue get() = syncQueue
 
     /** 上次同步时间 Flow（按当前租户） */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val lastSyncTime: Flow<Long> = authState.flatMapLatest { auth ->
         val tenantId = auth?.tenantId ?: ""
         if (tenantId.isEmpty()) {
@@ -84,7 +96,8 @@ class SyncManager @Inject constructor(
                     tenantId = response.effectiveTenantId(),
                     token = response.effectiveToken(),
                     refreshToken = response.refreshToken ?: "",
-                    expiresAt = response.expiresAt ?: 0L
+                    expiresAt = response.expiresAt ?: 0L,
+                    displayName = identifier
                 )
                 _authState.value = auth
                 authManager.saveAuthState(auth)
@@ -92,6 +105,18 @@ class SyncManager @Inject constructor(
                 Timber.d("登录成功: tenant=${auth.tenantId}, user=${auth.userId}")
                 // 迁移本地数据到真实租户（仅首次登录/新设备场景）
                 migrateLocalDataIfNeeded(auth.tenantId)
+                // BUG-R8 修复: 登录成功后触发 fullSync 拉取云端数据
+                // (与 restoreAuthState 行为一致；fullSync 失败不应阻断登录成功)
+                try {
+                    val result = fullSync(auth.tenantId)
+                    if (result.isSuccess) {
+                        Timber.d("登录后全量同步成功: tenant=${auth.tenantId}")
+                    } else {
+                        Timber.w("登录后全量同步失败: ${result.exceptionOrNull()?.message}")
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "登录后全量同步异常")
+                }
                 Result.success(auth)
             } else {
                 val msg = response.errorMessage() ?: "登录失败"
@@ -99,7 +124,7 @@ class SyncManager @Inject constructor(
                 Result.failure(Exception(msg))
             }
         } catch (e: Exception) {
-            Timber.e(e, "登录失败")
+            Log.e("SyncManager", "登录失败: ${e.message}")
             _syncState.value = SyncState.Error(e.message ?: "网络错误")
             Result.failure(e)
         }
@@ -228,6 +253,7 @@ class SyncManager @Inject constructor(
 
     companion object {
         const val DEFAULT_TENANT_ID = "default_tenant"
+        private const val PUSH_BATCH_SIZE = 50
     }
 
     /**
@@ -235,70 +261,222 @@ class SyncManager @Inject constructor(
      * 解决卸载重装后本地数据 tenantId 不正确导致同步返回 0 的问题。
      */
     private suspend fun migrateLocalDataIfNeeded(tenantId: String) {
-        if (tenantId == DEFAULT_TENANT_ID) return
-
-        // 检查是否需要迁移：只有当真实租户下还没有数据时才迁移
-        val existingRules = keywordRuleDao.getRulesByTenantSync(tenantId)
-        if (existingRules.isNotEmpty()) {
-            Timber.d("真实租户已有数据，跳过迁移")
+        if (tenantId == DEFAULT_TENANT_ID) {
+            Log.d("SyncManager", "migrateLocalDataIfNeeded: tenant is DEFAULT, skip")
             return
         }
 
-        Timber.d("开始迁移本地数据: default_tenant -> $tenantId")
+        var totalMigrated = 0
+        Log.d("SyncManager", "幂等迁移开始: default_tenant -> $tenantId")
 
-        val rules = keywordRuleDao.getRulesByTenantSync(DEFAULT_TENANT_ID)
-        if (rules.isNotEmpty()) {
-            rules.forEach { rule ->
-                keywordRuleDao.insertRule(rule.copy(tenantId = tenantId, syncVersion = 0L))
+        // 知识库规则: 按 id 去重迁移
+        val defaultRules = keywordRuleDao.getRulesByTenantSync(DEFAULT_TENANT_ID)
+        Log.d("SyncManager", "default_tenant 规则数: ${defaultRules.size}")
+        if (defaultRules.isNotEmpty()) {
+            val existingIds = keywordRuleDao.getRulesByTenantSync(tenantId).map { it.id }.toHashSet()
+            Log.d("SyncManager", "真实租户已有规则数: ${existingIds.size}")
+            val toMigrate = defaultRules.filter { it.id !in existingIds }
+            Log.d("SyncManager", "需要迁移的规则数: ${toMigrate.size}")
+            if (toMigrate.isNotEmpty()) {
+                toMigrate.forEach { keywordRuleDao.insertRule(it.copy(tenantId = tenantId, syncVersion = 0L)) }
+                totalMigrated += toMigrate.size
+                Timber.d("迁移 ${toMigrate.size} 条知识库规则到 tenant=$tenantId")
             }
-            Timber.d("迁移 ${rules.size} 条知识库规则到 tenant=$tenantId")
         }
 
-        val models = aiModelConfigDao.getModelsByTenantSync(DEFAULT_TENANT_ID)
-        if (models.isNotEmpty()) {
-            models.forEach { model ->
-                aiModelConfigDao.insertModel(model.copy(tenantId = tenantId, syncVersion = 0L))
+        // 空 tenantId 规则迁移: 旧版本数据可能 tenantId 为空字符串
+        val emptyTenantRules = keywordRuleDao.getRulesWithEmptyTenant()
+        Log.d("SyncManager", "空 tenantId 规则数: ${emptyTenantRules.size}")
+        if (emptyTenantRules.isNotEmpty()) {
+            val existingIds = keywordRuleDao.getRulesByTenantSync(tenantId).map { it.id }.toHashSet()
+            val toMigrate = emptyTenantRules.filter { it.id !in existingIds }
+            if (toMigrate.isNotEmpty()) {
+                toMigrate.forEach { keywordRuleDao.insertRule(it.copy(tenantId = tenantId, syncVersion = 0L)) }
+                totalMigrated += toMigrate.size
+                Timber.d("迁移 ${toMigrate.size} 条空 tenantId 规则到 tenant=$tenantId")
             }
-            Timber.d("迁移 ${models.size} 条 AI 模型配置")
         }
 
-        val profile = userStyleProfileDao.getProfileByTenantIdSync(DEFAULT_TENANT_ID)
-        profile?.let {
-            userStyleProfileDao.insertProfile(it.copy(tenantId = tenantId, syncVersion = 0L))
-            Timber.d("迁移风格画像")
-        }
-
-        val apps = appConfigDao.getAppsByTenantSync(DEFAULT_TENANT_ID)
-        if (apps.isNotEmpty()) {
-            apps.forEach { app ->
-                appConfigDao.insertApp(app.copy(tenantId = tenantId, syncVersion = 0L))
+        // 其他租户规则迁移: 旧手机上可能绑定了不同的 tenantId
+        val otherTenantRules = keywordRuleDao.getRulesFromOtherTenants(tenantId)
+        Log.d("SyncManager", "其他租户规则数: ${otherTenantRules.size}")
+        if (otherTenantRules.isNotEmpty()) {
+            val existingIds = keywordRuleDao.getRulesByTenantSync(tenantId).map { it.id }.toHashSet()
+            val toMigrate = otherTenantRules.filter { it.id !in existingIds }
+            if (toMigrate.isNotEmpty()) {
+                toMigrate.forEach { keywordRuleDao.insertRule(it.copy(tenantId = tenantId, syncVersion = 0L)) }
+                totalMigrated += toMigrate.size
+                Timber.d("迁移 ${toMigrate.size} 条其他租户规则到 tenant=$tenantId")
             }
-            Timber.d("迁移 ${apps.size} 条应用配置")
         }
 
-        val scenarios = scenarioDao.getScenariosByTenantSync(DEFAULT_TENANT_ID)
-        if (scenarios.isNotEmpty()) {
-            scenarios.forEach { scenario ->
-                scenarioDao.insertScenario(scenario.copy(tenantId = tenantId, syncVersion = 0L))
+        // 旧 tenantId 纠正: Room 里的 tenant UUID 可能和 JWT 的不完全一致
+        // (如缺末尾字符),用相同前缀匹配防止数据写到不同租户
+        val localPrefix = tenantId.take(30)
+        val misalignedCount = keywordRuleDao.getRulesByTenantSync(tenantId).size
+        if (misalignedCount < 10 && otherTenantRules.isNotEmpty()) {
+            // 当前租户数据很少,而其他租户有大量数据 → 可能是 UUID 前缀匹配但末尾不同
+            val similarRules = otherTenantRules.filter { it.tenantId.take(30) == localPrefix }
+            if (similarRules.isNotEmpty()) {
+                val existingIds = keywordRuleDao.getRulesByTenantSync(tenantId).map { it.id }.toHashSet()
+                val toFix = similarRules.filter { it.id !in existingIds }
+                if (toFix.isNotEmpty()) {
+                    toFix.forEach { keywordRuleDao.insertRule(it.copy(tenantId = tenantId, syncVersion = 0L)) }
+                    totalMigrated += toFix.size
+                    Log.d("SyncManager", "纠正 ${toFix.size} 条租户 UUID 不匹配的规则")
+                }
             }
-            Timber.d("迁移 ${scenarios.size} 条场景")
         }
 
-        val replies = replyHistoryDao.getRepliesByTenantSync(DEFAULT_TENANT_ID)
-        if (replies.isNotEmpty()) {
-            replies.forEach { reply ->
-                replyHistoryDao.insertReply(reply.copy(tenantId = tenantId, syncVersion = 0L))
+        // AI 模型配置
+        val defaultModels = aiModelConfigDao.getModelsByTenantSync(DEFAULT_TENANT_ID)
+        if (defaultModels.isNotEmpty()) {
+            val existingIds = aiModelConfigDao.getModelsByTenantSync(tenantId).map { it.id }.toHashSet()
+            val toMigrate = defaultModels.filter { it.id !in existingIds }
+            if (toMigrate.isNotEmpty()) {
+                toMigrate.forEach { aiModelConfigDao.insertModel(it.copy(tenantId = tenantId, syncVersion = 0L)) }
+                totalMigrated += toMigrate.size
+                Timber.d("迁移 ${toMigrate.size} 条 AI 模型配置")
             }
-            Timber.d("迁移 ${replies.size} 条回复历史")
         }
 
-        Timber.d("本地数据迁移完成")
-        // BUG-R12 fix: 迁移后必须触发增量同步, 把迁移过来的数据推到 sync server
-        // 否则 default_tenant 的数据迁过来后, syncVersion=0 永远不会被 pushChanges 推送
+        // 风格画像: 只有一条,不存在才迁移
+        val defaultProfile = userStyleProfileDao.getProfileByTenantIdSync(DEFAULT_TENANT_ID)
+        if (defaultProfile != null) {
+            val existing = userStyleProfileDao.getProfileByTenantIdSync(tenantId)
+            if (existing == null) {
+                userStyleProfileDao.insertProfile(defaultProfile.copy(tenantId = tenantId, syncVersion = 0L))
+                totalMigrated++
+                Timber.d("迁移风格画像")
+            }
+        }
+
+        // 应用配置: 按 packageName 去重迁移
+        val defaultApps = appConfigDao.getAppsByTenantSync(DEFAULT_TENANT_ID)
+        if (defaultApps.isNotEmpty()) {
+            val existingPkgs = appConfigDao.getAppsByTenantSync(tenantId).map { it.packageName }.toHashSet()
+            val toMigrate = defaultApps.filter { it.packageName !in existingPkgs }
+            if (toMigrate.isNotEmpty()) {
+                toMigrate.forEach { appConfigDao.insertApp(it.copy(tenantId = tenantId, syncVersion = 0L)) }
+                totalMigrated += toMigrate.size
+                Timber.d("迁移 ${toMigrate.size} 条应用配置")
+            }
+        }
+
+        // 场景: 按 id 去重迁移
+        val defaultScenarios = scenarioDao.getScenariosByTenantSync(DEFAULT_TENANT_ID)
+        if (defaultScenarios.isNotEmpty()) {
+            val existingIds = scenarioDao.getScenariosByTenantSync(tenantId).map { it.id }.toHashSet()
+            val toMigrate = defaultScenarios.filter { it.id !in existingIds }
+            if (toMigrate.isNotEmpty()) {
+                toMigrate.forEach { scenarioDao.insertScenario(it.copy(tenantId = tenantId, syncVersion = 0L)) }
+                totalMigrated += toMigrate.size
+                Timber.d("迁移 ${toMigrate.size} 条场景")
+            }
+        }
+
+        // 回复历史: 按 id 去重迁移
+        val defaultReplies = replyHistoryDao.getRepliesByTenantSync(DEFAULT_TENANT_ID)
+        if (defaultReplies.isNotEmpty()) {
+            val existingIds = replyHistoryDao.getRepliesByTenantSync(tenantId).map { it.id }.toHashSet()
+            val toMigrate = defaultReplies.filter { it.id !in existingIds }
+            if (toMigrate.isNotEmpty()) {
+                toMigrate.forEach { replyHistoryDao.insertReply(it.copy(tenantId = tenantId, syncVersion = 0L)) }
+                totalMigrated += toMigrate.size
+                Timber.d("迁移 ${toMigrate.size} 条回复历史")
+            }
+        }
+
+        // 遗留数据库导入: 检查 kefu_pull.db / kefu_main_pull.db (旧数据)
+        val existingRuleIds = keywordRuleDao.getRulesByTenantSync(tenantId).map { it.id }.toHashSet()
+        val legacyDbPaths = listOf(
+            "/data/data/${BuildConfig.APPLICATION_ID}/files/kefu_pull.db",
+            "/data/data/${BuildConfig.APPLICATION_ID}/kefu_main_pull.db"
+        )
+        for (legacyPath in legacyDbPaths) {
+            val file = java.io.File(legacyPath)
+            if (!file.exists()) {
+                Log.d("SyncManager", "遗留数据库不存在: $legacyPath")
+                continue
+            }
+            try {
+                val legacyDb = SQLiteDatabase.openDatabase(legacyPath, null, SQLiteDatabase.OPEN_READONLY)
+                try {
+                    val cursor = legacyDb.rawQuery(
+                        "SELECT * FROM keyword_rules WHERE tenantId IS NULL OR tenantId = ''",
+                        null
+                    )
+                    val entries = mutableListOf<KeywordRuleEntity>()
+                    while (cursor.moveToNext()) {
+                        val legacyId = cursor.getLong(cursor.getColumnIndexOrThrow("id"))
+                        if (legacyId in existingRuleIds) continue  // 已存在,跳过
+                        existingRuleIds.add(legacyId)
+                        entries.add(KeywordRuleEntity(
+                            id = legacyId,
+                            keyword = cursor.getString(cursor.getColumnIndexOrThrow("keyword"))
+                                .orEmpty(),
+                            matchType = cursor.getString(cursor.getColumnIndexOrThrow("matchType"))
+                                .orEmpty().ifEmpty { "CONTAINS" },
+                            replyTemplate = cursor.getString(
+                                cursor.getColumnIndexOrThrow("replyTemplate")
+                            ).orEmpty(),
+                            category = cursor.getString(cursor.getColumnIndexOrThrow("category"))
+                                .orEmpty(),
+                            targetType = cursor.getString(cursor.getColumnIndexOrThrow("targetType"))
+                                .orEmpty().ifEmpty { "ALL" },
+                            targetNamesJson = cursor.getString(
+                                cursor.getColumnIndexOrThrow("targetNamesJson")
+                            ).orEmpty().ifEmpty { "[]" },
+                            priority = cursor.getInt(cursor.getColumnIndexOrThrow("priority")),
+                            enabled = cursor.getInt(cursor.getColumnIndexOrThrow("enabled")) != 0,
+                            createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt")),
+                            updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updatedAt")),
+                            tenantId = tenantId,
+                            syncVersion = 0L,
+                            deleted = cursor.getInt(cursor.getColumnIndexOrThrow("deleted")) != 0
+                        ))
+                    }
+                    cursor.close()
+                    if (entries.isNotEmpty()) {
+                        keywordRuleDao.insertRules(entries)
+                        totalMigrated += entries.size
+                        Log.d("SyncManager", "从遗留数据库导入 ${entries.size} 条知识库规则: $legacyPath")
+                    }
+                } finally {
+                    legacyDb.close()
+                }
+            } catch (e: Exception) {
+                Log.w("SyncManager", "遗留数据库导入失败: $legacyPath - ${e.message}")
+            }
+        }
+
+        // 推送所有本地数据: 分批(每批50条),避免一次性发366+条导致超时
+        // 不使用 syncVersion 过滤,因为之前部分推送可能更新了 version 但数据没到服务器
+        if (tenantId !in legacyPushAttemptedTenants) {
+            val pushCandidates = keywordRuleDao.getRulesByTenantSync(tenantId)
+                .filter { !it.deleted }
+            if (pushCandidates.isNotEmpty()) {
+                Log.d("SyncManager", "分批推送所有 ${pushCandidates.size} 条(每批50)")
+                pushCandidates.chunked(PUSH_BATCH_SIZE).forEach { batch ->
+                    try {
+                        doPush(tenantId, batch, emptyList(), emptyList(),
+                            emptyList(), emptyList(), emptyList(), emptyList(), emptyMap(), 0L)
+                    } catch (e: Exception) {
+                        Log.w("SyncManager", "分批推送失败: ${e.message}")
+                    }
+                }
+            } else {
+                Log.d("SyncManager", "无数据需推送")
+            }
+            syncCheckpointDao.updateSyncSuccess(tenantId, System.currentTimeMillis(), null)
+            legacyPushAttemptedTenants.add(tenantId)
+        }
+        // BUG-R12 修复: 迁移后必须触发增量同步, 拉取云端变更到本地
+        // (与 restoreAuthState 行为一致; 增量同步失败不应阻断登录/迁移)
         try {
             incrementalSync(tenantId)
         } catch (e: Exception) {
-            Timber.e(e, "迁移后增量同步失败")
+            Log.e("SyncManager", "迁移后增量同步异常: ${e.message}")
         }
     }
 
@@ -308,7 +486,7 @@ class SyncManager @Inject constructor(
         _syncState.value = SyncState.Syncing("正在同步数据...")
         syncCheckpointDao.updateSyncing(tenantId, true)
         return try {
-            val response = syncApiService.getAllData(tenantId)
+            val response = getSyncApiService().getAllData(tenantId)
             Log.d("SyncManager", "全量同步 API 响应: isSuccess=${response.isSuccess}, msg=${response.message}, data=${response.data != null}")
             if (response.isSuccess && response.data != null) {
                 val data = response.data
@@ -325,15 +503,14 @@ class SyncManager @Inject constructor(
                 val scenarioCount = data.scenarios.size
                 val blacklistCount = data.messageBlacklist.size
                 val profileCount = if (data.userStyleProfile != null) 1 else 0
+                // 生成简短汇总 (只显示数量最多的类型)
                 val stats = buildString {
-                    append("全量同步完成：")
-                    if (ruleCount > 0) append("知识库${ruleCount}条，")
-                    if (blacklistCount > 0) append("黑名单${blacklistCount}条，")
-                    if (modelCount > 0) append("模型${modelCount}条，")
-                    if (appCount > 0) append("监控应用${appCount}条，")
-                    if (scenarioCount > 0) append("场景${scenarioCount}条，")
-                    if (profileCount > 0) append("风格画像${profileCount}条，")
-                    if (endsWith("，")) deleteCharAt(lastIndex)
+                    if (ruleCount > 0) append("知识库${ruleCount}条")
+                    if (blacklistCount > 0) append("，黑名单${blacklistCount}条")
+                    if (modelCount > 0) append("，模型${modelCount}条")
+                    if (appCount > 0) append("，监控应用${appCount}条")
+                    if (scenarioCount > 0) append("，场景${scenarioCount}条")
+                    if (profileCount > 0) append("，风格画像${profileCount}条")
                 }
                 _lastSyncStats = stats
                 _syncState.value = SyncState.Success("同步完成", stats)
@@ -378,7 +555,7 @@ class SyncManager @Inject constructor(
             Log.d("SyncManager", "推送结果: pushStats='$pushStats'")
 
             // 2. 拉取云端变更到本地
-            val changesResponse = syncApiService.getChanges(tenantId, since)
+            val changesResponse = getSyncApiService().getChanges(tenantId, since)
             if (changesResponse.isSuccess && changesResponse.data != null) {
                 val changes = changesResponse.data
                 applyChangesToLocal(changes, tenantId)
@@ -400,27 +577,32 @@ class SyncManager @Inject constructor(
             val pullProfileCount = if (changes?.userStyleProfile != null) 1 else 0
             val pullReplyCount = changes?.replyHistory?.size ?: 0
 
+            // 生成简短汇总 (推送/拉取分开，只列有变化的类型)
             val stats = buildString {
                 if (pushStats.isNotEmpty()) {
-                    append("推送：$pushStats；")
+                    append("推送：$pushStats")
                 }
-                append("拉取：")
-                val details = mutableListOf<String>()
-                if (pullRuleCount > 0) details.add("知识库${pullRuleCount}条")
-                if (pullBlacklistCount > 0) details.add("黑名单${pullBlacklistCount}条")
-                if (pullModelCount > 0) details.add("模型${pullModelCount}条")
-                if (pullAppCount > 0) details.add("监控应用${pullAppCount}条")
-                if (pullScenarioCount > 0) details.add("场景${pullScenarioCount}条")
-                if (pullReplyCount > 0) details.add("回复历史${pullReplyCount}条")
-                if (pullProfileCount > 0) details.add("风格画像${pullProfileCount}条")
-                if (details.isEmpty()) details.add("无变更")
-                append(details.joinToString("，"))
+                if (pullRuleCount > 0 || pullBlacklistCount > 0 || pullModelCount > 0 ||
+                    pullAppCount > 0 || pullScenarioCount > 0 || pullReplyCount > 0 || pullProfileCount > 0) {
+                    if (isNotEmpty()) append("，")
+                    append("拉取：")
+                    val details = mutableListOf<String>()
+                    if (pullRuleCount > 0) details.add("知识库${pullRuleCount}条")
+                    if (pullBlacklistCount > 0) details.add("黑名单${pullBlacklistCount}条")
+                    if (pullModelCount > 0) details.add("模型${pullModelCount}条")
+                    if (pullAppCount > 0) details.add("监控应用${pullAppCount}条")
+                    if (pullScenarioCount > 0) details.add("场景${pullScenarioCount}条")
+                    if (pullReplyCount > 0) details.add("回复历史${pullReplyCount}条")
+                    if (pullProfileCount > 0) details.add("风格画像${pullProfileCount}条")
+                    if (details.isEmpty()) details.add("无变更")
+                    append(details.joinToString("，"))
+                }
             }
             _syncState.value = SyncState.Success("同步完成", stats)
             Log.d("SyncManager", "增量同步完成: $stats")
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e("SyncManager", "增量同步失败", e)
+            Log.e("SyncManager", "增量同步失败: ${e.message}")
             syncCheckpointDao.updateLastError(tenantId, e.message)
             _syncState.value = SyncState.Error(e.message ?: "同步失败")
             Result.failure(e)
@@ -429,7 +611,7 @@ class SyncManager @Inject constructor(
         }
     }
 
-    // ========== 推送本地变更（增量）==========
+    // ========== 推送本地变更（增量，分批避免超时）==========
 
     suspend fun pushLocalChanges(tenantId: String, since: Long): String {
         // 收集本地有变更的数据（syncVersion == 0 表示新增/修改待同步）
@@ -450,7 +632,8 @@ class SyncManager @Inject constructor(
 
         // 分离正常数据和已删除数据
         val activeRules = rules.filter { !it.deleted }
-        val deletedRules = rules.filter { it.deleted }.map { it.id.toString() }
+        // BUG-R14: deleted id 也要用 namespaced id (与服务端 pkey 保持一致)
+        val deletedRules = rules.filter { it.deleted }.map { "${it.tenantId}_${it.id}" }
         val activeModels = models.filter { !it.deleted }
         val deletedModels = models.filter { it.deleted }.map { it.id.toString() }
         val activeApps = apps.filter { !it.deleted }
@@ -476,7 +659,28 @@ class SyncManager @Inject constructor(
             return ""
         }
 
-        return doPush(tenantId, activeRules, activeModels, profiles, activeApps, activeScenarios, activeReplies, activeBlacklists, deletedIds, since)
+        // 分批推送: 知识库规则按 PUSH_BATCH_SIZE 分批，其他数据量小的一次推送
+        val allStats = mutableListOf<String>()
+
+        // 知识库规则分批
+        val ruleBatches = activeRules.chunked(PUSH_BATCH_SIZE)
+        for ((i, ruleBatch) in ruleBatches.withIndex()) {
+            val isFirstBatch = i == 0
+            val batchStats = doPush(
+                tenantId, ruleBatch,
+                if (isFirstBatch) activeModels else emptyList(),
+                if (isFirstBatch) profiles else emptyList(),
+                if (isFirstBatch) activeApps else emptyList(),
+                if (isFirstBatch) activeScenarios else emptyList(),
+                if (isFirstBatch) activeReplies else emptyList(),
+                if (isFirstBatch) activeBlacklists else emptyList(),
+                if (isFirstBatch) deletedIds else emptyMap(),
+                since
+            )
+            if (batchStats.isNotEmpty()) allStats.add(batchStats)
+        }
+
+        return allStats.joinToString("；")
     }
 
     // ========== 推送所有本地数据（首次同步）==========
@@ -493,7 +697,8 @@ class SyncManager @Inject constructor(
 
         // 分离正常数据和已删除数据
         val activeRules = allRules.filter { !it.deleted }
-        val deletedRules = allRules.filter { it.deleted }.map { it.id.toString() }
+        // BUG-R14: deleted id 用 namespaced 形式
+        val deletedRules = allRules.filter { it.deleted }.map { "${it.tenantId}_${it.id}" }
         val activeModels = allModels.filter { !it.deleted }
         val deletedModels = allModels.filter { it.deleted }.map { it.id.toString() }
         val activeApps = allApps.filter { !it.deleted }
@@ -519,7 +724,27 @@ class SyncManager @Inject constructor(
             return ""
         }
 
-        return doPush(tenantId, activeRules, activeModels, profiles, activeApps, activeScenarios, activeReplies, activeBlacklists, deletedIds, 0L)
+        // 分批推送: 知识库规则按 PUSH_BATCH_SIZE 分批(避免单次 HTTP 推送 360+ 条超时)
+        // 修复 BUG-R13: 原本一次性 doPush(activeRules=360) 导致服务端 batch_conn 在 60s 内无法执行全部 INSERT, 超时失败 → 本地 syncVersion=0 永远没更新 → Supabase 始终 180+ 条
+        // 其他数据量小, 仅在第一批次一起推送
+        val ruleBatches = activeRules.chunked(PUSH_BATCH_SIZE)
+        val allStats = mutableListOf<String>()
+        for ((i, ruleBatch) in ruleBatches.withIndex()) {
+            val isFirstBatch = i == 0
+            val batchStats = doPush(
+                tenantId, ruleBatch,
+                if (isFirstBatch) activeModels else emptyList(),
+                if (isFirstBatch) profiles else emptyList(),
+                if (isFirstBatch) activeApps else emptyList(),
+                if (isFirstBatch) activeScenarios else emptyList(),
+                if (isFirstBatch) activeReplies else emptyList(),
+                if (isFirstBatch) activeBlacklists else emptyList(),
+                if (isFirstBatch) deletedIds else emptyMap(),
+                0L
+            )
+            if (batchStats.isNotEmpty()) allStats.add(batchStats)
+        }
+        return allStats.joinToString("；")
     }
 
     private suspend fun doPush(
@@ -549,7 +774,7 @@ class SyncManager @Inject constructor(
         Log.d("SyncManager", "doPush: rules=${rules.size}, models=${models.size}, deletedIds=$deletedIds")
 
         val response = try {
-            syncApiService.pushChanges(request)
+            getSyncApiService().pushChanges(request)
         } catch (e: Exception) {
             Timber.e(e, "推送失败: ${e.message}")
             throw e
@@ -595,9 +820,29 @@ class SyncManager @Inject constructor(
     // ========== 应用服务端数据到本地 ==========
 
     private suspend fun applyServerDataToLocal(data: SyncAllData, tenantId: String) {
-        // 知识库规则：服务端数据覆盖本地（全量同步场景）
+        // 知识库规则：服务端数据 upsert 到本地 (全量同步场景)
+        // BUG-R14: 用 remoteId 做 upsert 维度, 避免重复插入
         data.keywordRules.forEach { rule ->
-            keywordRuleDao.insertRule(rule.toEntity(tenantId))
+            val entity = rule.toEntity(tenantId)
+            val remoteId = entity.remoteId
+            if (remoteId != null) {
+                val existing = keywordRuleDao.getByRemoteId(tenantId, remoteId)
+                if (existing != null) {
+                    // 已有: 更新内容保留本地 id
+                    keywordRuleDao.updateByRemoteId(
+                        tenantId, remoteId,
+                        entity.keyword, entity.matchType, entity.replyTemplate, entity.category,
+                        entity.targetType, entity.targetNamesJson, entity.priority, entity.enabled,
+                        entity.updatedAt, entity.syncVersion, entity.deleted
+                    )
+                } else {
+                    // 新增: 让 Room autogenerate Long id
+                    keywordRuleDao.insertRule(entity)
+                }
+            } else {
+                // 无 remoteId (旧数据): 直接 insert
+                keywordRuleDao.insertRule(entity)
+            }
         }
 
         // AI 模型配置
@@ -632,7 +877,26 @@ class SyncManager @Inject constructor(
     }
 
     private suspend fun applyChangesToLocal(changes: SyncChanges, tenantId: String) {
-        changes.keywordRules.forEach { keywordRuleDao.insertRule(it.toEntity(tenantId)) }
+        // BUG-R14: 增量同步用 remoteId 做 upsert 维度, 避免重复插入
+        changes.keywordRules.forEach { rule ->
+            val entity = rule.toEntity(tenantId)
+            val remoteId = entity.remoteId
+            if (remoteId != null) {
+                val existing = keywordRuleDao.getByRemoteId(tenantId, remoteId)
+                if (existing != null) {
+                    keywordRuleDao.updateByRemoteId(
+                        tenantId, remoteId,
+                        entity.keyword, entity.matchType, entity.replyTemplate, entity.category,
+                        entity.targetType, entity.targetNamesJson, entity.priority, entity.enabled,
+                        entity.updatedAt, entity.syncVersion, entity.deleted
+                    )
+                } else {
+                    keywordRuleDao.insertRule(entity)
+                }
+            } else {
+                keywordRuleDao.insertRule(entity)
+            }
+        }
         changes.aiModelConfigs.forEach { aiModelConfigDao.insertModel(it.toEntity(tenantId)) }
         changes.userStyleProfile?.let { userStyleProfileDao.insertProfile(it.toEntity(tenantId)) }
         changes.appConfigs.forEach { appConfigDao.insertApp(it.toEntity(tenantId)) }
@@ -640,10 +904,14 @@ class SyncManager @Inject constructor(
         changes.replyHistory.forEach { replyHistoryDao.insertReply(it.toEntity(tenantId)) }
         changes.messageBlacklist.forEach { messageBlacklistDao.insert(it.toEntity(tenantId)) }
 
-        // 处理删除
+        // 处理删除 (服务端 String id → 通过 remoteId 查本地)
         changes.deletedIds.forEach { (entityType, ids) ->
             when (entityType) {
-                "keyword_rules" -> ids.forEach { keywordRuleDao.deleteById(it.toLong()) }
+                "keyword_rules" -> ids.forEach { remoteId ->
+                    keywordRuleDao.getByRemoteId(tenantId, remoteId)?.let {
+                        keywordRuleDao.deleteById(it.id)
+                    }
+                }
                 "ai_model_configs" -> ids.forEach { aiModelConfigDao.deleteById(it.toLong()) }
                 "app_configs" -> ids.forEach { appConfigDao.deleteByPackage(it) }
                 "scenarios" -> ids.forEach { scenarioDao.deleteById(it.toLong()) }
@@ -679,7 +947,7 @@ class SyncManager @Inject constructor(
         // 自动解决的冲突
         if (resolutions.isNotEmpty()) {
             try {
-                syncApiService.resolveConflict(ConflictResolveRequest(tenantId, resolutions))
+                getSyncApiService().resolveConflict(ConflictResolveRequest(tenantId, resolutions))
                 Timber.d("自动解决冲突: ${resolutions.size} 个")
             } catch (e: Exception) {
                 Timber.e(e, "冲突解决 API 调用失败")
@@ -766,7 +1034,9 @@ class SyncManager @Inject constructor(
     // ========== 数据转换 ==========
 
     private fun SyncKeywordRule.toEntity(tenantId: String) = KeywordRuleEntity(
-        id = id,
+        // BUG-R14 修复: 不复用服务端 String id (会破坏本地 UI 主键 Long 兼容性)
+        // 改用 id=0 让 Room autogenerate; 服务端 id 存到 remoteId 字段做 upsert 维度
+        id = 0,
         keyword = keyword.orEmpty(),
         matchType = matchType.orEmpty().ifEmpty { "CONTAINS" },
         replyTemplate = replyTemplate.orEmpty(),
@@ -779,7 +1049,8 @@ class SyncManager @Inject constructor(
         updatedAt = updatedAt,
         tenantId = tenantId,
         syncVersion = syncVersion,
-        deleted = deleted
+        deleted = deleted,
+        remoteId = id.takeIf { it.isNotEmpty() }
     )
 
     private fun SyncAIModelConfig.toEntity(tenantId: String) = AIModelConfigEntity(
@@ -858,7 +1129,10 @@ class SyncManager @Inject constructor(
     )
 
     private fun KeywordRuleEntity.toSyncModel() = SyncKeywordRule(
-        id = id, keyword = keyword, matchType = matchType,
+        // BUG-R14 修复: 用 "${tenantId}_${id}" 作为服务端唯一 id, 避免跨租户 id 冲突
+        // Room 主键仍是 Long, 但同步到 Supabase 时变成全局唯一字符串 id
+        id = "${tenantId}_${id}",
+        keyword = keyword, matchType = matchType,
         replyTemplate = replyTemplate, category = category,
         targetType = targetType, targetNamesJson = targetNamesJson,
         priority = priority, enabled = enabled,
@@ -920,11 +1194,4 @@ class SyncManager @Inject constructor(
     )
 }
 
-// ========== 同步状态 ==========
-
-sealed class SyncState {
-    object Idle : SyncState()
-    data class Syncing(val message: String) : SyncState()
-    data class Error(val message: String) : SyncState()
-    data class Success(val message: String, val stats: String = "") : SyncState()
-}
+// SyncState 已迁至 com.csbaby.kefu.domain.model.SyncState（domain 层共享类型）
