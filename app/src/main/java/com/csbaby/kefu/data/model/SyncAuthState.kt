@@ -11,7 +11,8 @@ data class SyncAuthState(
     val tenantId: String,  // 后端tenantId用于数据隔离
     val accessToken: String,
     val refreshToken: String = "",
-    val expiresAt: Long
+    val expiresAt: Long,
+    val displayName: String = ""  // 用户可读的标识(手机号/邮箱)
 ) {
     fun isExpired(): Boolean = System.currentTimeMillis() >= expiresAt
 
@@ -21,18 +22,16 @@ data class SyncAuthState(
             tenantId: String,
             token: String,
             refreshToken: String = "",
-            expiresAt: Long = 0L
+            expiresAt: Long = 0L,
+            displayName: String = ""
         ): SyncAuthState {
             return SyncAuthState(
                 userId = userId,
-                tenantId = tenantId.ifEmpty { userId },  // fallback to userId if tenantId empty
+                tenantId = tenantId.ifEmpty { userId },
                 accessToken = token,
                 refreshToken = refreshToken,
-                expiresAt = if (expiresAt > 0) {
-                    expiresAt
-                } else {
-                    System.currentTimeMillis() + 30 * 24 * 3600 * 1000L  // 默认30天
-                }
+                expiresAt = if (expiresAt > 0) expiresAt else System.currentTimeMillis() + 30 * 24 * 3600 * 1000L,
+                displayName = displayName
             )
         }
     }

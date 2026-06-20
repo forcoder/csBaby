@@ -37,6 +37,7 @@ class AuthManager @Inject constructor(
         private val KEY_REFRESH_TOKEN = stringPreferencesKey("auth_refresh_token")
         private val KEY_EXPIRES_AT = longPreferencesKey("auth_expires_at")
         private val KEY_IS_LOGGED_IN = booleanPreferencesKey("auth_is_logged_in")
+        private val KEY_DISPLAY_NAME = stringPreferencesKey("auth_display_name")
     }
 
     /** 内存缓存的认证状态，拦截器可同步读取 */
@@ -81,6 +82,7 @@ class AuthManager @Inject constructor(
             prefs[KEY_REFRESH_TOKEN] = auth.refreshToken
             prefs[KEY_EXPIRES_AT] = auth.expiresAt
             prefs[KEY_IS_LOGGED_IN] = true
+            prefs[KEY_DISPLAY_NAME] = auth.displayName
         }
         _currentAuth.value = auth
     }
@@ -114,7 +116,8 @@ class AuthManager @Inject constructor(
                 tenantId = prefs[KEY_TENANT_ID] ?: return null,
                 accessToken = prefs[KEY_ACCESS_TOKEN] ?: return null,
                 refreshToken = prefs[KEY_REFRESH_TOKEN] ?: return null,
-                expiresAt = prefs[KEY_EXPIRES_AT] ?: 0L
+                expiresAt = prefs[KEY_EXPIRES_AT] ?: 0L,
+                displayName = prefs[KEY_DISPLAY_NAME] ?: ""
             )
         } else null
     }

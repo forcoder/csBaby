@@ -27,7 +27,7 @@ object DatabaseModule {
             KefuDatabase::class.java,
             KefuDatabase.DATABASE_NAME
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .build()
     }
 
@@ -168,6 +168,21 @@ object DatabaseModule {
             database.execSQL(
                 "UPDATE ai_model_configs SET apiEndpoint = 'https://api.longcat.chat/openai/v1/chat/completions' " +
                 "WHERE apiEndpoint = 'https://api.longcat.chat/openai'"
+            )
+        }
+    }
+
+    private val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            // BUG-R14: keyword_rules 加 remoteId 列 (跨租户同步用)
+            database.execSQL("ALTER TABLE keyword_rules ADD COLUMN remoteId TEXT")
+            // 为已有数据生成 remoteId (tenantId_id 格式), 避免 NULL
+            database.execSQL(
+                "UPDATE keyword_rules SET remoteId = tenantId || '_' || id WHERE remoteId IS NULL"
+            )
+            // 建 (tenantId, remoteId) 唯一索引 (名称必须与 Entity @Index 一致)
+            database.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS index_keyword_rules_tenantId_remoteId ON keyword_rules(tenantId, remoteId)"
             )
         }
     }

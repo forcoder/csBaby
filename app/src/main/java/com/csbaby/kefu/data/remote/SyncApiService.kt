@@ -167,7 +167,7 @@ data class ConflictResolveResult(
 // ========== 同步数据模型（与本地 Entity 字段对应） ==========
 
 data class SyncKeywordRule(
-    @SerializedName("id") val id: Long = 0L,
+    @SerializedName("id") val id: String = "",
     @SerializedName("keyword") val keyword: String = "",
     @SerializedName("matchType") val matchType: String = "",
     @SerializedName("replyTemplate") val replyTemplate: String = "",

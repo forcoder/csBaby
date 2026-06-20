@@ -59,6 +59,12 @@ interface KeywordRuleDao {
     @Query("SELECT * FROM keyword_rules WHERE tenantId = :tenantId ORDER BY priority DESC, createdAt DESC")
     suspend fun getRulesByTenantSync(tenantId: String): List<KeywordRuleEntity>
 
+    @Query("SELECT * FROM keyword_rules WHERE tenantId IS NULL OR tenantId = '' ORDER BY id")
+    suspend fun getRulesWithEmptyTenant(): List<KeywordRuleEntity>
+
+    @Query("SELECT * FROM keyword_rules WHERE tenantId IS NOT NULL AND tenantId != '' AND tenantId != :exclude ORDER BY id")
+    suspend fun getRulesFromOtherTenants(exclude: String): List<KeywordRuleEntity>
+
     @Query("SELECT * FROM keyword_rules WHERE id = :id")
     suspend fun getById(id: Long): KeywordRuleEntity?
 
@@ -67,4 +73,21 @@ interface KeywordRuleDao {
 
     @Query("UPDATE keyword_rules SET deleted = 1, syncVersion = 0 WHERE id = :id")
     suspend fun softDelete(id: Long): Int
+
+    // ========== BUG-R14: remoteId 维度查询 (跨租户同步用) ==========
+
+    @Query("SELECT * FROM keyword_rules WHERE tenantId = :tenantId AND remoteId = :remoteId LIMIT 1")
+    suspend fun getByRemoteId(tenantId: String, remoteId: String): KeywordRuleEntity?
+
+    @Query("UPDATE keyword_rules SET keyword = :keyword, replyTemplate = :replyTemplate, " +
+            "matchType = :matchType, category = :category, targetType = :targetType, " +
+            "targetNamesJson = :targetNamesJson, priority = :priority, enabled = :enabled, " +
+            "updatedAt = :updatedAt, syncVersion = :syncVersion, deleted = :deleted " +
+            "WHERE tenantId = :tenantId AND remoteId = :remoteId")
+    suspend fun updateByRemoteId(
+        tenantId: String, remoteId: String,
+        keyword: String, matchType: String, replyTemplate: String, category: String,
+        targetType: String, targetNamesJson: String, priority: Int, enabled: Boolean,
+        updatedAt: Long, syncVersion: Long, deleted: Boolean
+    ): Int
 }
