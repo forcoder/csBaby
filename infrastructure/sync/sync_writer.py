@@ -104,6 +104,12 @@ def _transform_payload(table: str, payload: dict) -> dict:
     # 补 sync_version
     if "sync_version" not in out:
         out["sync_version"] = int(time.time() * 1000)
+    # keyword_rules: 补 keyword_hash = md5(keyword + reply_template) (唯一性约束)
+    if table == "keyword_rules":
+        import hashlib
+        kw = out.get("keyword", "") or ""
+        reply = out.get("reply_template", "") or ""
+        out["keyword_hash"] = hashlib.md5((kw + reply).encode("utf-8")).hexdigest()
     return out
 
 
@@ -137,10 +143,15 @@ def upsert_to_supabase(table: str, op: str, row_id: Optional[int], payload: Opti
                 placeholders = ",".join(["%s"] * len(cols))
                 col_list = ",".join(cols)
                 pk = _TABLE_PRIMARY_KEY.get(supa_table, "id")
+                # keyword_rules 用 (tenant_id, keyword_hash) 做 upsert, 避免同 keyword+reply 重复
+                if supa_table == "keyword_rules":
+                    conflict_cols = "(tenant_id, keyword_hash)"
+                else:
+                    conflict_cols = f"({pk})"
                 update_set = ",".join([f"{c}=EXCLUDED.{c}" for c in cols if c != pk])
                 sql = (
                     f"INSERT INTO {supa_table} ({col_list}) VALUES ({placeholders}) "
-                    f"ON CONFLICT ({pk}) DO UPDATE SET {update_set}"
+                    f"ON CONFLICT {conflict_cols} DO UPDATE SET {update_set}"
                 )
                 cur.execute(sql, values)
         conn.commit()
