@@ -16,46 +16,61 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
+/**
+ * 暖茶色 — 亲和、专业
+ * 主色 #0D9488 (Teal-600): 温暖、可信赖、比传统冷色客服工具有辨识度
+ * 辅色 #F59E0B (Amber-500): 温暖活力,用于标签/高亮/次要操作
+ * 底色 #FFFAF5 (Warm Paper): 暖白柔和,像纸张质感
+ */
+
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF6D28D9),
+    primary = Color(0xFF0D9488),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE9D5FF),
-    onPrimaryContainer = Color(0xFF2E1065),
-    secondary = Color(0xFF0891B2),
+    primaryContainer = Color(0xFFCCFBF1),
+    onPrimaryContainer = Color(0xFF134E4A),
+    secondary = Color(0xFFF59E0B),
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFCFFAFE),
-    onSecondaryContainer = Color(0xFF083344),
-    tertiary = Color(0xFFF97316),
+    secondaryContainer = Color(0xFFFEF3C7),
+    onSecondaryContainer = Color(0xFF78350F),
+    tertiary = Color(0xFF0EA5E9),
     onTertiary = Color.White,
-    background = Color(0xFFF5F7FF),
-    onBackground = Color(0xFF111827),
-    surface = Color(0xFFFCFCFF),
-    onSurface = Color(0xFF111827),
-    surfaceVariant = Color(0xFFEFF2FF),
-    onSurfaceVariant = Color(0xFF475569),
-    error = Color(0xFFDC2626),
-    onError = Color.White
+    background = Color(0xFFFFFAF5),
+    onBackground = Color(0xFF1C1917),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF1C1917),
+    surfaceVariant = Color(0xFFF5F5F4),
+    onSurfaceVariant = Color(0xFF78716C),
+    error = Color(0xFFE11D48),
+    onError = Color.White,
+    errorContainer = Color(0xFFFFE4E6),
+    onErrorContainer = Color(0xFF4C0519),
+    outline = Color(0xFFD6D3D1),
+    outlineVariant = Color(0xFFE7E5E4)
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFFC4B5FD),
-    onPrimary = Color(0xFF2E1065),
-    primaryContainer = Color(0xFF4C1D95),
-    onPrimaryContainer = Color(0xFFE9D5FF),
-    secondary = Color(0xFF67E8F9),
-    onSecondary = Color(0xFF083344),
-    secondaryContainer = Color(0xFF155E75),
-    onSecondaryContainer = Color(0xFFCFFAFE),
-    tertiary = Color(0xFFFDBA74),
-    onTertiary = Color(0xFF7C2D12),
-    background = Color(0xFF020617),
-    onBackground = Color(0xFFE2E8F0),
-    surface = Color(0xFF0F172A),
-    onSurface = Color(0xFFE2E8F0),
-    surfaceVariant = Color(0xFF172033),
-    onSurfaceVariant = Color(0xFF94A3B8),
-    error = Color(0xFFF87171),
-    onError = Color(0xFF450A0A)
+    primary = Color(0xFF2DD4BF),
+    onPrimary = Color(0xFF134E4A),
+    primaryContainer = Color(0xFF0F766E),
+    onPrimaryContainer = Color(0xFFCCFBF1),
+    secondary = Color(0xFFFBBF24),
+    onSecondary = Color(0xFF78350F),
+    secondaryContainer = Color(0xFF92400E),
+    onSecondaryContainer = Color(0xFFFEF3C7),
+    tertiary = Color(0xFF7DD3FC),
+    onTertiary = Color(0xFF0C4A6E),
+    background = Color(0xFF0C0A09),
+    onBackground = Color(0xFFF5F5F4),
+    surface = Color(0xFF1C1917),
+    onSurface = Color(0xFFF5F5F4),
+    surfaceVariant = Color(0xFF292524),
+    onSurfaceVariant = Color(0xFFA8A29E),
+    error = Color(0xFFFB7185),
+    onError = Color(0xFF4C0519),
+    errorContainer = Color(0xFF881337),
+    onErrorContainer = Color(0xFFFFE4E6),
+    outline = Color(0xFF44403C),
+    outlineVariant = Color(0xFF292524)
 )
 
 
@@ -84,7 +99,7 @@ fun KefuTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
+            window.statusBarColor = colorScheme.surface.toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }
