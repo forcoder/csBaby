@@ -33,7 +33,19 @@ logs/
 *.tmp
 *.temp
 *.bak
+*.bak2
 *.backup
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# adb pull 误命名的 Room 数据库（路径含盘符:残留在仓库根）
+?:*.db
+?:*workspace*.db
+workspaceworkbuddy*db
+"?workspace*.db"
 
 # 系统文件
 Thumbs.db
