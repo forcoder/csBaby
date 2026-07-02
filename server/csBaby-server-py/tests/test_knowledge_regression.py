@@ -17,23 +17,51 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 @pytest.fixture
 def app():
-    """创建测试 Flask app 并注册 knowledge_bp"""
-    from flask import Flask, g
-    from controllers.knowledge_controller import knowledge_bp
+    """创建测试 Flask app 并注册 knowledge_bp（mock 认证校验）"""
+    from flask import Flask
+    from controllers.knowledge_controller import knowledge_bp, _verify_token
+    from unittest.mock import MagicMock
+
+    # Mock _verify_token 使其总是返回有效 payload
+    import controllers.knowledge_controller as kc
+    kc._verify_token = lambda token: {
+        'user_id': 'test-user',
+        'tenant_id': 'test-tenant',
+        'type': 'access',
+    }
 
     app = Flask(__name__)
     app.config['TESTING'] = True
-
-    # 注册 blueprint
     app.register_blueprint(knowledge_bp)
 
-    # 添加认证中间件（模拟 g.tenant_id）
     @app.before_request
-    def _set_auth():
-        g.user_id = 'test-user'
-        g.tenant_id = 'test-tenant'
+    def _inject_auth():
+        from flask import request
+        # 确保所有测试请求都有 Authorization header
+        if not request.headers.get('Authorization', '').startswith('Bearer '):
+            request.environ['HTTP_AUTHORIZATION'] = 'Bearer mock-token'
 
     return app
+
+
+@pytest.fixture
+def client(app):
+    """创建带认证 token 的测试客户端"""
+    client = app.test_client()
+    client.test_token = app.config['TEST_TOKEN']
+
+    # 创建一个带 auth header 的便捷方法
+    original_open = client.open
+
+    def _open(*args, **kwargs):
+        headers = kwargs.pop('headers', {})
+        if 'Authorization' not in headers:
+            headers['Authorization'] = f"Bearer {app.config['TEST_TOKEN']}"
+        kwargs['headers'] = headers
+        return original_open(*args, **kwargs)
+
+    client.open = _open
+    return client
 
 
 @pytest.fixture
@@ -219,24 +247,17 @@ class TestExceptionCases:
 
         return app
 
-    def test_unauthorized_access(self, client, monkeypatch):
+    def test_unauthorized_access(self, client):
         """异常6: 未认证访问返回401"""
-        # 模拟 g.tenant_id 不存在的情况
-        import flask
-        original_g = flask.g
-
-        class MockG:
-            _data = {}
-
-            def get(self, key, default=None):
-                return self._data.get(key, default)
-
-        mock_g = MockG()
-        monkeypatch.setattr('controllers.knowledge_controller.g', mock_g)
-
-        resp = client.get('/api/knowledge/rules')
-        # 如果没有 tenant_id，应返回 401
-        assert resp.status_code == 401
+        # 临时恢复 verify_token 使其返回 None
+        import controllers.knowledge_controller as kc
+        original_verify = kc._verify_token
+        kc._verify_token = lambda token: None
+        try:
+            resp = client.get('/api/knowledge/rules')
+            assert resp.status_code == 401
+        finally:
+            kc._verify_token = original_verify
 
 
 # ==================== 综合测试 ====================

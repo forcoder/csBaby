@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: csbaby-sync-server-py
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    region: oregon
+    repo: https://github.com/forcoder/csBaby-server-py
+    branch: master
+    autoDeploy: true
+    envVars:
+      - key: DB_NAME
+        value: quick_speech
+      - key: DB_HOST
+        value: dpg-d7pu5hm8bjmc73blqp40-a
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_USER
+        value: quick_speech_user
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true

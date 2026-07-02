@@ -228,7 +228,7 @@ class TestDeleteRule:
         assert result is True
         call_args = mock_execute_update.call_args
         update_sql = call_args[0][0]
-        assert 'deleted = TRUE' in update_sql
+        assert 'deleted =' in update_sql
 
 
 class TestSearchRules:

@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.database import execute_query, execute_update, execute_batch
+from config.database import execute_query, execute_update, execute_batch, like_op
 
 logger = logging.getLogger(__name__)
 
@@ -73,13 +73,13 @@ class KnowledgeService:
         else:
             rules = execute_query(
                 """SELECT * FROM keyword_rules
-                   WHERE tenant_id = %s AND deleted = FALSE
+                   WHERE tenant_id = %s AND deleted = 0
                    ORDER BY priority DESC, created_at DESC
                    LIMIT %s OFFSET %s""",
                 (tenant_id, limit, offset)
             )
             total_row = execute_query(
-                "SELECT COUNT(*) FROM keyword_rules WHERE tenant_id = %s AND deleted = FALSE",
+                "SELECT COUNT(*) FROM keyword_rules WHERE tenant_id = %s AND deleted = 0",
                 (tenant_id,), fetch='one'
             )
 
@@ -230,7 +230,7 @@ class KnowledgeService:
         now = _now_ms()
         execute_update(
             """UPDATE keyword_rules
-               SET deleted = TRUE, sync_version = %s, updated_at = %s
+               SET deleted = 1, sync_version = %s, updated_at = %s
                WHERE id = %s AND tenant_id = %s""",
             (now, now, rule_id, tenant_id)
         )
@@ -256,30 +256,31 @@ class KnowledgeService:
 
         if keyword:
             pattern = f"%{keyword}%"
+            lop = like_op()
             rules = execute_query(
-                """SELECT * FROM keyword_rules
-                   WHERE tenant_id = %s AND deleted = FALSE
-                   AND (keyword ILIKE %s OR reply_template ILIKE %s OR category ILIKE %s)
+                f"""SELECT * FROM keyword_rules
+                   WHERE tenant_id = %s AND deleted = 0
+                   AND (keyword {lop} %s OR reply_template {lop} %s OR category {lop} %s)
                    ORDER BY priority DESC, created_at DESC
                    LIMIT %s OFFSET %s""",
                 (tenant_id, pattern, pattern, pattern, limit, offset)
             )
             total_row = execute_query(
-                """SELECT COUNT(*) FROM keyword_rules
-                   WHERE tenant_id = %s AND deleted = FALSE
-                   AND (keyword ILIKE %s OR reply_template ILIKE %s OR category ILIKE %s)""",
+                f"""SELECT COUNT(*) FROM keyword_rules
+                   WHERE tenant_id = %s AND deleted = 0
+                   AND (keyword {lop} %s OR reply_template {lop} %s OR category {lop} %s)""",
                 (tenant_id, pattern, pattern, pattern), fetch='one'
             )
         else:
             rules = execute_query(
                 """SELECT * FROM keyword_rules
-                   WHERE tenant_id = %s AND deleted = FALSE
+                   WHERE tenant_id = %s AND deleted = 0
                    ORDER BY priority DESC, created_at DESC
                    LIMIT %s OFFSET %s""",
                 (tenant_id, limit, offset)
             )
             total_row = execute_query(
-                "SELECT COUNT(*) FROM keyword_rules WHERE tenant_id = %s AND deleted = FALSE",
+                "SELECT COUNT(*) FROM keyword_rules WHERE tenant_id = %s AND deleted = 0",
                 (tenant_id,), fetch='one'
             )
 
