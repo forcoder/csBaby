@@ -96,7 +96,7 @@ class SyncManager @Inject constructor(
                     tenantId = response.effectiveTenantId(),
                     token = response.effectiveToken(),
                     refreshToken = response.refreshToken ?: "",
-                    expiresAt = response.expiresAt ?: 0L,
+expiresAt = response.expiresAt ?: 0L,
                     displayName = identifier
                 )
                 _authState.value = auth

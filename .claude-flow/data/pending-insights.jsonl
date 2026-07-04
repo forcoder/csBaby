@@ -456,3 +456,6 @@
 {"type":"edit","file":"D:\\workspace\\workbuddy\\csBaby\\app\\src\\main\\java\\com\\csbaby\\kefu\\data\\remote\\OtaApiService.kt","timestamp":1780201237982,"sessionId":null}
 {"type":"edit","file":"D:\\workspace\\workbuddy\\csBaby\\app\\src\\main\\java\\com\\csbaby\\kefu\\data\\remote\\OtaApiService.kt","timestamp":1780201253708,"sessionId":null}
 {"type":"edit","file":"D:\\workspace\\workbuddy\\csBaby\\app\\src\\main\\java\\com\\csbaby\\kefu\\data\\repository\\OtaRepositoryImpl.kt","timestamp":1780201266133,"sessionId":null}
+{"type":"edit","file":"D:\\workspace\\workbuddy\\csBaby\\app\\build.gradle.kts","timestamp":1783126498208,"sessionId":null}
+{"type":"edit","file":"D:\\workspace\\workbuddy\\csBaby\\app\\src\\main\\java\\com\\csbaby\\kefu\\data\\remote\\SyncApiService.kt","timestamp":1783126514244,"sessionId":null}
+{"type":"edit","file":"D:\\workspace\\workbuddy\\csBaby\\app\\src\\main\\java\\com\\csbaby\\kefu\\data\\sync\\SyncManager.kt","timestamp":1783126550451,"sessionId":null}

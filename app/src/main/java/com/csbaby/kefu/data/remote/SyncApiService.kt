@@ -18,8 +18,7 @@ import retrofit2.http.*
  */
 interface SyncApiService {
 
-    // ========== 认证 (refresh token only) ==========
-    // login/register 已迁到主 API 的 AuthApiService
+// ========== 认证（仅保留 Token 刷新，登录/注册已移至 AuthApiService）==========
 
     @POST("auth/refresh")
     suspend fun refreshToken(@Body request: RefreshTokenRequest): ApiResponse<AuthResult>
