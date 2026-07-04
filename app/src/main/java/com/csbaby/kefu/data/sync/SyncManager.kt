@@ -65,23 +65,26 @@ class SyncManager @Inject constructor(
         }
     }
 
-    // ========== 认证 ==========
+    // ========== 认证（统一走主 API 的 /api/auth/user/*） ==========
 
-    suspend fun login(email: String, password: String): Result<SyncAuthState> {
-        Log.d("SyncManager", "login() 开始: email=$email")
+    suspend fun login(identifier: String, password: String): Result<SyncAuthState> {
+        Log.d("SyncManager", "login() 开始: identifier=$identifier")
         _syncState.value = SyncState.Syncing("正在登录...")
         return try {
-            Log.d("SyncManager", "login() 调用 syncApiService.login, baseUrl=${BuildConfig.SYNC_BASE_URL}")
-            val request = LoginRequest(email, password)
-            val response = syncApiService.login(request)
-            Log.d("SyncManager", "login() 响应: isSuccess=${response.isSuccess}, msg=${response.message}")
-            if (response.isSuccess && response.data != null) {
+            Log.d("SyncManager", "login() 调用 authApiService.login, baseUrl=${BuildConfig.API_BASE_URL}")
+            val response = syncClient.authApiService.login(
+                com.csbaby.kefu.data.remote.LoginRequest(
+                    identifier = identifier, password = password
+                )
+            )
+            Log.d("SyncManager", "login() 响应: isSuccess=${response.isSuccess()}, err=${response.errorMessage()}")
+            if (response.isSuccess()) {
                 val auth = SyncAuthState.fromLoginResponse(
-                    userId = response.data.userId,
-                    tenantId = response.data.tenantId.ifEmpty { response.data.userId },
-                    token = response.data.effectiveAccessToken(),
-                    refreshToken = response.data.refreshToken,
-                    expiresAt = response.data.expiresAt
+                    userId = response.effectiveUserId(),
+                    tenantId = response.effectiveTenantId(),
+                    token = response.effectiveToken(),
+                    refreshToken = response.refreshToken ?: "",
+                    expiresAt = response.expiresAt ?: 0L
                 )
                 _authState.value = auth
                 authManager.saveAuthState(auth)
@@ -91,7 +94,7 @@ class SyncManager @Inject constructor(
                 migrateLocalDataIfNeeded(auth.tenantId)
                 Result.success(auth)
             } else {
-                val msg = response.message.ifEmpty { "登录失败" }
+                val msg = response.errorMessage() ?: "登录失败"
                 _syncState.value = SyncState.Error(msg)
                 Result.failure(Exception(msg))
             }
@@ -102,17 +105,25 @@ class SyncManager @Inject constructor(
         }
     }
 
-    suspend fun register(email: String, password: String, displayName: String): Result<SyncAuthState> {
+    suspend fun register(identifier: String, password: String, displayName: String): Result<SyncAuthState> {
         _syncState.value = SyncState.Syncing("正在注册...")
         return try {
-            val response = syncApiService.register(RegisterRequest(email, password, displayName))
-            if (response.isSuccess && response.data != null) {
+            // auto-detect phone vs email: 包含 '@' 视为 email, 否则 phone
+            val isEmail = identifier.contains("@")
+            val req = com.csbaby.kefu.data.remote.RegisterRequest(
+                email = if (isEmail) identifier else null,
+                phone = if (isEmail) null else identifier,
+                password = password,
+                name = displayName
+            )
+            val response = syncClient.authApiService.register(req)
+            if (response.isSuccess()) {
                 val auth = SyncAuthState.fromLoginResponse(
-                    userId = response.data.userId,
-                    tenantId = response.data.tenantId.ifEmpty { response.data.userId },
-                    token = response.data.effectiveAccessToken(),
-                    refreshToken = response.data.refreshToken,
-                    expiresAt = response.data.expiresAt
+                    userId = response.effectiveUserId(),
+                    tenantId = response.effectiveTenantId(),
+                    token = response.effectiveToken(),
+                    refreshToken = response.refreshToken ?: "",
+                    expiresAt = response.expiresAt ?: 0L
                 )
                 _authState.value = auth
                 authManager.saveAuthState(auth)
@@ -120,7 +131,7 @@ class SyncManager @Inject constructor(
                 Timber.d("注册成功: tenant=${auth.tenantId}, user=${auth.userId}")
                 Result.success(auth)
             } else {
-                val msg = response.message.ifEmpty { "注册失败" }
+                val msg = response.errorMessage() ?: "注册失败"
                 _syncState.value = SyncState.Error(msg)
                 Result.failure(Exception(msg))
             }

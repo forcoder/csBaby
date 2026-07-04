@@ -4,6 +4,7 @@ import android.util.Log
 import com.csbaby.kefu.BuildConfig
 import com.csbaby.kefu.data.model.SyncAuthState
 import com.csbaby.kefu.data.remote.ApiResponse
+import com.csbaby.kefu.data.remote.AuthApiService
 import com.csbaby.kefu.data.remote.AuthResult
 import com.csbaby.kefu.data.remote.RefreshTokenRequest
 import com.csbaby.kefu.data.remote.SyncApiService
@@ -19,6 +20,7 @@ class AuthenticatedSyncClient(
     private val authManager: AuthManager
 ) {
     val apiService: SyncApiService
+    val authApiService: AuthApiService
 
     /** 用于 Token 刷新的 API Service（不经过认证拦截器） */
     val refreshApiService: SyncApiService
@@ -49,6 +51,14 @@ class AuthenticatedSyncClient(
             .build()
 
         refreshApiService = refreshRetrofit.create(SyncApiService::class.java)
+
+        // 主 API 认证 Retrofit (api.agentai0.com) - 用于登录/注册
+        val authRetrofit = Retrofit.Builder()
+            .baseUrl(BuildConfig.API_BASE_URL)
+            .client(refreshClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+        authApiService = authRetrofit.create(AuthApiService::class.java)
 
         val authInterceptor = Interceptor { chain ->
             val original = chain.request()
