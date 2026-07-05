@@ -1,10 +1,13 @@
 import json
 import logging
+import os
 import time
 from typing import Optional
 
 from infrastructure.persistence.db_supabase import get_connection as get_supa_conn
 from infrastructure.persistence.db_supabase import put_connection as put_supa_conn
+from infrastructure.persistence.db_mysql import get_connection as get_mysql_conn
+from infrastructure.persistence.db_mysql import put_connection as put_mysql_conn
 from infrastructure.sync.sync_outbox_repo import SyncOutboxRepository
 
 logger = logging.getLogger(__name__)
@@ -159,28 +162,112 @@ def upsert_to_supabase(table: str, op: str, row_id: Optional[int], payload: Opti
         put_supa_conn(conn)
 
 
+def upsert_to_mysql(table: str, op: str, row_id: Optional[int], payload: Optional[dict]) -> None:
+    """Push single row to Aliyun RDS MySQL via pymysql.
+
+    Phase 1 双写镜像 - 与 upsert_to_supabase 行为对齐,使用 MySQL 方言:
+      - ON CONFLICT → ON DUPLICATE KEY UPDATE
+      - BOOLEAN → TINYINT(1) (依赖 schema 已统一)
+      - 其余字段名/类型与 supabase 一致
+
+    RDS 缺配置时 RuntimeError("RDS_DB_URL not set"),由 SyncWriter.push 兜底到 outbox。
+    """
+    mysql_table = _TABLE_NAME_MAP.get(table)
+    if not mysql_table:
+        raise ValueError(f"Unknown table for sync: {table}")
+
+    conn = get_mysql_conn()
+    try:
+        with conn.cursor() as cur:
+            if op == "DELETE":
+                pk = _TABLE_PRIMARY_KEY.get(mysql_table, "id")
+                if pk == "id":
+                    cur.execute(f"DELETE FROM {mysql_table} WHERE id=%s", (row_id,))
+                else:
+                    if not payload:
+                        raise ValueError(f"DELETE on {mysql_table} requires payload (pk={pk})")
+                    cur.execute(f"DELETE FROM {mysql_table} WHERE {pk}=%s", (payload.get(pk),))
+            else:
+                if not payload:
+                    raise ValueError(f"INSERT/UPDATE requires payload, got empty for {table}")
+                transformed = _transform_payload(table, payload)
+                cols = list(transformed.keys())
+                values = [transformed[c] for c in cols]
+                placeholders = ",".join(["%s"] * len(cols))
+                col_list = ",".join(cols)
+                pk = _TABLE_PRIMARY_KEY.get(mysql_table, "id")
+                # keyword_rules 用 (tenant_id, keyword_hash) 做 upsert
+                # 假设 RDS 上已有 uk_tenant_keyword_hash 唯一索引 (Phase 2 验证)
+                # 若仅 uk_tenant_keyword,MySQL 会按 (tenant_id, keyword_hash) 判定冲突
+                if mysql_table == "keyword_rules":
+                    conflict_cols = "(tenant_id, keyword_hash)"
+                else:
+                    conflict_cols = f"({pk})"
+                update_set = ",".join([f"{c}=VALUES({c})" for c in cols if c != pk])
+                sql = (
+                    f"INSERT INTO {mysql_table} ({col_list}) VALUES ({placeholders}) "
+                    f"ON DUPLICATE KEY UPDATE {update_set}"
+                )
+                cur.execute(sql, values)
+        conn.commit()
+    finally:
+        put_mysql_conn(conn)
+
+
 class SyncWriter:
-    """Dual-write orchestrator: push to Supabase; on failure, enqueue to outbox."""
+    """Dual-write orchestrator: push to Supabase + RDS MySQL; on either failure, enqueue to outbox.
+
+    Phase 1 行为:
+      - push() 同时尝试 upsert_to_supabase 与 upsert_to_mysql
+      - 任一成功 / 任一失败 都不阻塞 API 调用方
+      - 任一失败 → outbox.enqueue(记录失败原因),由 retry_worker 后续补单
+      - 双失败 → outbox.enqueue 记录 last_error(双侧错误合并)
+    """
 
     def __init__(self, db):
         self.db = db
         self.outbox_repo = SyncOutboxRepository(db)
 
     def push(self, table: str, op: str, row_id: Optional[int], payload: Optional[dict]) -> None:
+        errors: list[str] = []
+
+        # 双写路径 1: Supabase (PostgreSQL)
         try:
             upsert_to_supabase(table, op, row_id, payload)
-            logger.debug("sync.push success table=%s op=%s row_id=%s", table, op, row_id)
+            logger.debug("sync.push supabase success table=%s op=%s row_id=%s", table, op, row_id)
         except Exception as e:
-            logger.warning("sync.push failed table=%s op=%s row_id=%s err=%s",
+            err = f"supabase: {e}"
+            logger.warning("sync.push supabase failed table=%s op=%s row_id=%s err=%s",
                            table, op, row_id, e)
+            errors.append(err)
+
+        # 双写路径 2: RDS MySQL (Phase 1 新增镜像)
+        # 配置缺失 (RDS_DB_URL 未设) 视为「未启用 RDS 镜像」,静默跳过,
+        # 不写 outbox (语义: API 仍按 Phase 0 行为只写 Supabase)。
+        # 真连不上才视为失败,需要 outbox 兜底。
+        if not os.environ.get("RDS_DB_URL"):
+            logger.debug("sync.push mysql skipped (RDS_DB_URL not configured)")
+        else:
+            try:
+                upsert_to_mysql(table, op, row_id, payload)
+                logger.debug("sync.push mysql success table=%s op=%s row_id=%s", table, op, row_id)
+            except Exception as e:
+                err = f"mysql: {e}"
+                logger.warning("sync.push mysql failed table=%s op=%s row_id=%s err=%s",
+                               table, op, row_id, e)
+                errors.append(err)
+
+        # 任一失败 → outbox.enqueue 兜底
+        if errors:
+            last_error = " | ".join(errors)
             try:
                 self.outbox_repo.enqueue(
                     table_name=table,
                     op=op,
                     row_id=row_id,
                     payload=payload or {},
-                    last_error=str(e),
+                    last_error=last_error,
                 )
             except Exception as ee:
-                # outbox 写入也失败 → log 但不抛出（不阻塞 API）
+                # outbox 写入也失败 → log 但不抛出(不阻塞 API)
                 logger.error("sync.outbox.enqueue failed table=%s err=%s", table, ee)

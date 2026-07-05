@@ -21,6 +21,14 @@ def writer(db):
     return SyncWriter(db)
 
 
+@pytest.fixture(autouse=True)
+def disable_rds(monkeypatch):
+    """旧测试场景只验证 Supabase 路径,显式禁用 RDS 双写避免被 outbox 兜底。
+    Phase 1 双写测试在 test_sync_writer_dual_write.py 用 enable_rds fixture 启用。
+    """
+    monkeypatch.delenv("RDS_DB_URL", raising=False)
+
+
 def test_push_supabase_success_no_outbox(writer, db):
     with patch("infrastructure.sync.sync_writer.upsert_to_supabase", return_value=None):
         writer.push("keyword_rules", "INSERT", 1, {"id": 1, "keyword": "hi"})
@@ -35,7 +43,8 @@ def test_push_supabase_failure_enqueues_outbox(writer, db):
     outbox = db.execute("SELECT * FROM sync_outbox").fetchall()
     assert len(outbox) == 1
     assert outbox[0]["table_name"] == "keyword_rules"
-    assert outbox[0]["last_error"] == "connection refused"
+    # Phase 1 升级: last_error 加了 "supabase: " 前缀以区分双侧失败
+    assert "connection refused" in outbox[0]["last_error"]
 
 
 def test_push_delete_op_does_not_require_payload(writer, db):

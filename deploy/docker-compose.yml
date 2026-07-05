@@ -11,11 +11,17 @@ services:
       - PORT=8080
       - SERVICE_NAME=csbaby-api
       - DATABASE_PATH=/data/csbaby.db
+      # Phase 1: RDS MySQL 双写镜像 (可选)
+      # 留空 = 仅写 Supabase (Phase 0 行为)
+      # 配置后 = 同时写 Supabase + RDS MySQL
+      - RDS_DB_URL=${RDS_DB_URL:-}
+    ports:
+      - "8084:8080"
     volumes:
       - api-data:/data
     networks: [csnet]
 
-  # Retry worker: processes sync_outbox to push failed items to Supabase
+  # Retry worker: processes sync_outbox to push failed items to Supabase + RDS
   retry:
     build:
       context: ..
@@ -27,6 +33,7 @@ services:
     environment:
       - DATABASE_PATH=/data/csbaby.db
       - SYNC_RETRY_INTERVAL_SECONDS=30
+      - RDS_DB_URL=${RDS_DB_URL:-}
     volumes:
       - api-data:/data
     networks: [csnet]
@@ -43,6 +50,8 @@ services:
     environment:
       - PORT=8080
       - SERVICE_NAME=csbaby-sync-server-py
+    ports:
+      - "8085:8080"
     networks: [csnet]
 
   admin:
@@ -56,6 +65,8 @@ services:
     environment:
       - PORT=8080
       - SERVICE_NAME=csbaby-admin
+    ports:
+      - "8086:8080"
     networks: [csnet]
 
 networks:
