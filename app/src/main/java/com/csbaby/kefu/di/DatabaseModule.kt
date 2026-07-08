@@ -2,6 +2,7 @@ package com.csbaby.kefu.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.csbaby.kefu.data.local.KefuDatabase
@@ -27,7 +28,22 @@ object DatabaseModule {
             KefuDatabase::class.java,
             KefuDatabase.DATABASE_NAME
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+            .addCallback(object : RoomDatabase.Callback() {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    super.onCreate(db)
+                    // 首次创建数据库时预置 LongCat 默认模型
+                    db.execSQL(
+                        "INSERT OR IGNORE INTO ai_model_configs " +
+                        "(modelType, modelName, apiKey, apiEndpoint, temperature, maxTokens, " +
+                        "isDefault, isEnabled, monthlyCost, lastUsed, createdAt, tenantId, syncVersion, deleted) " +
+                        "VALUES ('OPENAI', 'LongCat-2.0', '', 'https://api.longcat.chat/openai/v1', " +
+                        "0.7, 1000, 1, 1, 0.0, " +
+                        "CAST(strftime('%s','now') AS INTEGER)*1000, CAST(strftime('%s','now') AS INTEGER)*1000, " +
+                        "'default_tenant', 0, 0)"
+                    )
+                }
+            })
             .build()
     }
 
@@ -183,6 +199,22 @@ object DatabaseModule {
             // 建 (tenantId, remoteId) 唯一索引 (名称必须与 Entity @Index 一致)
             database.execSQL(
                 "CREATE UNIQUE INDEX IF NOT EXISTS index_keyword_rules_tenantId_remoteId ON keyword_rules(tenantId, remoteId)"
+            )
+        }
+    }
+
+    private val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            // 预置 LongCat 默认模型（仅首次安装/无模型时生效）
+            database.execSQL(
+                "INSERT OR IGNORE INTO ai_model_configs " +
+                "(modelType, modelName, apiKey, apiEndpoint, temperature, maxTokens, " +
+                "isDefault, isEnabled, monthlyCost, lastUsed, createdAt, tenantId, syncVersion, deleted) " +
+                "SELECT 'OPENAI', 'LongCat-2.0', '', 'https://api.longcat.chat/openai/v1', " +
+                "0.7, 1000, 1, 1, 0.0, " +
+                "CAST(strftime('%s','now') AS INTEGER)*1000, CAST(strftime('%s','now') AS INTEGER)*1000, " +
+                "'default_tenant', 0, 0 " +
+                "WHERE NOT EXISTS (SELECT 1 FROM ai_model_configs LIMIT 1)"
             )
         }
     }

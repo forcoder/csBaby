@@ -91,13 +91,20 @@ class SyncManager @Inject constructor(
             )
             Log.d("SyncManager", "login() 响应: isSuccess=${response.isSuccess()}, err=${response.errorMessage()}")
             if (response.isSuccess()) {
+                // BUG 修复: displayName 优先用服务端返回的 phone/email, 兜底用登录 identifier
+                // 避免旧版登录未写入 displayName 导致 UI 显示租户 ID
+                // 去除 "email:" 前缀: 服务端 phone 字段存储为 "email:user@example.com"
+                val rawDisplay = response.phone
+                    ?: response.email
+                    ?: identifier
+                val effectiveDisplayName = rawDisplay.removePrefix("email:")
                 val auth = SyncAuthState.fromLoginResponse(
                     userId = response.effectiveUserId(),
                     tenantId = response.effectiveTenantId(),
                     token = response.effectiveToken(),
                     refreshToken = response.refreshToken ?: "",
-expiresAt = response.expiresAt ?: 0L,
-                    displayName = identifier
+                    expiresAt = response.expiresAt ?: 0L,
+                    displayName = effectiveDisplayName
                 )
                 _authState.value = auth
                 authManager.saveAuthState(auth)
@@ -105,17 +112,16 @@ expiresAt = response.expiresAt ?: 0L,
                 Timber.d("登录成功: tenant=${auth.tenantId}, user=${auth.userId}")
                 // 迁移本地数据到真实租户（仅首次登录/新设备场景）
                 migrateLocalDataIfNeeded(auth.tenantId)
-                // BUG-R8 修复: 登录成功后触发 fullSync 拉取云端数据
-                // (与 restoreAuthState 行为一致；fullSync 失败不应阻断登录成功)
+                // 增量拉取云端变更（记录最后拉取时间，只拉取更新的数据）
                 try {
-                    val result = fullSync(auth.tenantId)
+                    val result = incrementalSync(auth.tenantId)
                     if (result.isSuccess) {
-                        Timber.d("登录后全量同步成功: tenant=${auth.tenantId}")
+                        Timber.d("登录后增量同步成功: tenant=${auth.tenantId}")
                     } else {
-                        Timber.w("登录后全量同步失败: ${result.exceptionOrNull()?.message}")
+                        Timber.w("登录后增量同步失败: ${result.exceptionOrNull()?.message}")
                     }
                 } catch (e: Exception) {
-                    Timber.e(e, "登录后全量同步异常")
+                    Timber.e(e, "登录后增量同步异常")
                 }
                 Result.success(auth)
             } else {
@@ -181,39 +187,54 @@ expiresAt = response.expiresAt ?: 0L,
     suspend fun restoreAuthState() {
         val saved = authManager.getAuthState()
         if (saved != null && !saved.isExpired()) {
-            _authState.value = saved
-            Timber.d("恢复登录状态: tenant=${saved.tenantId}")
+            // BUG 修复: 旧版登录未写入 displayName, 用 userId 前 8 位兜底, 避免 UI 显示租户 ID 误导
+            val restored = if (saved.displayName.isBlank()) {
+                val fallbackName = "用户${saved.userId.takeLast(4)}"
+                val patched = saved.copy(displayName = fallbackName)
+                authManager.saveAuthState(patched)
+                patched
+            } else {
+                saved
+            }
+            _authState.value = restored
+            Timber.d("恢复登录状态: tenant=${restored.tenantId}")
 
             // 迁移本地 default_tenant 数据到真实租户（首次登录/卸载重装场景）
             migrateLocalDataIfNeeded(saved.tenantId)
 
-            // 自动触发全量同步以恢复云端数据（首次登录/卸载重装场景）
+            // 增量拉取云端变更（记录最后拉取时间，只拉取更新的数据）
             try {
-                val result = fullSync(saved.tenantId)
+                val result = incrementalSync(saved.tenantId)
                 if (result.isSuccess) {
-                    Timber.d("自动全量同步成功: tenant=${saved.tenantId}")
+                    Timber.d("自动增量同步成功: tenant=${saved.tenantId}")
                 } else {
-                    Timber.w("自动全量同步失败: ${result.exceptionOrNull()?.message}")
+                    Timber.w("自动增量同步失败: ${result.exceptionOrNull()?.message}")
                 }
             } catch (e: Exception) {
-                Timber.e(e, "自动全量同步异常")
+                Timber.e(e, "自动增量同步异常")
             }
         } else if (saved != null && saved.isExpired()) {
             // Token 已过期，尝试用 refreshToken 刷新
             Timber.d("Token 已过期，尝试刷新")
             val refreshed = tryRefreshToken(saved.refreshToken)
             if (refreshed != null) {
-                _authState.value = refreshed
-                authManager.saveAuthState(refreshed)
-                Timber.d("Token 刷新成功: tenant=${refreshed.tenantId}")
+                // BUG 修复: tryRefreshToken 不返回 displayName, 用原 saved.displayName 兜底, 再用 userId 补填
+                val restored = if (refreshed.displayName.isBlank()) {
+                    val name = saved.displayName.ifBlank { "用户${refreshed.userId.takeLast(4)}" }
+                    refreshed.copy(displayName = name).also { authManager.saveAuthState(it) }
+                } else {
+                    refreshed
+                }
+                _authState.value = restored
+                Timber.d("Token 刷新成功: tenant=${restored.tenantId}")
 
                 // 迁移本地 default_tenant 数据到真实租户
                 migrateLocalDataIfNeeded(refreshed.tenantId)
 
                 try {
-                    fullSync(refreshed.tenantId)
+                    incrementalSync(refreshed.tenantId)
                 } catch (e: Exception) {
-                    Timber.e(e, "Token 刷新后全量同步异常")
+                    Timber.e(e, "Token 刷新后增量同步异常")
                 }
             } else {
                 Timber.w("Token 刷新失败，清除认证状态")
@@ -254,11 +275,24 @@ expiresAt = response.expiresAt ?: 0L,
     companion object {
         const val DEFAULT_TENANT_ID = "default_tenant"
         private const val PUSH_BATCH_SIZE = 50
+
+        /**
+         * 单次 doPush 的结果：服务端返回的精确统计 + 本地推送数量（用于 stats==null 兜底）
+         * + 服务端新版本号（用于 checkpoint 时间戳更新）
+         */
+        private data class PushBatchResult(
+            val serverStats: SyncStats?,
+            val localByType: Map<String, Int>,
+            val newServerVersion: Long = 0L
+        )
     }
 
     /**
      * 将本地 default_tenant 的数据迁移到真实租户。
      * 解决卸载重装后本地数据 tenantId 不正确导致同步返回 0 的问题。
+     *
+     * 安全边界：只迁移 default_tenant 和空 tenantId 的占位数据，
+     * 禁止迁移其他已登录账号的 tenant 数据，确保"同步只同步登录账号数据"。
      */
     private suspend fun migrateLocalDataIfNeeded(tenantId: String) {
         if (tenantId == DEFAULT_TENANT_ID) {
@@ -269,7 +303,7 @@ expiresAt = response.expiresAt ?: 0L,
         var totalMigrated = 0
         Log.d("SyncManager", "幂等迁移开始: default_tenant -> $tenantId")
 
-        // 知识库规则: 按 id 去重迁移
+        // 知识库规则: 按 id 去重迁移（仅 default_tenant 占位数据）
         val defaultRules = keywordRuleDao.getRulesByTenantSync(DEFAULT_TENANT_ID)
         Log.d("SyncManager", "default_tenant 规则数: ${defaultRules.size}")
         if (defaultRules.isNotEmpty()) {
@@ -297,36 +331,8 @@ expiresAt = response.expiresAt ?: 0L,
             }
         }
 
-        // 其他租户规则迁移: 旧手机上可能绑定了不同的 tenantId
-        val otherTenantRules = keywordRuleDao.getRulesFromOtherTenants(tenantId)
-        Log.d("SyncManager", "其他租户规则数: ${otherTenantRules.size}")
-        if (otherTenantRules.isNotEmpty()) {
-            val existingIds = keywordRuleDao.getRulesByTenantSync(tenantId).map { it.id }.toHashSet()
-            val toMigrate = otherTenantRules.filter { it.id !in existingIds }
-            if (toMigrate.isNotEmpty()) {
-                toMigrate.forEach { keywordRuleDao.insertRule(it.copy(tenantId = tenantId, syncVersion = 0L)) }
-                totalMigrated += toMigrate.size
-                Timber.d("迁移 ${toMigrate.size} 条其他租户规则到 tenant=$tenantId")
-            }
-        }
-
-        // 旧 tenantId 纠正: Room 里的 tenant UUID 可能和 JWT 的不完全一致
-        // (如缺末尾字符),用相同前缀匹配防止数据写到不同租户
-        val localPrefix = tenantId.take(30)
-        val misalignedCount = keywordRuleDao.getRulesByTenantSync(tenantId).size
-        if (misalignedCount < 10 && otherTenantRules.isNotEmpty()) {
-            // 当前租户数据很少,而其他租户有大量数据 → 可能是 UUID 前缀匹配但末尾不同
-            val similarRules = otherTenantRules.filter { it.tenantId.take(30) == localPrefix }
-            if (similarRules.isNotEmpty()) {
-                val existingIds = keywordRuleDao.getRulesByTenantSync(tenantId).map { it.id }.toHashSet()
-                val toFix = similarRules.filter { it.id !in existingIds }
-                if (toFix.isNotEmpty()) {
-                    toFix.forEach { keywordRuleDao.insertRule(it.copy(tenantId = tenantId, syncVersion = 0L)) }
-                    totalMigrated += toFix.size
-                    Log.d("SyncManager", "纠正 ${toFix.size} 条租户 UUID 不匹配的规则")
-                }
-            }
-        }
+        // 安全说明: 不移除其他已登录账号的 tenant 数据(getRulesFromOtherTenants / UUID 前缀匹配)
+        // 避免 A 账号数据迁移到 B 账号下被错误同步
 
         // AI 模型配置
         val defaultModels = aiModelConfigDao.getModelsByTenantSync(DEFAULT_TENANT_ID)
@@ -455,12 +461,16 @@ expiresAt = response.expiresAt ?: 0L,
         if (tenantId !in legacyPushAttemptedTenants) {
             val pushCandidates = keywordRuleDao.getRulesByTenantSync(tenantId)
                 .filter { !it.deleted }
+            var maxServerVersion = 0L
             if (pushCandidates.isNotEmpty()) {
                 Log.d("SyncManager", "分批推送所有 ${pushCandidates.size} 条(每批50)")
                 pushCandidates.chunked(PUSH_BATCH_SIZE).forEach { batch ->
                     try {
-                        doPush(tenantId, batch, emptyList(), emptyList(),
+                        val result = doPush(tenantId, batch, emptyList(), emptyList(),
                             emptyList(), emptyList(), emptyList(), emptyList(), emptyMap(), 0L)
+                        if (result.newServerVersion > maxServerVersion) {
+                            maxServerVersion = result.newServerVersion
+                        }
                     } catch (e: Exception) {
                         Log.w("SyncManager", "分批推送失败: ${e.message}")
                     }
@@ -468,7 +478,9 @@ expiresAt = response.expiresAt ?: 0L,
             } else {
                 Log.d("SyncManager", "无数据需推送")
             }
-            syncCheckpointDao.updateSyncSuccess(tenantId, System.currentTimeMillis(), null)
+            // BUG-FIX: 使用服务器返回的时间戳更新 checkpoint, 避免时钟偏差
+            val checkpointTime = if (maxServerVersion > 0L) maxServerVersion else System.currentTimeMillis()
+            syncCheckpointDao.updateSyncSuccess(tenantId, checkpointTime, null)
             legacyPushAttemptedTenants.add(tenantId)
         }
         // BUG-R12 修复: 迁移后必须触发增量同步, 拉取云端变更到本地
@@ -561,9 +573,13 @@ expiresAt = response.expiresAt ?: 0L,
                 applyChangesToLocal(changes, tenantId)
             }
 
+            // BUG-FIX: 使用服务器时间戳更新 checkpoint, 避免手机/服务器时钟偏差
+            // 导致下次同步时 syncVersion >= since 比较错误
+            val serverTime = changesResponse.data?.serverTime
+                ?: System.currentTimeMillis()
             syncCheckpointDao.updateSyncSuccess(
                 tenantId,
-                System.currentTimeMillis(),
+                serverTime,
                 changesResponse.data?.nextCursor
             )
 
@@ -599,6 +615,7 @@ expiresAt = response.expiresAt ?: 0L,
                 }
             }
             _syncState.value = SyncState.Success("同步完成", stats)
+            _lastSyncStats = stats
             Log.d("SyncManager", "增量同步完成: $stats")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -614,21 +631,24 @@ expiresAt = response.expiresAt ?: 0L,
     // ========== 推送本地变更（增量，分批避免超时）==========
 
     suspend fun pushLocalChanges(tenantId: String, since: Long): String {
-        // 收集本地有变更的数据（syncVersion == 0 表示新增/修改待同步）
+        // 脏标记机制: syncVersion == 0L 表示本地有变更待同步（新增/修改/删除）
+        // 所有写操作（insertRule/updateRule/softDelete）都已设置 syncVersion = 0L
+        // doPush 成功后更新 syncVersion 为服务器时间戳，清除脏标记
+        // 从服务端拉取的数据 syncVersion > 0，不会出现在这里
         val rules = keywordRuleDao.getRulesByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
         val models = aiModelConfigDao.getModelsByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
         val profile = userStyleProfileDao.getProfileByTenantIdSync(tenantId)
-        val profiles = if (profile != null && (profile.syncVersion >= since || profile.syncVersion == 0L)) listOf(profile) else emptyList()
+        val profiles = if (profile != null && profile.syncVersion == 0L) listOf(profile) else emptyList()
         val apps = appConfigDao.getAppsByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
         val scenarios = scenarioDao.getScenariosByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
         val replies = replyHistoryDao.getRepliesByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
         val blacklists = messageBlacklistDao.getByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
 
         // 分离正常数据和已删除数据
         val activeRules = rules.filter { !it.deleted }
@@ -660,13 +680,15 @@ expiresAt = response.expiresAt ?: 0L,
         }
 
         // 分批推送: 知识库规则按 PUSH_BATCH_SIZE 分批，其他数据量小的一次推送
-        val allStats = mutableListOf<String>()
-
-        // 知识库规则分批
+        // 累加每批 server 返回的精确统计(stats==null 时回退到本地数量), 避免 ； 拼接重复显示
         val ruleBatches = activeRules.chunked(PUSH_BATCH_SIZE)
+        var totalInserted = 0
+        var totalUpdated = 0
+        var totalDeleted = 0
+        val fallbackByType = mutableMapOf<String, Int>()
         for ((i, ruleBatch) in ruleBatches.withIndex()) {
             val isFirstBatch = i == 0
-            val batchStats = doPush(
+            val batchResult = doPush(
                 tenantId, ruleBatch,
                 if (isFirstBatch) activeModels else emptyList(),
                 if (isFirstBatch) profiles else emptyList(),
@@ -677,23 +699,31 @@ expiresAt = response.expiresAt ?: 0L,
                 if (isFirstBatch) deletedIds else emptyMap(),
                 since
             )
-            if (batchStats.isNotEmpty()) allStats.add(batchStats)
+            batchResult.serverStats?.let {
+                totalInserted += it.inserted
+                totalUpdated += it.updated
+                totalDeleted += it.deleted
+            }
+            batchResult.localByType.forEach { (k, v) ->
+                fallbackByType[k] = (fallbackByType[k] ?: 0) + v
+            }
         }
 
-        return allStats.joinToString("；")
+        return formatSyncSummary(totalInserted, totalUpdated, totalDeleted, fallbackByType)
     }
 
-    // ========== 推送所有本地数据（首次同步）==========
+    // ========== 推送所有脏数据（首次同步 / 迁移后）==========
 
     suspend fun pushAllLocalChanges(tenantId: String): String {
-        val allRules = keywordRuleDao.getRulesByTenantSync(tenantId)
-        val allModels = aiModelConfigDao.getModelsByTenantSync(tenantId)
+        // 只推送有脏标记的数据（syncVersion == 0L），已同步且未修改的数据跳过
+        val allRules = keywordRuleDao.getRulesByTenantSync(tenantId).filter { it.syncVersion == 0L }
+        val allModels = aiModelConfigDao.getModelsByTenantSync(tenantId).filter { it.syncVersion == 0L }
         val profile = userStyleProfileDao.getProfileByTenantIdSync(tenantId)
-        val profiles = if (profile != null) listOf(profile) else emptyList()
-        val allApps = appConfigDao.getAppsByTenantSync(tenantId)
-        val allScenarios = scenarioDao.getScenariosByTenantSync(tenantId)
-        val allReplies = replyHistoryDao.getRepliesByTenantSync(tenantId)
-        val allBlacklists = messageBlacklistDao.getByTenantSync(tenantId)
+        val profiles = if (profile != null && profile.syncVersion == 0L) listOf(profile) else emptyList()
+        val allApps = appConfigDao.getAppsByTenantSync(tenantId).filter { it.syncVersion == 0L }
+        val allScenarios = scenarioDao.getScenariosByTenantSync(tenantId).filter { it.syncVersion == 0L }
+        val allReplies = replyHistoryDao.getRepliesByTenantSync(tenantId).filter { it.syncVersion == 0L }
+        val allBlacklists = messageBlacklistDao.getByTenantSync(tenantId).filter { it.syncVersion == 0L }
 
         // 分离正常数据和已删除数据
         val activeRules = allRules.filter { !it.deleted }
@@ -727,11 +757,21 @@ expiresAt = response.expiresAt ?: 0L,
         // 分批推送: 知识库规则按 PUSH_BATCH_SIZE 分批(避免单次 HTTP 推送 360+ 条超时)
         // 修复 BUG-R13: 原本一次性 doPush(activeRules=360) 导致服务端 batch_conn 在 60s 内无法执行全部 INSERT, 超时失败 → 本地 syncVersion=0 永远没更新 → Supabase 始终 180+ 条
         // 其他数据量小, 仅在第一批次一起推送
+        // 累加每批 server 返回的精确统计(stats==null 时回退到本地数量), 避免 ； 拼接重复显示
         val ruleBatches = activeRules.chunked(PUSH_BATCH_SIZE)
-        val allStats = mutableListOf<String>()
-        for ((i, ruleBatch) in ruleBatches.withIndex()) {
+        // BUG-FIX: 当只有删除数据无活跃规则时，需确保至少推送一次（否则 deletedIds 永远不会发出）
+        val allBatches = if (ruleBatches.isEmpty() && deletedIds.isNotEmpty()) {
+            listOf(emptyList<KeywordRuleEntity>())
+        } else {
+            ruleBatches
+        }
+        var totalInserted = 0
+        var totalUpdated = 0
+        var totalDeleted = 0
+        val fallbackByType = mutableMapOf<String, Int>()
+        for ((i, ruleBatch) in allBatches.withIndex()) {
             val isFirstBatch = i == 0
-            val batchStats = doPush(
+            val batchResult = doPush(
                 tenantId, ruleBatch,
                 if (isFirstBatch) activeModels else emptyList(),
                 if (isFirstBatch) profiles else emptyList(),
@@ -742,9 +782,16 @@ expiresAt = response.expiresAt ?: 0L,
                 if (isFirstBatch) deletedIds else emptyMap(),
                 0L
             )
-            if (batchStats.isNotEmpty()) allStats.add(batchStats)
+            batchResult.serverStats?.let {
+                totalInserted += it.inserted
+                totalUpdated += it.updated
+                totalDeleted += it.deleted
+            }
+            batchResult.localByType.forEach { (k, v) ->
+                fallbackByType[k] = (fallbackByType[k] ?: 0) + v
+            }
         }
-        return allStats.joinToString("；")
+        return formatSyncSummary(totalInserted, totalUpdated, totalDeleted, fallbackByType)
     }
 
     private suspend fun doPush(
@@ -758,7 +805,7 @@ expiresAt = response.expiresAt ?: 0L,
         blacklists: List<MessageBlacklistEntity>,
         deletedIds: Map<String, List<String>>,
         baseVersion: Long
-    ): String {
+    ): PushBatchResult {
         val request = PushChangesRequest(
             tenantId = tenantId,
             keywordRules = rules.map { it.toSyncModel() },
@@ -772,6 +819,19 @@ expiresAt = response.expiresAt ?: 0L,
             baseVersion = baseVersion
         )
         Log.d("SyncManager", "doPush: rules=${rules.size}, models=${models.size}, deletedIds=$deletedIds")
+
+        // 计算本次本地推送的"按类型数量"（用于服务端未返回 stats 时的兜底汇总）
+        val localByType = buildMap {
+            if (rules.isNotEmpty()) put("知识库", rules.size)
+            if (blacklists.isNotEmpty()) put("黑名单", blacklists.size)
+            if (models.isNotEmpty()) put("模型", models.size)
+            if (apps.isNotEmpty()) put("监控应用", apps.size)
+            if (scenarios.isNotEmpty()) put("场景", scenarios.size)
+            if (replies.isNotEmpty()) put("回复历史", replies.size)
+            if (profiles.isNotEmpty()) put("风格画像", profiles.size)
+            val totalDeleted = deletedIds.values.sumOf { it.size }
+            if (totalDeleted > 0) put("删除", totalDeleted)
+        }
 
         val response = try {
             getSyncApiService().pushChanges(request)
@@ -793,27 +853,28 @@ expiresAt = response.expiresAt ?: 0L,
             scenarios.forEach { scenarioDao.updateSyncVersion(it.id, newVersion) }
             replies.forEach { replyHistoryDao.updateSyncVersion(it.id, newVersion) }
             blacklists.forEach { messageBlacklistDao.updateSyncVersion(it.id, newVersion) }
-            // 返回同步统计
-            val stats = result.stats
-            return if (stats != null) {
-                "新增 ${stats.inserted} 条，更新 ${stats.updated} 条，删除 ${stats.deleted} 条"
-            } else {
-                buildString {
-                    val details = mutableListOf<String>()
-                    if (rules.isNotEmpty()) details.add("知识库${rules.size}条")
-                    if (blacklists.isNotEmpty()) details.add("黑名单${blacklists.size}条")
-                    if (models.isNotEmpty()) details.add("模型${models.size}条")
-                    if (apps.isNotEmpty()) details.add("监控应用${apps.size}条")
-                    if (scenarios.isNotEmpty()) details.add("场景${scenarios.size}条")
-                    if (replies.isNotEmpty()) details.add("回复历史${replies.size}条")
-                    if (profiles.isNotEmpty()) details.add("风格画像${profiles.size}条")
-                    if (deletedIds.isNotEmpty()) {
-                        val totalDeleted = deletedIds.values.sumOf { it.size }
-                        if (totalDeleted > 0) details.add("删除${totalDeleted}条")
-                    }
-                    if (details.isNotEmpty()) details.joinToString("，") else ""
-                }
-            }
+            return PushBatchResult(
+                serverStats = result.stats, localByType = localByType,
+                newServerVersion = newVersion
+            )
+        }
+        return PushBatchResult(serverStats = null, localByType = localByType)
+    }
+
+    /**
+     * 把多批推送结果合并成单条汇总字符串（修复 ； 拼接重复显示问题）。
+     * 优先使用服务端返回的精确统计；服务端未返回时回退到本地按类型推送数量。
+     */
+    private fun formatSyncSummary(
+        totalInserted: Int, totalUpdated: Int, totalDeleted: Int,
+        fallbackByType: Map<String, Int>
+    ): String {
+        if (totalInserted + totalUpdated + totalDeleted > 0) {
+            return "新增 $totalInserted 条，更新 $totalUpdated 条，删除 $totalDeleted 条"
+        }
+        if (fallbackByType.isNotEmpty()) {
+            val parts = fallbackByType.entries.joinToString("，") { (k, v) -> "$k${v}条" }
+            return "推送：$parts"
         }
         return ""
     }

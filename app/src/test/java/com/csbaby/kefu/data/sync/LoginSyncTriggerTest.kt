@@ -82,7 +82,7 @@ class LoginSyncTriggerTest {
     }
 
     @Test
-    fun `BUG-R8 login成功后必须调用fullSync拉取云端数据`() = runBlocking {
+    fun `BUG-R8 login成功后必须调用incrementalSync拉取云端数据`() = runBlocking {
         // 登录成功响应 (LoginResponse 兼容主 API token / accessToken 双格式)
         coEvery { mockAuthApi.login(any()) } returns LoginResponse(
             userId = "u1",
@@ -92,10 +92,10 @@ class LoginSyncTriggerTest {
             expiresIn = 3600
         )
 
-        // 模拟 fullSync 拉到 3 条知识库规则
-        coEvery { mockSyncApi.getAllData(any()) } returns ApiResponse(
+        // 模拟 incrementalSync 中的 getChanges 返回 3 条知识库规则
+        coEvery { mockSyncApi.getChanges(any(), any()) } returns ApiResponse(
             code = 0, message = "ok",
-            data = SyncAllData(
+            data = SyncChanges(
                 keywordRules = listOf(
                     SyncKeywordRule(id = "1", keyword = "k1"),
                     SyncKeywordRule(id = "2", keyword = "k2"),
@@ -106,32 +106,48 @@ class LoginSyncTriggerTest {
                 scenarios = emptyList(),
                 replyHistory = emptyList(),
                 messageBlacklist = emptyList(),
-                userStyleProfile = null
+                userStyleProfile = null,
+                serverTime = System.currentTimeMillis()
+            )
+        )
+        // 推送 mock（incrementalSync 先 push 再 pull）
+        coEvery { mockSyncApi.pushChanges(any()) } returns ApiResponse(
+            code = 0, data = PushChangesResult(
+                accepted = true, conflicts = emptyList(),
+                serverTime = 1L, newServerVersion = 100L,
+                stats = SyncStats(inserted = 0, updated = 0, deleted = 0)
             )
         )
 
         val result = syncManager.login("13800000000", "password")
 
         assertTrue("登录应该成功", result.isSuccess)
-        coVerify(atLeast = 1) { mockSyncApi.getAllData(any()) }
+        coVerify(atLeast = 1) { mockSyncApi.getChanges(any(), any()) }
         val stats = syncManager.getLastSyncStats()
         assertNotNull("BUG-R8: 登录后 _lastSyncStats 应包含具体同步内容", stats)
         assertTrue("BUG-R8: 同步内容应包含'知识库'", stats!!.contains("知识库"))
     }
 
     @Test
-    fun `BUG-R8 login成功但fullSync失败时仍返回登录成功`() = runBlocking {
+    fun `BUG-R8 login成功但incrementalSync失败时仍返回登录成功`() = runBlocking {
         coEvery { mockAuthApi.login(any()) } returns LoginResponse(
             userId = "u1", tenantId = "t1",
             token = "tok", refreshToken = "ref", expiresIn = 3600
         )
-        // fullSync 失败
-        coEvery { mockSyncApi.getAllData(any()) } throws RuntimeException("网络超时")
+        // incrementalSync 中的 getChanges 失败
+        coEvery { mockSyncApi.getChanges(any(), any()) } throws RuntimeException("网络超时")
+        coEvery { mockSyncApi.pushChanges(any()) } returns ApiResponse(
+            code = 0, data = PushChangesResult(
+                accepted = true, conflicts = emptyList(),
+                serverTime = 1L, newServerVersion = 100L,
+                stats = SyncStats(inserted = 0, updated = 0, deleted = 0)
+            )
+        )
 
         val result = syncManager.login("13800000000", "password")
 
-        assertTrue("BUG-R8: fullSync 失败不应阻断登录成功", result.isSuccess)
-        coVerify(atLeast = 1) { mockSyncApi.getAllData(any()) }
+        assertTrue("BUG-R8: incrementalSync 失败不应阻断登录成功", result.isSuccess)
+        coVerify(atLeast = 1) { mockSyncApi.getChanges(any(), any()) }
     }
 
     @Test

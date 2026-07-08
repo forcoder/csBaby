@@ -30,7 +30,13 @@ class AIModelRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getDefaultModel(): AIModelConfig? {
-        return aiModelConfigDao.getDefaultModel()?.toDomain()
+        // 如果无默认模型，自动预置 LongCat-2.0
+        var model = aiModelConfigDao.getDefaultModel()
+        if (model == null) {
+            seedDefaultModel()
+            model = aiModelConfigDao.getDefaultModel()
+        }
+        return model?.toDomain()
     }
 
     override suspend fun getModelById(id: Long): AIModelConfig? {
@@ -72,5 +78,23 @@ class AIModelRepositoryImpl @Inject constructor(
 
     override suspend fun addCost(id: Long, cost: Double) {
         aiModelConfigDao.addCost(id, cost)
+    }
+
+    /** 预置 LongCat-2.0 默认模型（仅首次、无模型时执行） */
+    suspend fun seedDefaultModel() {
+        val count = aiModelConfigDao.getModelCount()
+        if (count > 0) return
+        aiModelConfigDao.insertModel(
+            com.csbaby.kefu.data.local.entity.AIModelConfigEntity(
+                modelType = "OPENAI",
+                modelName = "LongCat-2.0",
+                apiKey = "",
+                apiEndpoint = "https://api.longcat.chat/openai/v1",
+                temperature = 0.7f,
+                maxTokens = 1000,
+                isDefault = true,
+                isEnabled = true
+            )
+        )
     }
 }

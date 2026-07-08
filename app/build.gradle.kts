@@ -22,13 +22,13 @@ android {
             useSupportLibrary = true
         }
 
-// 主 API 服务配置（api.agentai0.com）
+// 主 API 服务配置（api.agentai0.com - HTTP，部署环境无有效证书）
         // 统一使用主 API 的 /api/auth/user/login（支持 phone 或 email 双字段）
-        buildConfigField("String", "API_BASE_URL", "\"https://api.agentai0.com/\"")
-        // 同步服务器配置（自建部署：sync.agentai0.com）
+        buildConfigField("String", "API_BASE_URL", "\"http://api.agentai0.com/\"")
+        // 同步服务器配置（自建部署：sync.agentai0.com - HTTP）
         // 仅用于数据同步 (sync/all, sync/changes, sync/push, backup)
         // 认证已在主 API 完成
-        buildConfigField("String", "SYNC_BASE_URL", "\"https://sync.agentai0.com/\"")
+        buildConfigField("String", "SYNC_BASE_URL", "\"http://sync.agentai0.com/\"")
     }
 
     buildTypes {

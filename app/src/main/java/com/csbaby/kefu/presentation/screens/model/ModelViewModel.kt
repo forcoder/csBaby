@@ -106,7 +106,7 @@ class ModelViewModel @Inject constructor(
 
     fun testConnection(modelId: Long) {
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
+            val result = withContext(Dispatchers.Main) {
                 aiService.testModelConnection(modelId)
             }
             val testResult = result.fold(

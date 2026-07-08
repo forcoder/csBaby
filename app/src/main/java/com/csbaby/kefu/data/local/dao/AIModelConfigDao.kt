@@ -52,4 +52,7 @@ interface AIModelConfigDao {
 
     @Query("UPDATE ai_model_configs SET syncVersion = :version WHERE id = :id")
     suspend fun updateSyncVersion(id: Long, version: Long)
+
+    @Query("SELECT COUNT(*) FROM ai_model_configs")
+    suspend fun getModelCount(): Int
 }

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    csBaby Network Security Config
+
+    部署环境说明：
+    - api.agentai0.com / sync.agentai0.com 当前使用自建部署 (121.43.55.151)，
+      证书 hostname 不匹配 (SEC_E_WRONG_PRINCIPAL)，无法使用 HTTPS
+    - 仅针对这两个特定域名开放 cleartext，不影响其他域名
+    - 未来服务端配置有效证书后，应改回 base-config cleartextTrafficPermitted="false"
+-->
+<network-security-config>
+    <!-- 全局默认仍禁止明文（生产域名应坚持 HTTPS） -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- 仅放行 csBaby 自己的部署域名 -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">api.agentai0.com</domain>
+        <domain includeSubdomains="false">sync.agentai0.com</domain>
+    </domain-config>
+</network-security-config>

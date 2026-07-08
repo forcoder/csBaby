@@ -1,5 +1,7 @@
 package com.csbaby.kefu.presentation.screens.knowledge
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -215,10 +217,10 @@ class KnowledgeViewModel @Inject constructor(
     }
 
     /**
-     * 复制指定 id 的规则:生成新 id,keyword 追加" 副本"后缀,其他字段保持原值。
-     * 源规则不存在时通过 noticeMessage 提示用户,不抛异常。
+     * 复制指定规则的回复模板内容到系统剪贴板，方便用户直接粘贴回复。
+     * 源规则不存在时通过 noticeMessage 提示用户，不抛异常。
      */
-    fun duplicateRule(id: Long) {
+    fun copyReplyToClipboard(id: Long) {
         viewModelScope.launch {
             val source = knowledgeBaseManager.getRuleById(id)
             if (source == null) {
@@ -226,18 +228,23 @@ class KnowledgeViewModel @Inject constructor(
                 return@launch
             }
 
-            val now = System.currentTimeMillis()
-            val copy = source.copy(
-                id = 0L,
-                keyword = "${source.keyword} 副本",
-                createdAt = now,
-                updatedAt = now,
-                syncVersion = 0L
-            )
-            knowledgeBaseManager.createRule(copy)
-            _uiState.update { it.copy(noticeMessage = "已复制: ${source.keyword}") }
+            val replyText = source.replyTemplate
+            if (replyText.isBlank()) {
+                _uiState.update { it.copy(noticeMessage = "回复内容为空，无法复制") }
+                return@launch
+            }
 
-            triggerAutoSyncForLoggedInUser()
+            val clipboardManager =
+                appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+
+            try {
+                clipboardManager.setPrimaryClip(
+                    ClipData.newPlainText("suggested_reply", replyText)
+                )
+                _uiState.update { it.copy(noticeMessage = "已复制回复内容") }
+            } catch (e: SecurityException) {
+                _uiState.update { it.copy(noticeMessage = "复制失败：没有剪贴板访问权限") }
+            }
         }
     }
 

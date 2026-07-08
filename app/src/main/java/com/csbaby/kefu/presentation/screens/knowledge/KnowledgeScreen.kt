@@ -233,7 +233,7 @@ fun KnowledgeScreen(
                             onEdit = { editingRule = rule },
                             onDelete = { viewModel.deleteRule(rule.id) },
                             onToggle = { viewModel.toggleRule(rule.id, !rule.enabled) },
-                            onDuplicate = { viewModel.duplicateRule(rule.id) }
+                            onCopyReply = { viewModel.copyReplyToClipboard(rule.id) }
                         )
                     }
                 }
@@ -292,7 +292,7 @@ fun RuleItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onToggle: () -> Unit,
-    onDuplicate: () -> Unit
+    onCopyReply: () -> Unit
 ) {
     androidx.compose.material3.Card(
         modifier = Modifier.fillMaxWidth()
@@ -360,7 +360,7 @@ fun RuleItem(
                 IconButton(onClick = onEdit) {
                     Icon(Icons.Default.Edit, contentDescription = "Edit")
                 }
-                IconButton(onClick = onDuplicate) {
+                IconButton(onClick = onCopyReply) {
                     Icon(Icons.Default.ContentCopy, contentDescription = "复制")
                 }
                 IconButton(onClick = onDelete) {
