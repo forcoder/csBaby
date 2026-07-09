@@ -82,8 +82,9 @@ jobs:
 
           # Create version info JSON
           # downloadUrl 指向版本专用文件，客户端应该读取 csBabyLog_v{VERSION_CODE} 获取最新版本信息
-          cat > /tmp/version.json << 'VERSION_EOF'
-          {"versionCode":$VERSION_CODE,"versionName":"$VERSION_NAME","releaseDate":"$RELEASE_DATE","fileSize":$APK_SIZE,"md5":"$APK_MD5","downloadUrl":"https://shz.al/~csBabyApk_v${VERSION_CODE}","releaseNotes":"v$VERSION_NAME 更新","forceUpdate":false}
+          # 注意: heredoc 不能用 'EOF' (单引号会阻止变量展开), 否则 shz.al 上存的是字面模板
+          cat > /tmp/version.json << VERSION_EOF
+          {"versionCode":${VERSION_CODE},"versionName":"${VERSION_NAME}","releaseDate":"${RELEASE_DATE}","fileSize":${APK_SIZE},"md5":"${APK_MD5}","downloadUrl":"https://shz.al/~csBabyApk_v${VERSION_CODE}","releaseNotes":"v${VERSION_NAME} 更新","forceUpdate":false}
           VERSION_EOF
 
           # 使用版本专用文件名上传
