@@ -1,5 +1,6 @@
 package com.csbaby.kefu.presentation.screens.model
 
+import android.content.Context
 import com.csbaby.kefu.data.sync.SyncManager
 import com.csbaby.kefu.domain.model.AIModelConfig
 import com.csbaby.kefu.domain.model.ModelType
@@ -18,6 +19,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class ModelViewModelTest {
 
+    private lateinit var appContext: Context
     private lateinit var aiModelRepository: AIModelRepository
     private lateinit var aiService: AIService
     private lateinit var syncManager: SyncManager
@@ -26,6 +28,7 @@ class ModelViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        appContext = mockk(relaxed = true)
         aiModelRepository = mockk(relaxed = true)
         aiService = mockk(relaxed = true)
         syncManager = mockk(relaxed = true)
@@ -49,6 +52,7 @@ class ModelViewModelTest {
 
     private fun createViewModel(): ModelViewModel {
         return ModelViewModel(
+            appContext = appContext,
             aiModelRepository = aiModelRepository,
             aiService = aiService,
             syncManager = syncManager

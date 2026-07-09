@@ -1,6 +1,11 @@
 package com.csbaby.kefu.presentation.screens.profile
 
 import com.csbaby.kefu.data.local.PreferencesManager
+import com.csbaby.kefu.data.local.dao.AIModelConfigDao
+import com.csbaby.kefu.data.local.dao.AppConfigDao
+import com.csbaby.kefu.data.local.dao.KeywordRuleDao
+import com.csbaby.kefu.data.local.dao.MessageBlacklistDao
+import com.csbaby.kefu.data.local.dao.ScenarioDao
 import com.csbaby.kefu.data.model.BackupStatus
 import com.csbaby.kefu.data.model.SyncAuthState
 import com.csbaby.kefu.data.model.UpdateStatus
@@ -33,6 +38,11 @@ class ProfileViewModelTest {
     private lateinit var syncManager: SyncManager
     private lateinit var authManager: AuthManager
     private lateinit var backupManager: BackupManager
+    private lateinit var keywordRuleDao: KeywordRuleDao
+    private lateinit var messageBlacklistDao: MessageBlacklistDao
+    private lateinit var aiModelConfigDao: AIModelConfigDao
+    private lateinit var appConfigDao: AppConfigDao
+    private lateinit var scenarioDao: ScenarioDao
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -47,6 +57,11 @@ class ProfileViewModelTest {
         syncManager = mockk(relaxed = true)
         authManager = mockk(relaxed = true)
         backupManager = mockk(relaxed = true)
+        keywordRuleDao = mockk(relaxed = true)
+        messageBlacklistDao = mockk(relaxed = true)
+        aiModelConfigDao = mockk(relaxed = true)
+        appConfigDao = mockk(relaxed = true)
+        scenarioDao = mockk(relaxed = true)
 
         // Default stubs
         every { preferencesManager.userPreferencesFlow } returns flowOf(
@@ -93,7 +108,12 @@ class ProfileViewModelTest {
             otaManager = otaManager,
             syncManager = syncManager,
             authManager = authManager,
-            backupManager = backupManager
+            backupManager = backupManager,
+            keywordRuleDao = keywordRuleDao,
+            messageBlacklistDao = messageBlacklistDao,
+            aiModelConfigDao = aiModelConfigDao,
+            appConfigDao = appConfigDao,
+            scenarioDao = scenarioDao
         )
     }
 
