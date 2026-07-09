@@ -42,6 +42,13 @@ jobs:
           distribution: 'microsoft'
           cache: gradle
 
+      - name: 设置 Android SDK（用于 apksigner / zipalign）
+        uses: android-actions/setup-android@v2
+        with:
+          # compileSdk=34 (见 app/build.gradle.kts),build-tools 34.0.0 自带 apksigner
+          api-level: '34'
+          build-tools-version: '34.0.0'
+
       - name: 授权 gradlew 执行权限
         run: chmod +x ./gradlew
 
@@ -64,18 +71,57 @@ jobs:
           echo "code=$VERSION_CODE" >> $GITHUB_OUTPUT
           echo "📦 构建版本: v$VERSION_NAME ($VERSION_CODE)"
 
-      - name: 构建 Release APK（跳过混淆，Debug 签名）
+      - name: 构建 Release APK（未签名）
         run: |
           ./gradlew assembleRelease --no-daemon -PskipVersionIncrement -PskipUpload \
             --stacktrace
 
+      - name: 生成临时签名 keystore（不入仓，CI 销毁）
+        run: |
+          mkdir -p /tmp/keystore
+          KEYSTORE_PATH=/tmp/keystore/release.jks
+          # 从 secrets 读别名和密码; keystore 仅在 CI 临时目录存在,
+          # 构建完成后随 runner 销毁, 不会泄露到任何外部存储。
+          KEY_ALIAS="${{ secrets.KEY_ALIAS }}"
+          KEYSTORE_PASS="${{ secrets.KEYSTORE_PASSWORD }}"
+          KEY_PASS="${{ secrets.KEY_PASSWORD }}"
+          if [ -z "$KEY_ALIAS" ] || [ -z "$KEYSTORE_PASS" ] || [ -z "$KEY_PASS" ]; then
+            echo "::error::缺少签名 secrets: KEY_ALIAS / KEYSTORE_PASSWORD / KEY_PASSWORD 必须在仓库 Settings → Secrets → Actions 中配置"
+            exit 1
+          fi
+          # keytool 来自本 job 前面 setup-java@v4 安装的 JDK 17
+          keytool -genkeypair -v \
+            -keystore "$KEYSTORE_PATH" \
+            -alias "$KEY_ALIAS" \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass "$KEYSTORE_PASS" \
+            -keypass "$KEY_PASS" \
+            -dname "CN=csBaby Release, OU=Mobile, O=csBaby, L=NA, S=NA, C=CN"
+          echo "KEYSTORE_PATH=$KEYSTORE_PATH" >> $GITHUB_ENV
+          echo "KEY_ALIAS=$KEY_ALIAS"     >> $GITHUB_ENV
+          echo "OK: keystore generated at $KEYSTORE_PATH"
+
+      - name: 用 apksigner 给 APK 签名 + 校验
+        run: |
+          UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
+          SIGNED="app/build/outputs/apk/release/app-release.apk"
+          # zipalign 是 v2/v3 签名块对齐的强制要求
+          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -v -p 4 "$UNSIGNED" "${UNSIGNED}.aligned"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
+            --ks "$KEYSTORE_PATH" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass "pass:$KEYSTORE_PASS" \
+            --key-pass "pass:$KEY_PASS" \
+            --out "$SIGNED" \
+            "${UNSIGNED}.aligned"
+          # 校验签名确实生效(否则上传后还是未签名)
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$SIGNED"
+          echo "OK: APK signed at $SIGNED"
+
       - name: 重命名并记录 APK 路径
         id: rename
         run: |
-          APK_SRC="app/build/outputs/apk/release/app-release-unsigned.apk"
-          # 兼容已配置签名的场景
-          [ -f "app/build/outputs/apk/release/app-release.apk" ] && \
-            APK_SRC="app/build/outputs/apk/release/app-release.apk"
+          APK_SRC="app/build/outputs/apk/release/app-release.apk"
           APK_NAME="csBaby-v${{ steps.version.outputs.name }}.apk"
           APK_DST="app/build/outputs/apk/release/$APK_NAME"
           mv "$APK_SRC" "$APK_DST"
