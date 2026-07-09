@@ -2131,18 +2131,33 @@ class FloatingWindowService : Service() {
         }
 
         fun hide(context: Context) {
-            val intent = Intent(context, FloatingWindowService::class.java).apply {
-                action = ACTION_HIDE
+            try {
+                val intent = Intent(context, FloatingWindowService::class.java).apply {
+                    action = ACTION_HIDE
+                }
+                context.startService(intent)
+            } catch (e: Exception) {
+                // Android 8+ 后台启动 Service 限制: hide() 常被后台协程调用,
+                // (例: ReplyOrchestrator 在 DefaultDispatcher 上观察 floatingIconEnabled=false 时),
+                // startService 抛 BackgroundServiceStartNotAllowedException。
+                // 这是预期场景:用户已关闭悬浮图标, service 本身就不该运行。
+                // 静默忽略即可, 不影响业务逻辑。
+                Log.w(TAG, "FWS.hide(): startService 失败 (后台启动限制), 已忽略", e)
             }
-            context.startService(intent)
         }
 
         fun update(context: Context, displayData: DisplayData) {
-            val intent = Intent(context, FloatingWindowService::class.java).apply {
-                action = ACTION_UPDATE
-                putExtra(EXTRA_MESSAGE, displayData)
+            try {
+                val intent = Intent(context, FloatingWindowService::class.java).apply {
+                    action = ACTION_UPDATE
+                    putExtra(EXTRA_MESSAGE, displayData)
+                }
+                context.startService(intent)
+            } catch (e: Exception) {
+                // Android 8+ 后台启动限制: update() 在后台协程被调用时可能受限。
+                // Service 不在运行就不需要 update, 静默忽略即可。
+                Log.w(TAG, "FWS.update(): startService 失败 (后台启动限制), 已忽略", e)
             }
-            context.startService(intent)
         }
     }
 }
