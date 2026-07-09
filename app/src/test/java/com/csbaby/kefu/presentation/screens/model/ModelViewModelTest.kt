@@ -207,7 +207,10 @@ class ModelViewModelTest {
         advanceUntilIdle()
 
         viewModel.testConnection(1L)
-        advanceUntilIdle()
+        // viewModelScope.launch + withContext(Dispatchers.IO) 切到真实 IO 线程池,
+        // advanceUntilIdle 只推进 testDispatcher 无法等 IO 完成。
+        // 用跑 suspend + yield 循环等协程到达预期状态。
+        waitForIdleUpTo(2_000)
 
         val state = viewModel.uiState.value
         assertEquals(true, state.testResults[1L]?.success)
@@ -223,10 +226,26 @@ class ModelViewModelTest {
         advanceUntilIdle()
 
         viewModel.testConnection(1L)
-        advanceUntilIdle()
+        waitForIdleUpTo(2_000)
 
         val state = viewModel.uiState.value
         assertEquals(false, state.testResults[1L]?.success)
         assertEquals("连接超时", state.testResults[1L]?.errorMessage)
+    }
+
+    /**
+     * 等协程完成,最多等 timeoutMs 毫秒。
+     *
+     * 专为 ViewModel.viewModelScope.launch + withContext(Dispatchers.IO) 场景:
+     * advanceUntilIdle 只推进 testDispatcher (Main) 上的协程,
+     * 但 IO 是真实线程池,需要 yield 给 IO 协程跑完。
+     */
+    private suspend fun TestScope.waitForIdleUpTo(timeoutMs: Long) {
+        val start = System.currentTimeMillis()
+        repeat(20) {
+            advanceUntilIdle()
+            Thread.sleep(50)
+            if (System.currentTimeMillis() - start > timeoutMs) return
+        }
     }
 }
