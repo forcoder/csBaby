@@ -85,8 +85,15 @@ jobs:
           KEY_ALIAS="${{ secrets.KEY_ALIAS }}"
           KEYSTORE_PASS="${{ secrets.KEYSTORE_PASSWORD }}"
           KEY_PASS="${{ secrets.KEY_PASSWORD }}"
+          # 调试输出（不打印密码值）: 长度而非内容
+          echo "::group::Secrets 调试（不显示值，仅长度）"
+          echo "  KEY_ALIAS length=${#KEY_ALIAS}  (expected > 0)"
+          echo "  KEYSTORE_PASS length=${#KEYSTORE_PASS}  (expected >= 4)"
+          echo "  KEY_PASS length=${#KEY_PASS}  (expected >= 4)"
+          echo "::endgroup::"
           if [ -z "$KEY_ALIAS" ] || [ -z "$KEYSTORE_PASS" ] || [ -z "$KEY_PASS" ]; then
             echo "::error::缺少签名 secrets: KEY_ALIAS / KEYSTORE_PASSWORD / KEY_PASSWORD 必须在仓库 Settings → Secrets → Actions 中配置"
+            echo "::error::当前值: KEY_ALIAS='${KEY_ALIAS}' KEYSTORE_PASS len=${#KEYSTORE_PASS} KEY_PASS len=${#KEY_PASS}"
             exit 1
           fi
           # keytool 来自本 job 前面 setup-java@v4 安装的 JDK 17
@@ -96,9 +103,16 @@ jobs:
             -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass "$KEYSTORE_PASS" \
             -keypass "$KEY_PASS" \
-            -dname "CN=csBaby Release, OU=Mobile, O=csBaby, L=NA, S=NA, C=CN"
+            -dname "CN=csBaby Release, OU=Mobile, O=csBaby, L=NA, S=NA, C=CN" 2>&1 | tee /tmp/keytool.log
+          KEYTOOL_EXIT=$?
+          if [ $KEYTOOL_EXIT -ne 0 ]; then
+            echo "::error::keytool 退出码: $KEYTOOL_EXIT"
+            cat /tmp/keytool.log
+            exit $KEYTOOL_EXIT
+          fi
           echo "KEYSTORE_PATH=$KEYSTORE_PATH" >> $GITHUB_ENV
           echo "KEY_ALIAS=$KEY_ALIAS"     >> $GITHUB_ENV
+          ls -la "$KEYSTORE_PATH"
           echo "OK: keystore generated at $KEYSTORE_PATH"
 
       - name: 用 apksigner 给 APK 签名 + 校验
