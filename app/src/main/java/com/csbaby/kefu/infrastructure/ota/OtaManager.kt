@@ -7,7 +7,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -85,46 +84,55 @@ class OtaManager @Inject constructor(
     
     /**
      * 开始下载更新
+     *
+     * 修复记录(解析包出现错误):
+     * 1. 路径从公开 Download/KefuUpdates/ 改为 App 私有 getExternalFilesDir("ota_updates"),
+     *    与 file_paths.xml 的 external-files-path 严格对齐,避免 FileProvider.getUriForFile() 越界
+     * 2. DownloadManager.setDestinationUri(Uri.fromFile(...)) 改为
+     *    setDestinationInExternalFilesDir(SUBDIR, fileName),Scoped Storage 兼容
      */
     fun startDownload(update: OtaUpdate): Boolean {
         _updateStatus.value = UpdateStatus.DOWNLOADING
         _errorMessage.value = null
-        
+
         try {
             downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            
-            // 创建下载目录
-            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            val appDir = File(downloadsDir, "KefuUpdates")
-            if (!appDir.exists()) {
-                appDir.mkdirs()
+
+            // 路径决策: OtaDownloadPath 决定 subdir + fileName, OtaManager 决定 baseDir
+            val decision = OtaDownloadPath.resolve(update)
+            val baseDir = context.getExternalFilesDir(decision.subdir)
+                ?: throw IllegalStateException(
+                    "getExternalFilesDir(${decision.subdir}) 返回 null,外部存储不可用"
+                )
+            if (!baseDir.exists()) {
+                baseDir.mkdirs()
             }
-            
-            val fileName = "kefu_v${update.versionName}_${update.versionCode}.apk"
-            val downloadFile = File(appDir, fileName)
-            
+            val downloadFile = File(baseDir, decision.fileName)
+
             // 如果文件已存在，先删除
             if (downloadFile.exists()) {
                 downloadFile.delete()
             }
-            
+
             val request = DownloadManager.Request(Uri.parse(update.downloadUrl))
                 .setTitle("客服助手更新 v${update.versionName}")
                 .setDescription("正在下载更新...")
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationUri(Uri.fromFile(downloadFile))
+                // 修复: 用 setDestinationInExternalFilesDir 替代 setDestinationUri(file://),
+                // Scoped Storage 下 setDestinationUri + file:// 已被废弃
+                .setDestinationInExternalFilesDir(context, decision.subdir, decision.fileName)
                 .setAllowedOverMetered(true)
                 .setAllowedOverRoaming(true)
-            
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 request.setRequiresCharging(false)
             }
-            
+
             downloadId = downloadManager?.enqueue(request) ?: return false
-            
+
             // 注册下载完成广播接收器
             registerDownloadReceiver()
-            
+
             return true
         } catch (e: Exception) {
             Log.e(TAG, "开始下载失败", e)
@@ -190,33 +198,64 @@ class OtaManager @Inject constructor(
     
     /**
      * 准备安装APK
+     *
+     * 修复记录(解析包出现错误):
+     * 1. 启动安装前调用 ApkIntegrityChecker.verify 校验 MD5,下载损坏/服务端 404 返回 HTML 时
+     *    会直接拦截,避免 PackageInstaller 解析到损坏的"APK"时报"解析包出现错误"
+     * 2. 不再吞掉 IllegalArgumentException(FileProvider 路径越界)和 ActivityNotFoundException,
+     *    将具体异常信息暴露到 errorMessage,便于定位真正的根因
      */
     private fun prepareInstallation(apkFile: File) {
         try {
             _updateStatus.value = UpdateStatus.INSTALLING
-            
+
+            // 步骤 1: 完整性校验(可观测根因)
+            val expectedMd5 = _availableUpdate.value?.md5.orEmpty()
+            val integrityResult = ApkIntegrityChecker.verify(apkFile, expectedMd5)
+            if (integrityResult.isFailure) {
+                val reason = integrityResult.exceptionOrNull()?.message ?: "未知"
+                Log.e(TAG, "APK 完整性校验失败: $reason")
+                _errorMessage.value = "APK 校验失败,可能是下载未完成: $reason"
+                _updateStatus.value = UpdateStatus.FAILED
+                return
+            }
+
+            // 步骤 2: 构造 FileProvider URI(走合法的 external-files-path)
             val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                // Android 7.0+ 使用FileProvider
-                FileProvider.getUriForFile(
-                    context,
-                    "${BuildConfig.APPLICATION_ID}.fileprovider",
-                    apkFile
-                )
+                try {
+                    FileProvider.getUriForFile(
+                        context,
+                        "${BuildConfig.APPLICATION_ID}.fileprovider",
+                        apkFile
+                    )
+                } catch (e: IllegalArgumentException) {
+                    // 不再吞掉! FileProvider.getUriForFile 路径越界时会抛 IllegalArgumentException
+                    Log.e(TAG, "FileProvider 路径越界: ${apkFile.absolutePath}", e)
+                    _errorMessage.value = "FileProvider 路径错误: ${e.message}"
+                    _updateStatus.value = UpdateStatus.FAILED
+                    return
+                }
             } else {
                 Uri.fromFile(apkFile)
             }
-            
+
             val installIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/vnd.android.package-archive")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                
+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
             }
-            
-            context.startActivity(installIntent)
-            
+
+            try {
+                context.startActivity(installIntent)
+            } catch (e: android.content.ActivityNotFoundException) {
+                Log.e(TAG, "未找到 APK 安装器", e)
+                _errorMessage.value = "未找到 APK 安装器,请先安装系统包安装程序"
+                _updateStatus.value = UpdateStatus.FAILED
+            }
+
         } catch (e: Exception) {
             Log.e(TAG, "安装准备失败", e)
             _errorMessage.value = "安装准备失败: ${e.message}"
