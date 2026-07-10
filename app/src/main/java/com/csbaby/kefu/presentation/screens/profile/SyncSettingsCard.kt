@@ -30,7 +30,8 @@ import java.util.*
 fun SyncSettingsCard(
     syncState: SyncState,
     isLoggedIn: Boolean,
-    currentTenantId: String?,
+    currentAccount: String? = null,
+    currentTenantId: String? = null,
     pendingSyncCount: Int,
     lastSyncTime: Long,
     syncStats: String = "",
@@ -85,7 +86,8 @@ fun SyncSettingsCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             if (isLoggedIn) {
-                // 已登录状态
+                // 已登录状态 — 优先显示用户可读的账号 (手机号/邮箱)
+                // 而不是后端内部使用的 tenantId (uuid) 防止误读
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -96,7 +98,14 @@ fun SyncSettingsCard(
                             text = "已登录",
                             style = MaterialTheme.typography.bodyMedium
                         )
-                        currentTenantId?.let { tenantId ->
+                        currentAccount?.takeIf { it.isNotBlank() }?.let { acc ->
+                            Text(
+                                text = "账号: $acc",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } ?: currentTenantId?.let { tenantId ->
+                            // 旧数据没有 account 时退化为显示 tenantId, 仅作 fallback
                             Text(
                                 text = "租户: $tenantId",
                                 style = MaterialTheme.typography.bodySmall,

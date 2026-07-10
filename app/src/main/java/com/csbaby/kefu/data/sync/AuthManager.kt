@@ -33,6 +33,7 @@ class AuthManager @Inject constructor(
     companion object {
         private val KEY_USER_ID = stringPreferencesKey("auth_user_id")
         private val KEY_TENANT_ID = stringPreferencesKey("auth_tenant_id")
+        private val KEY_ACCOUNT = stringPreferencesKey("auth_account")
         private val KEY_ACCESS_TOKEN = stringPreferencesKey("auth_access_token")
         private val KEY_REFRESH_TOKEN = stringPreferencesKey("auth_refresh_token")
         private val KEY_EXPIRES_AT = longPreferencesKey("auth_expires_at")
@@ -77,6 +78,7 @@ class AuthManager @Inject constructor(
         authStore.edit { prefs ->
             prefs[KEY_USER_ID] = auth.userId
             prefs[KEY_TENANT_ID] = auth.tenantId
+            prefs[KEY_ACCOUNT] = auth.account
             prefs[KEY_ACCESS_TOKEN] = auth.accessToken
             prefs[KEY_REFRESH_TOKEN] = auth.refreshToken
             prefs[KEY_EXPIRES_AT] = auth.expiresAt
@@ -106,6 +108,9 @@ class AuthManager @Inject constructor(
 
     suspend fun currentUserId(): String? = _currentAuth.value?.userId
 
+    /** UI 显示用的账号 (手机号或邮箱), 从内存缓存读取 */
+    fun currentAccount(): String? = _currentAuth.value?.account
+
     private suspend fun loadFromDataStore(): SyncAuthState? {
         val prefs = authStore.data.first()
         return if (prefs[KEY_IS_LOGGED_IN] == true) {
@@ -114,7 +119,8 @@ class AuthManager @Inject constructor(
                 tenantId = prefs[KEY_TENANT_ID] ?: return null,
                 accessToken = prefs[KEY_ACCESS_TOKEN] ?: return null,
                 refreshToken = prefs[KEY_REFRESH_TOKEN] ?: return null,
-                expiresAt = prefs[KEY_EXPIRES_AT] ?: 0L
+                expiresAt = prefs[KEY_EXPIRES_AT] ?: 0L,
+                account = prefs[KEY_ACCOUNT] ?: ""
             )
         } else null
     }

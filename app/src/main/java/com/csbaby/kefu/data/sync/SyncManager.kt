@@ -84,7 +84,8 @@ class SyncManager @Inject constructor(
                     tenantId = response.effectiveTenantId(),
                     token = response.effectiveToken(),
                     refreshToken = response.refreshToken ?: "",
-                    expiresAt = response.expiresAt ?: 0L
+                    expiresAt = response.expiresAt ?: 0L,
+                    account = identifier  // 记录登录时输入的手机号/邮箱,用于UI显示
                 )
                 _authState.value = auth
                 authManager.saveAuthState(auth)
@@ -123,7 +124,8 @@ class SyncManager @Inject constructor(
                     tenantId = response.effectiveTenantId(),
                     token = response.effectiveToken(),
                     refreshToken = response.refreshToken ?: "",
-                    expiresAt = response.expiresAt ?: 0L
+                    expiresAt = response.expiresAt ?: 0L,
+                    account = identifier
                 )
                 _authState.value = auth
                 authManager.saveAuthState(auth)

@@ -212,6 +212,7 @@ fun ProfileScreen(
                 SyncSettingsCard(
                     syncState = uiState.syncState,
                     isLoggedIn = uiState.isLoggedIn,
+                    currentAccount = uiState.currentAccount,
                     currentTenantId = uiState.currentTenantId,
                     pendingSyncCount = uiState.pendingSyncCount,
                     lastSyncTime = uiState.lastSyncTime,

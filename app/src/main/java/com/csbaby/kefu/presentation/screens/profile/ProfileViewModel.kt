@@ -43,6 +43,7 @@ data class ProfileUiState(
     val syncState: SyncState = SyncState.Idle,
     val isLoggedIn: Boolean = false,
     val currentTenantId: String? = null,
+    val currentAccount: String? = null,
     val pendingSyncCount: Int = 0,
     val lastSyncTime: Long = 0L,
     val syncStats: String = "",
@@ -154,7 +155,8 @@ class ProfileViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isLoggedIn = auth != null,
-                        currentTenantId = auth?.tenantId
+                        currentTenantId = auth?.tenantId,
+                        currentAccount = auth?.account
                     )
                 }
             }
