@@ -62,7 +62,7 @@ jobs:
           KS_BASE64:  ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           KS_PASS:    ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           KS_ALIAS:   ${{ secrets.RELEASE_KEY_ALIAS }}
-          KS_KEY_PASS:${{ secrets.RELEASE_KEY_PASSWORD }}
+          KS_KEY_PASS: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           set -e
           if [ -z "$KS_BASE64" ]; then
