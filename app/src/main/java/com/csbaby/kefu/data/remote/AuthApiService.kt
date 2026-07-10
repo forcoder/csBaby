@@ -11,7 +11,7 @@ import retrofit2.http.POST
  * - 鉴权: BASE_URL = API_BASE_URL (主 API)
  *   端点: /api/auth/user/{login,register}
  *   支持 phone 或 email 双字段登录
- * - 数据同步: BASE_URL = SYNC_BASE_URL (同步服务)
+ * - 数据同步: BASE_URL = API_BASE_URL (统一主 API 域名)
  *   端点: /sync/all, /sync/changes, /sync/push
  *
  * 响应格式: 成功时直接返回 {user_id, token, expires_in} (无包装),

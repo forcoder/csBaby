@@ -22,13 +22,8 @@ android {
             useSupportLibrary = true
         }
 
-        // 主 API 服务配置（api.agentai0.com - HTTP）
-        // 统一使用主 API 的 /api/auth/user/login（支持 phone 或 email 双字段）
+        // 唯一 API 入口: api.agentai0.com, nginx 已反代 auth + sync + backup 路径
         buildConfigField("String", "API_BASE_URL", "\"http://api.agentai0.com/\"")
-        // 同步服务器配置（自建部署：sync.agentai0.com - HTTP）
-        // 仅用于数据同步 (sync/all, sync/changes, sync/push, backup)
-        // 认证已在主 API 完成
-        buildConfigField("String", "SYNC_BASE_URL", "\"http://sync.agentai0.com/\"")
     }
 
     // Release 签名 - OTA 分发必须用统一签名,避免不同构建机器 debug.keystore 不一致导致

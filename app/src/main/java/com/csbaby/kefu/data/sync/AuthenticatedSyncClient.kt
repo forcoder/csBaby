@@ -45,7 +45,7 @@ class AuthenticatedSyncClient(
             .build()
 
         refreshRetrofit = Retrofit.Builder()
-            .baseUrl(BuildConfig.SYNC_BASE_URL)
+            .baseUrl(BuildConfig.API_BASE_URL)
             .client(refreshClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
@@ -130,7 +130,7 @@ class AuthenticatedSyncClient(
             .build()
 
         val retrofit = Retrofit.Builder()
-            .baseUrl(BuildConfig.SYNC_BASE_URL)
+            .baseUrl(BuildConfig.API_BASE_URL)
             .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()

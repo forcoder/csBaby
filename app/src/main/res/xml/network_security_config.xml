@@ -5,11 +5,10 @@
 
   仅以下域名允许 HTTP:
   - api.agentai0.com   (主 API 服务器)
-  - sync.agentai0.com  (数据同步服务器)
   - shz.al             (OTA apk 下载 + version-info 读取)
   - 10.0.2.2           (Android emulator 访问宿主机 localhost)
 
-  如未来后端切换到 HTTPS, 整个 config 可以删除, Android 默认就是 HTTPS-only
+  sync 已合并到 api.agentai0.com 统一域名（nginx 反代 /auth/* /sync/* 到 sync 服务）
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">
@@ -20,7 +19,6 @@
 
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">api.agentai0.com</domain>
-        <domain includeSubdomains="true">sync.agentai0.com</domain>
         <domain includeSubdomains="true">shz.al</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>
     </domain-config>
