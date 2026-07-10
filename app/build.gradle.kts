@@ -31,6 +31,22 @@ android {
         buildConfigField("String", "SYNC_BASE_URL", "\"http://sync.agentai0.com/\"")
     }
 
+    // Release 签名 - OTA 分发必须用统一签名,避免不同构建机器 debug.keystore 不一致导致
+    // "解析包出现问题"。本地开发/CI 通过环境变量注入 keystore 路径和密码。
+    signingConfigs {
+        create("release") {
+            // 环境变量来自 GitHub Actions secrets(KS_FILE / KS_STORE_PASS / KS_KEY_ALIAS / KS_KEY_PASS)
+            // 本地开发可在 ~/.gradle/gradle.properties 或环境变量设置
+            val ksFile: String? = System.getenv("KS_FILE")
+            if (ksFile != null && ksFile.isNotBlank()) {
+                storeFile = file(ksFile)
+                storePassword = System.getenv("KS_STORE_PASS")
+                keyAlias = System.getenv("KS_KEY_ALIAS")
+                keyPassword = System.getenv("KS_KEY_PASS")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             // 调试签名，允许安装到设备
@@ -38,6 +54,13 @@ android {
         }
         release {
             isMinifyEnabled = false
+            // 仅当 signingConfigs.release 已配置 storeFile 时才使用 release 签名,
+            // 否则降级为 debug 签名以便本地直接构建( CI 中必须配置 KS_FILE 等环境变量 )
+            signingConfig = if (signingConfigs.findByName("release")?.storeFile != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

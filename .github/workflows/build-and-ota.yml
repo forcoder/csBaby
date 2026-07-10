@@ -55,20 +55,69 @@ jobs:
           echo "name=$VERSION_NAME" >> $GITHUB_OUTPUT
           echo "📦 Current version: v$VERSION_NAME ($VERSION_CODE)"
 
-      - name: Build Debug APK
+      # 从 GitHub Secrets 还原 release keystore（p12）到工作目录
+      # 必须在 Build 之前完成, build.gradle.kts 通过 KS_FILE 环境变量读取
+      - name: Restore release keystore
+        env:
+          KS_BASE64:  ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KS_PASS:    ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KS_ALIAS:   ${{ secrets.RELEASE_KEY_ALIAS }}
+          KS_KEY_PASS:${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
-          ./gradlew assembleDebug --no-daemon \
-            --stacktrace
+          set -e
+          if [ -z "$KS_BASE64" ]; then
+            echo "::error::RELEASE_KEYSTORE_BASE64 secret is empty. 请在 GitHub Settings → Secrets 配置."
+            exit 1
+          fi
+          mkdir -p keystore
+          echo "$KS_BASE64" | base64 -d > keystore/csBaby-release.p12
+          ls -la keystore/
+          echo "key_alias=$KS_ALIAS"      >> $GITHUB_ENV
+          echo "key_password=$KS_KEY_PASS" >> $GITHUB_ENV
+          echo "store_password=$KS_PASS"   >> $GITHUB_ENV
+
+      # 修改 build.yml OTA 步骤所在 - 通过环境变量让 Gradle 使用 release 签名
+      # 这里把 keystore 路径和密码导出给后续 gradle step 使用
+      - name: Build Release APK (用 release keystore 签名)
+        env:
+          KS_FILE:       ${{ github.workspace }}/keystore/csBaby-release.p12
+          KS_STORE_PASS: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KS_KEY_ALIAS:  ${{ secrets.RELEASE_KEY_ALIAS }}
+          KS_KEY_PASS:   ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Verify APK signature
+        run: |
+          # 确认输出文件确实是 signed release apk 而不是 unsigned
+          RELEASE_APK="$(ls app/build/outputs/apk/release/app-release.apk 2>/dev/null || echo '')"
+          UNSIGNED_APK="$(ls app/build/outputs/apk/release/app-release-unsigned.apk 2>/dev/null || echo '')"
+          if [ -z "$RELEASE_APK" ] || [ -n "$UNSIGNED_APK" ]; then
+            echo "::error::未找到已签名 release APK. 当前 outputs:"
+            ls -la app/build/outputs/apk/release/ || true
+            exit 1
+          fi
+          echo "✅ Signed APK: $RELEASE_APK"
+          APK_SIZE=$(stat -c%s "$RELEASE_APK")
+          echo "APK_SIZE_BYTES=$APK_SIZE"
 
       - name: Rename APK
+        env:
+          KS_STORE_PASS: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KS_KEY_ALIAS:  ${{ secrets.RELEASE_KEY_ALIAS }}
+          KS_KEY_PASS:   ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
-          APK_SRC="app/build/outputs/apk/debug/app-debug.apk"
-          APK_DST="app/build/outputs/apk/debug/csBaby-v${{ steps.version.outputs.name }}-debug.apk"
+          APK_SRC="app/build/outputs/apk/release/app-release.apk"
+          APK_DST="app/build/outputs/apk/release/csBaby-v${{ steps.version.outputs.name }}-release.apk"
           mv "$APK_SRC" "$APK_DST"
           echo "APK_PATH=$APK_DST" >> $GITHUB_ENV
-          echo "APK_NAME=csBaby-v${{ steps.version.outputs.name }}-debug.apk" >> $GITHUB_ENV
+          echo "APK_NAME=csBaby-v${{ steps.version.outputs.name }}-release.apk" >> $GITHUB_ENV
 
       - name: Upload APK to shz.al
+        env:
+          KS_STORE_PASS: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KS_KEY_ALIAS:  ${{ secrets.RELEASE_KEY_ALIAS }}
+          KS_KEY_PASS:   ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           APK_PATH="${{ env.APK_PATH }}"
           APK_NAME="${{ env.APK_NAME }}"
@@ -84,7 +133,7 @@ jobs:
           # downloadUrl 指向版本专用文件，客户端应该读取 csBabyLog_v{VERSION_CODE} 获取最新版本信息
           # 注意: heredoc 不能用 'EOF' (单引号会阻止变量展开), 否则 shz.al 上存的是字面模板
           cat > /tmp/version.json << VERSION_EOF
-          {"versionCode":${VERSION_CODE},"versionName":"${VERSION_NAME}","releaseDate":"${RELEASE_DATE}","fileSize":${APK_SIZE},"md5":"${APK_MD5}","downloadUrl":"https://shz.al/~csBabyApk_v${VERSION_CODE}","releaseNotes":"v${VERSION_NAME} 更新","forceUpdate":false}
+          {"versionCode":${VERSION_CODE},"versionName":"${VERSION_NAME}","releaseDate":"${RELEASE_DATE}","fileSize":${APK_SIZE},"md5":"${APK_MD5}","downloadUrl":"https://shz.al/~csBabyApk_v${VERSION_CODE}","releaseNotes":"v${VERSION_NAME} 更新(已签名 release)","forceUpdate":false}
           VERSION_EOF
 
           # 使用版本专用文件名上传
@@ -96,12 +145,13 @@ jobs:
 
       - name: Output APK download URL
         run: |
-          echo "## 🎉 Build and OTA deploy successful" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎉 Build and OTA deploy successful (signed release APK)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|----|" >> $GITHUB_STEP_SUMMARY
           echo "| Version | v${{ steps.version.outputs.name }} (${{ steps.version.outputs.code }}) |" >> $GITHUB_STEP_SUMMARY
           echo "| APK File | ${{ env.APK_NAME }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Download URL | https://shz.al/~csBabyApk |" >> $GITHUB_STEP_SUMMARY
+          echo "| Signed | YES (release keystore) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Download URL | https://shz.al/~csBabyApk_v${{ steps.version.outputs.code }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Branch | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
