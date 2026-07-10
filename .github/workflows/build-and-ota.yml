@@ -60,9 +60,9 @@ jobs:
       - name: Restore release keystore
         env:
           KS_BASE64:  ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
-          KS_PASS:    ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-          KS_ALIAS:   ${{ secrets.RELEASE_KEY_ALIAS }}
-          KS_KEY_PASS: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          KS_PASS:    ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_ALIAS:   ${{ secrets.KEY_ALIAS }}
+          KS_KEY_PASS: ${{ secrets.KEY_PASSWORD }}
         run: |
           set -e
           if [ -z "$KS_BASE64" ]; then
@@ -72,18 +72,15 @@ jobs:
           mkdir -p keystore
           echo "$KS_BASE64" | base64 -d > keystore/csBaby-release.p12
           ls -la keystore/
-          echo "key_alias=$KS_ALIAS"      >> $GITHUB_ENV
-          echo "key_password=$KS_KEY_PASS" >> $GITHUB_ENV
-          echo "store_password=$KS_PASS"   >> $GITHUB_ENV
 
       # 修改 build.yml OTA 步骤所在 - 通过环境变量让 Gradle 使用 release 签名
       # 这里把 keystore 路径和密码导出给后续 gradle step 使用
       - name: Build Release APK (用 release keystore 签名)
         env:
           KS_FILE:       ${{ github.workspace }}/keystore/csBaby-release.p12
-          KS_STORE_PASS: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-          KS_KEY_ALIAS:  ${{ secrets.RELEASE_KEY_ALIAS }}
-          KS_KEY_PASS:   ${{ secrets.RELEASE_KEY_PASSWORD }}
+          KS_STORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_KEY_ALIAS:  ${{ secrets.KEY_ALIAS }}
+          KS_KEY_PASS:   ${{ secrets.KEY_PASSWORD }}
         run: |
           ./gradlew assembleRelease --no-daemon --stacktrace
 
@@ -102,10 +99,6 @@ jobs:
           echo "APK_SIZE_BYTES=$APK_SIZE"
 
       - name: Rename APK
-        env:
-          KS_STORE_PASS: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-          KS_KEY_ALIAS:  ${{ secrets.RELEASE_KEY_ALIAS }}
-          KS_KEY_PASS:   ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           APK_SRC="app/build/outputs/apk/release/app-release.apk"
           APK_DST="app/build/outputs/apk/release/csBaby-v${{ steps.version.outputs.name }}-release.apk"
@@ -114,10 +107,6 @@ jobs:
           echo "APK_NAME=csBaby-v${{ steps.version.outputs.name }}-release.apk" >> $GITHUB_ENV
 
       - name: Upload APK to shz.al
-        env:
-          KS_STORE_PASS: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-          KS_KEY_ALIAS:  ${{ secrets.RELEASE_KEY_ALIAS }}
-          KS_KEY_PASS:   ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           APK_PATH="${{ env.APK_PATH }}"
           APK_NAME="${{ env.APK_NAME }}"
