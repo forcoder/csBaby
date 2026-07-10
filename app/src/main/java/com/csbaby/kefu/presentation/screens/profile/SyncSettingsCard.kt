@@ -448,8 +448,14 @@ fun LoginDialog(
     onDismiss: () -> Unit,
     onLogin: (String, String) -> Unit
 ) {
-    var email by remember { mutableStateOf("") }
+    var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+
+    // 自动识别输入: 含 '@' 当作邮箱, 全数字当手机号 (中国大陆 11 位)
+    fun isValidIdentifier(text: String): Boolean {
+        val t = text.trim()
+        return t.contains('@') || t.matches(Regex("^\\d{11}$"))
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -457,11 +463,21 @@ fun LoginDialog(
         text = {
             Column {
                 OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text("邮箱") },
+                    value = identifier,
+                    onValueChange = { identifier = it },
+                    label = { Text("邮箱 / 手机号") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    supportingText = {
+                        Text(
+                            when {
+                                identifier.isBlank() -> "邮箱或 11 位手机号"
+                                identifier.contains('@') -> "邮箱登录"
+                                identifier.matches(Regex("^\\d{11}$")) -> "手机号登录"
+                                else -> "格式无效"
+                            }
+                        )
+                    }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
@@ -471,21 +487,23 @@ fun LoginDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    supportingText = { Text("至少 6 位") }
                 )
             }
         },
+        // 按钮顺序反转: 登录按钮放左边, 取消放右边(用户偏好)
         confirmButton = {
-            Button(
-                onClick = { onLogin(email, password) },
-                enabled = email.trim().contains("@") && password.length >= 6
-            ) {
-                Text("登录")
+            TextButton(onClick = onDismiss) {
+                Text("取消")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
+            Button(
+                onClick = { onLogin(identifier.trim(), password) },
+                enabled = isValidIdentifier(identifier) && password.length >= 6
+            ) {
+                Text("登录")
             }
         }
     )
@@ -496,9 +514,14 @@ fun RegisterDialog(
     onDismiss: () -> Unit,
     onRegister: (String, String, String) -> Unit
 ) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
+    var identifier by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+
+    fun isValidIdentifier(text: String): Boolean {
+        val t = text.trim()
+        return t.contains('@') || t.matches(Regex("^\\d{11}$"))
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -514,11 +537,21 @@ fun RegisterDialog(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text("邮箱") },
+                    value = identifier,
+                    onValueChange = { identifier = it },
+                    label = { Text("邮箱 / 手机号") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    supportingText = {
+                        Text(
+                            when {
+                                identifier.isBlank() -> "邮箱或 11 位手机号"
+                                identifier.contains('@') -> "邮箱注册"
+                                identifier.matches(Regex("^\\d{11}$")) -> "手机号注册"
+                                else -> "格式无效"
+                            }
+                        )
+                    }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
@@ -529,21 +562,21 @@ fun RegisterDialog(
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    supportingText = { Text("至少6位") }
+                    supportingText = { Text("至少 6 位") }
                 )
             }
         },
         confirmButton = {
-            Button(
-                onClick = { onRegister(email, password, displayName) },
-                enabled = email.trim().contains("@") && password.length >= 6 && displayName.trim().isNotBlank()
-            ) {
-                Text("注册")
+            TextButton(onClick = onDismiss) {
+                Text("取消")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
+            Button(
+                onClick = { onRegister(identifier.trim(), password, displayName) },
+                enabled = isValidIdentifier(identifier) && password.length >= 6 && displayName.trim().isNotBlank()
+            ) {
+                Text("注册")
             }
         }
     )
