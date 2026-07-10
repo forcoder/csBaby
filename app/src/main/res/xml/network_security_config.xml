@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  csBaby 自托管后端在 HTTP(目前无证书), Android 9.0+ (targetSdk 28+) 默认禁止 cleartext
+  必须给特定域名开通明文 HTTP, 其他域名仍禁止.
+
+  仅以下域名允许 HTTP:
+  - api.agentai0.com   (主 API 服务器)
+  - sync.agentai0.com  (数据同步服务器)
+  - shz.al             (OTA apk 下载 + version-info 读取)
+  - 10.0.2.2           (Android emulator 访问宿主机 localhost)
+
+  如未来后端切换到 HTTPS, 整个 config 可以删除, Android 默认就是 HTTPS-only
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">api.agentai0.com</domain>
+        <domain includeSubdomains="true">sync.agentai0.com</domain>
+        <domain includeSubdomains="true">shz.al</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>
