@@ -107,6 +107,8 @@ jobs:
           echo "APK_NAME=csBaby-v${{ steps.version.outputs.name }}-release.apk" >> $GITHUB_ENV
 
       - name: Upload APK to shz.al
+        env:
+          SHZAL_PASSWORD: ${{ secrets.SHZAL_PASSWORD }}
         run: |
           APK_PATH="${{ env.APK_PATH }}"
           APK_NAME="${{ env.APK_NAME }}"
@@ -125,11 +127,15 @@ jobs:
           {"versionCode":${VERSION_CODE},"versionName":"${VERSION_NAME}","releaseDate":"${RELEASE_DATE}","fileSize":${APK_SIZE},"md5":"${APK_MD5}","downloadUrl":"https://shz.al/~csBabyApk_v${VERSION_CODE}","releaseNotes":"v${VERSION_NAME} 更新(已签名 release)","forceUpdate":false}
           VERSION_EOF
 
-          # 使用版本专用文件名上传
-          echo "[1/2] Uploading version info (csBabyLog_v${VERSION_CODE})..."
+          # 上传顺序很关键: 先 version-info, 再 APK. 客户端读 ~csBabyLog 拿到主更新指针,
+          # ~csBabyLog_v{VERSION_CODE} 是 fallback. 这里 3 个都必须更新(否则老客户端读不到)
+          echo "[1/3] Uploading master csBabyLog (客户端首先读这个)..."
+          curl -s -X POST -F "n=csBabyLog" -F "c=@/tmp/version.json" -F "e=30d" https://shz.al
+
+          echo "[2/3] Uploading version info (csBabyLog_v${VERSION_CODE})..."
           curl -s -X POST -F "n=csBabyLog_v${VERSION_CODE}" -F "c=@/tmp/version.json" -F "e=30d" https://shz.al
 
-          echo "[2/3] Uploading APK (csBabyApk_v${VERSION_CODE})..."
+          echo "[3/3] Uploading APK (csBabyApk_v${VERSION_CODE})..."
           curl -s -X POST -F "n=csBabyApk_v${VERSION_CODE}" -F "filename=$APK_NAME" -F "c=@$APK_PATH" -F "e=30d" https://shz.al
 
       - name: Output APK download URL
