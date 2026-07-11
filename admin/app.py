@@ -417,7 +417,7 @@ def logout():
     return redirect(url_for("admin.login"))
 
 
-@admin_bp.route("/")
+@admin_bp.route("/", strict_slashes=False)
 def admin_index():
     return redirect(url_for("admin.dashboard"))
 
@@ -1333,6 +1333,22 @@ def admin_tenant_routing_agent_add(tenant_id):
     if not agent_phone:
         flash("客服手机号不能为空", "error")
         return redirect(url_for("admin.admin_tenant_routing", tenant_id=tenant_id))
+
+    data = {
+        "agent_phone": agent_phone,
+        "agent_name": agent_name,
+        "status": status,
+        "max_concurrent": int(max_concurrent) if max_concurrent.isdigit() else 5,
+    }
+    try:
+        resp = api_post(f"/api/admin/tenants/{tenant_id}/routing/agent/add", data, token)
+        if resp.status_code in (200, 201):
+            flash("客服已添加", "success")
+        else:
+            flash(f"添加失败：{_safe_api_error(resp, 'API 错误')}", "error")
+    except Exception as e:
+        flash(f"网络错误: {e}", "error")
+    return redirect(url_for("admin.admin_tenant_routing", tenant_id=tenant_id))
 
 
 # ========== Admin Panel: Backup Management ==========

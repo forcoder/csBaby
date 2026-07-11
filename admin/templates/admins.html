@@ -106,7 +106,7 @@ function showEditModal(id, phone, isActive) {
     document.getElementById('editId').value = id;
     document.getElementById('editPhone').value = phone;
     document.getElementById('editIsActive').checked = isActive == 1;
-    document.getElementById('editForm').action = '{{ url_for("admin_admins_edit", admin_id=0) }}'.replace('/0', '/' + id);
+    document.getElementById('editForm').action = '{{ url_for("admin.admin_admins_edit", admin_id=0) }}'.replace('/0', '/' + id);
     document.getElementById('editModal').style.display = 'block';
 }
 function hideEditModal() {
