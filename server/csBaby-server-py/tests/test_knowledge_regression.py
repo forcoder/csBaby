@@ -86,6 +86,22 @@ def mock_list_rules(monkeypatch):
     return mock
 
 
+@pytest.fixture
+def mock_search_rules(monkeypatch):
+    """模拟 KnowledgeService.search_rules"""
+    mock = MagicMock(return_value={
+        'rules': [{'id': 'r1', 'keyword': 'hello', 'matchType': 'CONTAINS',
+                    'replyTemplate': '你好', 'enabled': True,
+                    'createdAt': 1000, 'updatedAt': 1000,
+                    'tenantId': 'test-tenant', 'syncVersion': 1000, 'deleted': False}],
+        'total': 1,
+        'page': 1,
+        'limit': 100,
+    })
+    monkeypatch.setattr('controllers.knowledge_controller.service.search_rules', mock)
+    return mock
+
+
 # ==================== 正常场景 — HTTP 测试 ====================
 
 class TestCRUDEndpoints:
@@ -101,7 +117,7 @@ class TestCRUDEndpoints:
         assert len(data['data']['rules']) == 1
         assert data['data']['total'] == 1
 
-    def test_search_rules_returns_200(self, client, mock_list_rules):
+    def test_search_rules_returns_200(self, client, mock_search_rules):
         """正常场景2: 搜索规则返回200"""
         resp = client.get('/api/knowledge/rules/search?keyword=hello')
         assert resp.status_code == 200
