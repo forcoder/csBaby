@@ -74,9 +74,9 @@ class KnowledgeViewModelClipboardCopyTest {
         clearAllMocks()
     }
 
-    /** 正常场景:应当调用 putText,并把 keyword + replyTemplate 写入剪贴板 */
+    /** 正常场景:应当调用 putText,且只含 replyTemplate(不拼 keyword) */
     @Test
-    fun `copyRuleToClipboard writes keyword and replyTemplate to clipboard`() =
+    fun `copyRuleToClipboard writes only replyTemplate to clipboard`() =
         runTest(testDispatcher) {
             viewModel.copyRuleToClipboard(42L)
             testDispatcher.scheduler.advanceUntilIdle()
@@ -84,16 +84,16 @@ class KnowledgeViewModelClipboardCopyTest {
             verify {
                 clipboardService.putText(
                     label = "csBaby 规则",
-                    text = "test 测试\n回复：这是一个测试回复"
+                    text = "这是一个测试回复"
                 )
             }
             assertEquals(
-                "已复制到剪贴板：test 测试",
+                "已复制: test 测试",
                 viewModel.uiState.value.noticeMessage
             )
         }
 
-    /** 边界值:replyTemplate 为空时仍要复制(用户主动触发) */
+    /** 边界值:replyTemplate 为空时仍要复制(用户主动触发,粘贴结果为空字符串) */
     @Test
     fun `copyRuleToClipboard works when replyTemplate is empty`() =
         runTest(testDispatcher) {
@@ -106,12 +106,12 @@ class KnowledgeViewModelClipboardCopyTest {
             verify {
                 clipboardService.putText(
                     label = "csBaby 规则",
-                    text = "test 测试\n回复："
+                    text = ""
                 )
             }
         }
 
-    /** 边界值:keyword 含特殊字符(冒号、换行)仍完整写入 */
+    /** 边界值:replyTemplate 含特殊字符(冒号、换行)保留原样 */
     @Test
     fun `copyRuleToClipboard preserves newlines in replyTemplate`() =
         runTest(testDispatcher) {
@@ -127,7 +127,7 @@ class KnowledgeViewModelClipboardCopyTest {
             verify {
                 clipboardService.putText(
                     label = "csBaby 规则",
-                    text = "价格\n回复：第一行\n第二行：优惠"
+                    text = "第一行\n第二行：优惠"
                 )
             }
         }

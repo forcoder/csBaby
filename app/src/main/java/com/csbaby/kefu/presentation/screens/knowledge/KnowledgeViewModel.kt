@@ -216,23 +216,20 @@ class KnowledgeViewModel @Inject constructor(
     }
 
     /**
-     * 复制规则内容到系统剪贴板，供客服在聊天窗口直接粘贴使用。
-     * 复制格式：`{keyword}\n回复：{replyTemplate}`，方便一眼区分关键词和模板。
+     * 复制规则回复模板到系统剪贴板,供客服在聊天窗口直接粘贴使用。
+     * 复制格式:只含 replyTemplate(不包含 keyword 或 "回复:" 装饰行)。
      * 源规则不存在时什么都不做（不 crash，不写入剪贴板）。
      */
     fun copyRuleToClipboard(id: Long) {
         viewModelScope.launch {
             val source = knowledgeBaseManager.getRuleById(id) ?: return@launch
-            val clipboardText = buildClipboardText(source)
+            val clipboardText = source.replyTemplate
             runCatching {
                 clipboardService.putText(label = "csBaby 规则", text = clipboardText)
             }
-            _uiState.update { it.copy(noticeMessage = "已复制到剪贴板：${source.keyword}") }
+            _uiState.update { it.copy(noticeMessage = "已复制: ${source.keyword}") }
         }
     }
-
-    private fun buildClipboardText(rule: KeywordRule): String =
-        "${rule.keyword}\n回复：${rule.replyTemplate}"
 
     /**
      * 写入操作后触发自动同步（debounce 2s，由 SyncManager.triggerSync 处理）
