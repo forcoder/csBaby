@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileUpload
@@ -231,7 +232,8 @@ fun KnowledgeScreen(
                             rule = rule,
                             onEdit = { editingRule = rule },
                             onDelete = { viewModel.deleteRule(rule.id) },
-                            onToggle = { viewModel.toggleRule(rule.id, !rule.enabled) }
+                            onToggle = { viewModel.toggleRule(rule.id, !rule.enabled) },
+                            onCopyToClipboard = { viewModel.copyRuleToClipboard(rule.id) }
                         )
                     }
                 }
@@ -289,7 +291,8 @@ fun RuleItem(
     rule: KeywordRule,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
+    onCopyToClipboard: () -> Unit
 ) {
     androidx.compose.material3.Card(
         modifier = Modifier.fillMaxWidth()
@@ -356,6 +359,9 @@ fun RuleItem(
             ) {
                 IconButton(onClick = onEdit) {
                     Icon(Icons.Default.Edit, contentDescription = "Edit")
+                }
+                IconButton(onClick = onCopyToClipboard) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "复制")
                 }
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.Delete, contentDescription = "Delete")
