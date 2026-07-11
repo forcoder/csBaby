@@ -14,8 +14,8 @@ import secrets
 import time
 from functools import wraps
 from threading import Lock
-from flask import Flask, request, jsonify
 from typing import Optional
+from flask import Flask, request, jsonify
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,7 @@ from infrastructure.persistence.model_repo_sqlite import SqliteModelRepository
 from infrastructure.persistence.history_repo_sqlite import SqliteHistoryRepository
 from infrastructure.persistence.feedback_repo_sqlite import SqliteFeedbackRepository
 from infrastructure.persistence.metrics_repo_sqlite import SqliteMetricsRepository
+from infrastructure.sync.sync_writer import SyncWriter
 from domain.services.auth_service import AuthService as UserAuthService
 
 # ========== 配置 ==========
@@ -147,20 +148,45 @@ def after_request(response):
 @app.route("/health", methods=["GET"])
 def health_check():
     import datetime
+    from infrastructure.persistence.db_supabase import health_check as supa_health
     health: dict = {
         "status": "ok",
         "service": "csBaby-api",
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
     db_status = "ok"
+    outbox_pending = 0
+    outbox_dead = 0
+    supa_error = None
     try:
         conn = get_connection()
         conn.execute("SELECT 1")
+        outbox_pending = conn.execute(
+            "SELECT COUNT(*) AS c FROM sync_outbox"
+        ).fetchone()["c"]
+        outbox_dead = conn.execute(
+            "SELECT COUNT(*) AS c FROM sync_outbox_dead"
+        ).fetchone()["c"]
         conn.close()
     except Exception as exc:
         db_status = str(exc)
         health["status"] = "degraded"
     health["database"] = db_status
+    try:
+        supa_ok = supa_health()
+        health["supabase"] = "up" if supa_ok else "down"
+    except Exception as exc:
+        supa_error = f"{type(exc).__name__}: {exc}"
+        health["supabase"] = "down"
+        health["supabase_error"] = supa_error
+    health["sync_outbox_pending"] = outbox_pending
+    health["sync_outbox_dead"] = outbox_dead
+    # 警告条件 (不降级, 只标记): outbox 堆积超过 100 条 或 死信 > 0
+    if outbox_pending > 100 or outbox_dead > 0:
+        health["sync_warning"] = (
+            f"sync_outbox 有 {outbox_pending} 条待重试"
+            + (f", 死信 {outbox_dead} 条" if outbox_dead else "")
+        )
     status_code = 200 if health["status"] == "ok" else 503
     return jsonify(health), status_code
 
@@ -170,51 +196,71 @@ def health_check():
 def user_register():
     data = request.get_json() or {}
     phone = (data.get("phone") or "").strip()
+    email = (data.get("email") or "").strip().lower() or None
     password = data.get("password", "")
     name = (data.get("name") or "").strip()
-    if not phone or not password:
-        return jsonify({"error": "phone and password are required"}), 400
+    if not password:
+        return jsonify({"error": "password is required"}), 400
     if len(password) < 6:
         return jsonify({"error": "password must be at least 6 chars"}), 400
-    if len(phone) > 20:
+    if not phone and not email:
+        return jsonify({"error": "phone or email is required"}), 400
+    if phone and len(phone) > 20:
         return jsonify({"error": "phone too long (max 20 chars)"}), 400
-    # Check if phone already exists
-    db = get_connection()
-    try:
-        existing = db.execute("SELECT id FROM users WHERE phone=?", (phone,)).fetchone()
-        if existing:
-            return jsonify({"error": "phone already registered"}), 409
-        user_id = str(__import__("uuid").uuid4())
-        pw_hash, salt = UserAuthService.hash_password(password)
-        db.execute(
-            "INSERT INTO users (id, phone, password_hash, salt, name) VALUES (?, ?, ?, ?, ?)",
-            (user_id, phone, pw_hash, salt, name or phone),
-        )
-        db.commit()
-    finally:
-        db.close()
+    if email and ("@" not in email or len(email) > 254):
+        return jsonify({"error": "invalid email format"}), 400
+    # phone column is UNIQUE NOT NULL — synthesize from email when absent
+    if not phone:
+        phone = f"email:{email}"
+
+    from infrastructure.persistence.user_repo_sqlite import SqliteUserRepository
+    repo = SqliteUserRepository()
+    if repo.get_by_phone(phone):
+        return jsonify({"error": "phone already registered"}), 409
+    if email and repo.get_by_email(email):
+        return jsonify({"error": "email already registered"}), 409
+
+    user_id = str(__import__("uuid").uuid4())
+    pw_hash, salt = UserAuthService.hash_password(password)
+    repo.create(user_id=user_id, phone=phone, password_hash=pw_hash,
+                salt=salt, name=name or email or phone, email=email)
     token = auth_service.generate_token(user_id)
-    return jsonify({"user_id": user_id, "token": token, "expires_in": 30 * 86400}), 201
+    return jsonify({
+        "user_id": user_id, "email": email,
+        "phone": phone if "@" not in phone else None,
+        "token": token, "expires_in": 30 * 86400,
+    }), 201
 
 
 @app.route("/api/auth/user/login", methods=["POST"])
 @rate_limit(max_requests=5, window_seconds=300)
 def user_login():
+    """Login a user by phone OR email.
+
+    Body accepts any of:
+      {"phone": "138...", "password": "..."}      (legacy)
+      {"email": "a@b.com", "password": "..."}
+      {"identifier": "any-of-the-above", "password": "..."}
+    """
     data = request.get_json() or {}
-    phone = (data.get("phone") or "").strip()
+    identifier = (data.get("identifier") or data.get("phone") or data.get("email") or "").strip()
     password = data.get("password", "")
-    if not phone or not password:
-        return jsonify({"error": "phone and password are required"}), 400
-    db = get_connection()
-    try:
-        row = db.execute("SELECT id, password_hash, salt FROM users WHERE phone=?", (phone,)).fetchone()
-    finally:
-        db.close()
+    if not identifier or not password:
+        return jsonify({"error": "phone or email and password are required"}), 400
+
+    from infrastructure.persistence.user_repo_sqlite import SqliteUserRepository
+    repo = SqliteUserRepository()
+    row = repo.get_by_identifier(identifier)
     if not row or not UserAuthService.verify_password(password, row["salt"], row["password_hash"]):
-        return jsonify({"error": "Invalid phone or password"}), 401
+        return jsonify({"error": "Invalid phone/email or password"}), 401
     user_id = row["id"]
     token = auth_service.generate_token(user_id)
-    return jsonify({"user_id": user_id, "token": token, "expires_in": 30 * 86400})
+    return jsonify({
+        "userId": user_id, "tenantId": user_id,
+        "phone": row.get("account"), "email": row.get("account"),
+        "account": row.get("account"),
+        "token": token, "expires_in": 30 * 86400,
+    })
 
 
 @app.route("/api/auth/register", methods=["POST"])
@@ -252,11 +298,21 @@ def register():
                 (user_id, device.id, platform, data.get("name", "")),
             )
             db.commit()
+            sync_payload = {
+                "user_id": user_id,
+                "device_id": device.id,
+                "platform": platform,
+                "device_name": data.get("name", ""),
+            }
+            SyncWriter(db).push("user_devices", "INSERT", None, sync_payload)
         finally:
             db.close()
-    resp = {"user_id": device.user_id, "token": device.token, "expires_in": 30 * 86400}
-    if user_id:
-        resp["user_id"] = user_id
+    resp = {
+        "device_id": device.id,
+        "user_id": user_id,
+        "token": device.token,
+        "expires_in": 30 * 86400,
+    }
     return jsonify(resp)
 
 @app.route("/api/auth/heartbeat", methods=["POST"])
@@ -2370,44 +2426,6 @@ def admin_restore_tenant_backup(tenant_id):
     return jsonify({"status": "ok", "restored": restored})
 
 
-# ========== Sync API Proxy（Chrome扩展统一使用 api.agentai0.com） ==========
-# 将 /auth/* 和 /sync/* 请求转发到 sync server (csbaby-sync:8080)
-# 这样 Chrome 扩展只需配置 api.agentai0.com 即可使用全部功能
-
-import requests as _requests
-
-SYNC_SERVER_URL = os.environ.get("SYNC_SERVER_URL", "http://csbaby-sync:8080")
-
-
-@app.route("/auth/<path:subpath>", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
-@app.route("/sync/<path:subpath>", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
-def sync_proxy(subpath):
-    """将 /auth/* 和 /sync/* 请求代理到 sync server。"""
-    try:
-        target_url = f"{SYNC_SERVER_URL}/{request.path.lstrip('/')}"
-        headers = {k: v for k, v in request.headers if k.lower() not in ("host", "content-length", "transfer-encoding")}
-        data = request.get_data()
-        resp = _requests.request(
-            method=request.method,
-            url=target_url,
-            headers=headers,
-            data=data,
-            params=request.args,
-            cookies=request.cookies,
-            timeout=30,
-        )
-        # 返回 sync server 的响应
-        excluded_headers = {"content-encoding", "transfer-encoding", "content-length", "connection"}
-        response_headers = [(k, v) for k, v in resp.headers.items() if k.lower() not in excluded_headers]
-        return (resp.content, resp.status_code, response_headers)
-    except _requests.exceptions.ConnectionError as e:
-        return jsonify({"code": 502, "message": f"Sync server unreachable: {e}"}), 502
-    except _requests.exceptions.Timeout:
-        return jsonify({"code": 504, "message": "Sync server timeout"}), 504
-    except Exception as e:
-        return jsonify({"code": 500, "message": f"Proxy error: {e}"}), 500
-
-
 # ========== Global Error Handlers ==========
 def not_found(e):
     return jsonify({"error": "Not found"}), 404
@@ -2480,3 +2498,201 @@ def _debug_admin_status():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
+
+
+
+import time
+from datetime import datetime
+
+# ========== Cloud Sync Compatibility Routes (added by refactor) ==========
+# These routes provide backward compatibility with the legacy sync server (csBaby-server-py)
+# so the Android client can use a single domain (api.agentai0.com) for all API calls.
+# nginx routes /auth/* and /sync/* and /api/v1/backup/* to this container (8084).
+
+@app.route("/auth/refresh", methods=["POST"])
+@app.route("/sync/all", methods=["GET"])
+@require_auth
+def sync_all():
+    """Full sync: return tenant data in client-expected camelCase fields."""
+    import time as _time
+    ensure_db()
+    tenant_id = request.args.get("tenantId") or request.user_id
+    conn = get_connection()
+    def safe(sql, params=()):
+        try:
+            return [dict_from_row(r) for r in conn.execute(sql, params).fetchall()]
+        except Exception:
+            return []
+    def safe_one(sql, params=()):
+        try:
+            row = conn.execute(sql, params).fetchone()
+            return dict_from_row(row) if row else None
+        except Exception:
+            return None
+    return jsonify({"code": 0, "data": {
+        "keywordRules":      safe("SELECT * FROM keyword_rules WHERE user_id=?", (tenant_id,)),
+        "aiModelConfigs":    safe("SELECT * FROM model_configs WHERE user_id=?", (tenant_id,)),
+        "messageBlacklist":  safe("SELECT * FROM blacklist WHERE user_id=?", (tenant_id,)),
+        "replyHistory":      safe("SELECT * FROM reply_history WHERE user_id=? ORDER BY created_at DESC LIMIT 500", (tenant_id,)),
+        "appConfigs":        [],
+        "scenarios":         [],
+        "userStyleProfile":  None,
+        "serverTime":        int(_time.time() * 1000),
+    }})
+
+
+@app.route("/sync/changes", methods=["GET"])
+@require_auth
+def sync_changes():
+    """
+    Incremental sync: return changes since a timestamp.
+    Query: tenantId=<tenant_id>, since=<unix_ms>
+    """
+    ensure_db()
+    tenant_id = request.args.get("tenantId") or request.user_id
+    since = request.args.get("since", "0")
+    conn = get_connection()
+    try:
+        rules = conn.execute(
+            "SELECT * FROM keyword_rules WHERE user_id = ? AND updated_at > ?",
+            (tenant_id, since)
+        ).fetchall()
+        return jsonify({"code": 0, "data": {
+            "rules": [dict_from_row(r) for r in rules],
+            "deletedIds": [],
+        }})
+    finally:
+        conn.close()
+
+
+@app.route("/sync/push", methods=["POST"])
+@require_auth
+def sync_push():
+    """
+    Push client changes to server.
+    Body: {rules: [...], models: [...]}
+    Response: {applied: N}
+    """
+    ensure_db()
+    tenant_id = request.user_id
+    data = request.get_json(force=True, silent=True) or {}
+    conn = get_connection()
+    applied = 0
+    try:
+        for rule in data.get("rules", []):
+            cols = list(rule.keys())
+            vals = [rule[c] for c in cols]
+            set_clause = ", ".join(f"{c}=?" for c in cols)
+            conn.execute(
+                f"INSERT OR REPLACE INTO keyword_rules ({','.join(cols)}) VALUES ({','.join(['?']*len(cols))})",
+                vals
+            )
+            applied += 1
+        conn.commit()
+        return jsonify({"applied": applied})
+    finally:
+        conn.close()
+
+
+# ========== Backup routes (v1 legacy path compatibility) ==========
+
+_in_memory_backups = {}  # {backup_id: {tenantId, data, created}}
+
+
+@app.route("/api/v1/backup/upload", methods=["POST"])
+@require_auth
+def backup_upload_v1():
+    """
+    Upload a backup. Body: {deviceName, data, checksum, appVersion}
+    Response: {backupId, createdAt}
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    if not isinstance(data, dict) or "data" not in data:
+        return jsonify({"error": "Missing backup data"}), 400
+    backup_id = secrets.token_hex(16)
+    _in_memory_backups[backup_id] = {
+        "tenantId": request.user_id,
+        "data": data.get("data"),
+        "deviceName": data.get("deviceName", "android"),
+        "checksum": data.get("checksum", ""),
+        "appVersion": data.get("appVersion", ""),
+        "created": int(datetime.utcnow().timestamp() * 1000),
+    }
+    return jsonify({
+        "backupId": backup_id,
+        "createdAt": _in_memory_backups[backup_id]["created"],
+    })
+
+
+@app.route("/api/v1/backup/list", methods=["GET"])
+@require_auth
+def backup_list_v1():
+    """List all backups for the current tenant."""
+    tenant_id = request.user_id
+    items = [
+        {"backupId": bid, **{k: v for k, v in b.items() if k != "data"}}
+        for bid, b in _in_memory_backups.items()
+        if b.get("tenantId") == tenant_id
+    ]
+    return jsonify({"items": items})
+
+
+@app.route("/api/v1/backup/download/<backup_id>", methods=["GET"])
+@require_auth
+def backup_download_v1(backup_id):
+    """Download a specific backup by ID."""
+    backup = _in_memory_backups.get(backup_id)
+    if not backup or backup.get("tenantId") != request.user_id:
+        return jsonify({"error": "Backup not found"}), 404
+    return jsonify(backup.get("data", {}))
+
+
+# ========== End Cloud Sync Compatibility Routes ==========
+
+import time as _time
+from datetime import datetime as _datetime
+
+@app.route("/auth/refresh", methods=["POST"])
+def auth_refresh():
+    """
+    Refresh access token via refreshToken.
+    Request: {"refreshToken": "..."}
+    Response: {userId, tenantId, token (new), refreshToken (new), expiresIn}
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    refresh_token = data.get("refreshToken")
+    if not refresh_token:
+        return jsonify({"error": "Missing refreshToken"}), 400
+    try:
+        import jwt as _jwt
+        payload = _jwt.decode(refresh_token, JWT_SECRET, algorithms=["HS256"])
+        user_id = payload.get("user_id")
+        tenant_id = payload.get("tenant_id", user_id)
+        if payload.get("type") != "refresh":
+            return jsonify({"error": "Invalid token type"}), 401
+    except _jwt.ExpiredSignatureError:
+        return jsonify({"error": "Refresh token expired"}), 401
+    except Exception as e:
+        return jsonify({"error": f"Invalid refresh token: {e}"}), 401
+
+    # Issue new tokens
+    now = int(_time.time())
+    access_payload = {
+        "user_id": user_id, "tenant_id": tenant_id, "type": "access",
+        "iat": now, "exp": now + 24 * 60 * 60,
+    }
+    new_access = _jwt.encode(access_payload, JWT_SECRET, algorithm="HS256")
+    refresh_payload = {
+        "user_id": user_id, "tenant_id": tenant_id, "type": "refresh",
+        "iat": now, "exp": now + 30 * 24 * 60 * 60,
+    }
+    new_refresh = _jwt.encode(refresh_payload, JWT_SECRET, algorithm="HS256")
+
+    return jsonify({
+        "userId": user_id,
+        "tenantId": tenant_id,
+        "token": new_access,
+        "refreshToken": new_refresh,
+        "expiresIn": 30 * 24 * 60 * 60,
+    })
+

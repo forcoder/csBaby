@@ -54,7 +54,9 @@
       "Bash(powershell *)",
       "Read(//d/temp/**)",
       "Bash(xargs grep -l \"弹窗\\\\|dialog\\\\|Dialog\")",
-      "Bash(gh secret *)"
+      "Bash(gh secret *)",
+      "Bash(ls -la *.apk)",
+      "Bash(ls -la app/build/outputs/apk/debug/*.apk)"
     ]
   },
   "enableAllProjectMcpServers": true,
