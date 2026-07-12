@@ -110,7 +110,20 @@ fun search(query: String) {
 
 ### 3.5 清空知识库
 
-(原 §3.4 — 调整编号) ...
+入口:TopAppBar 垃圾桶图标(`Icons.Default.Delete`)
+
+| 触发 | 行为 |
+|------|------|
+| 点击 | 弹 AlertDialog 确认"将删除当前全部 N 条规则..." |
+| 确认 | `viewModel.clearAllRules()` → `runCatching` → 软删除 + triggerSync |
+| 取消 | 关闭 dialog,无副作用 |
+| 已删除全部(空) | dialog 不可触发(`enabled = totalRuleCount > 0`) |
+
+UI:
+- 进行中:`isClearing=true` + 顶部 LinearProgressIndicator + 文字 "正在清空知识库规则..."
+- 完成后:`noticeMessage` 弹"已清空知识库,共删除 N 条规则"/"知识库已经是空的"
+
+实现:`KnowledgeViewModel.clearAllRules()`
 
 ### 3.6 导入 / 导出
 
@@ -159,7 +172,7 @@ fun search(query: String) {
 | 用户短时间内连续点同一个规则的复制 | 每次都会覆盖剪贴板,不需要防抖 |
 | 复制后未登录 | 不需要触发 sync(剪贴板操作不涉及数据持久化) |
 
-### 3.9 列表回复预览截断 (≤20 字)
+### 3.8 浮窗(FloatingWindowService)知识库搜索复制
 
 需求:列表中每条规则的回复模板,小字体(bodySmall)+ 1 行 + 最多展示 20 个字符(中英文都按 1 字算)+ 超出追加 `...`。点击整条 → 详情看完整。
 
@@ -206,6 +219,7 @@ fun search(query: String) {
 | 2026-07-11 | 搜索框行为修复:输入→清空→必须显示全部 (root cause: search() 依赖 stale `allRules` 缓存) | 用户报"先输价格再清空,显示空" |
 | 2026-07-11 | 新增 RuleDetailDialog:点击规则查看详情(只读,含全字段+replayTemplate 完整滚动) | 用户报"规则点击后应该可以查看详情" |
 | 2026-07-11 | 知识库"复制"按钮语义固化 = 写入剪贴板 | 用户纠正了之前误把 `duplicateRule`(克隆到 DB)重新引入的实现 |
+| 2026-07-12 | 浮窗知识库搜索联想列表配色(深色 popup + 浅色文字,自定义 layout) | 用户报"联想列表和背景颜色一样看不清" |
 | 2026-07-12 | 浮窗知识库搜索复制加固:runCatching 异常 + 返回 Boolean + 失败 Toast | 用户报"浮窗知识库搜索的复制也无法正常使用" |
 | 2026-07-11 | 知识库"导入"功能入文档(代码已实现,未文档化) | 用户多次强调后续需求先写文档 |
 | 2026-06-18 | commit 519aa085 首次实现 `duplicateRule`(克隆到 DB),后被 eb6e050f 删除 | 历史 |
