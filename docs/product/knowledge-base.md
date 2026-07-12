@@ -174,7 +174,30 @@ UI:
 
 ### 3.8 浮窗(FloatingWindowService)知识库搜索复制
 
-需求:列表中每条规则的回复模板,小字体(bodySmall)+ 1 行 + 最多展示 20 个字符(中英文都按 1 字算)+ 超出追加 `...`。点击整条 → 详情看完整。
+需求:每条浮窗知识库搜索结果都有"复制"按钮,**复制的不只是给个提示,而是要真正把回复模板写入系统剪贴板**,用户在聊天窗口粘贴时能拿到完整 replyTemplate。
+
+**核心 API**:`ClipboardManager.setPrimaryClip(ClipData.newPlainText(label, text))` 必须被实际调用,仅 Toast 提示不算成功。
+
+| 场景 | 期望行为 |
+|------|----------|
+| 正常路径 | 真的写 ClipData 到系统剪贴板 + Toast "已复制回复内容" |
+| ClipboardManager 服务不可用 | 不抛 NPE,返回 false + Toast "复制失败,请重试" |
+| setPrimaryClip 抛 SecurityException 等 | runCatching 包裹 → 返回 false + 日志 ERROR + Toast 失败 |
+
+实现:
+- `FloatingWindowService.copyReplyToClipboard(reply: String): Boolean`
+  - runCatching 包整个调用
+  - 成功返回 true / 失败返回 false,**不能**让 onClick lambda 静默吞异常
+- onClick 根据返回值给准确 Toast:
+  - `true` → "已复制回复内容"
+  - `false` → "复制失败,请重试"
+- 复制内容只含 `rule.replyTemplate`(与 §3.2 / §3.7 一致:**不**拼 keyword / "回复:" 行)
+- ClipData label = `"suggested_reply"` (与浮窗主建议回复标识一致)
+- 位置:`infrastructure/window/FloatingWindowService.kt:1006-1020`
+
+注意:用户每次报"复制不工作"通常是因为 Toast 显示但实际 setPrimaryClip 没生效 — 这次用 runCatching 显式暴露,失败时给明确反馈。
+
+### 3.9 列表回复预览截断 (≤20 字)
 
 | 输入长度 | 输出 |
 |----------|------|
@@ -193,17 +216,21 @@ UI:
 - 字符宽度估算依赖字体:此方案按"字符数"截断,简单可测;中文每字约 ~14dp,英文每字 ~7dp,在主流手机宽度上 20 字大约占屏幕 60-80%,基本单行可容纳
 - 不强求"视觉上恰好一行":Compose `maxLines=1` 做兜底截断
 
-浮窗搜索结果每条规则也带"复制"按钮,**行为必须与 §3.1 / §3.2 一致**:
+### 3.10 浮窗知识库搜索联想列表配色
 
-- 复制内容只含 `rule.replyTemplate`(不拼 keyword / "回复:" 行)
-- 复制失败时,弹 `复制失败,请重试`;成功时弹 `已复制回复内容`
-- 复制失败/成功都要用 `runCatching` + 显式日志包一下,**不能**让 onClick lambda 静默吞了异常 → 走到 Toast 报错
+需求(2026-07-12):用户报"联想列表和背景颜色一样,根本看不清"。
 
-位置:`infrastructure/window/FloatingWindowService.kt:1006-1020` (`copyReplyToClipboard`)
+| 元素 | 颜色 | 说明 |
+|------|------|------|
+| Popup 容器背景 | `#1E293B → #0F172A`(深色渐变,`createSuggestionListBackground()`) | 浮窗暗色风格 |
+| ListView 容器背景 | 透明(继承 popup 容器) | 配合 popup |
+| 列表项背景 | `#334155`(`R.layout.item_suggestion_keyword`) | 比 popup 容器稍亮,突出每条 |
+| 列表项文字 | `#F1F5F9` / 14sp / center_vertical | 高对比,看得清 |
 
-边界:
-- ClipboardManager 服务不可用 → 返回 false + 日志 WARN,不要抛 NPE
-- setPrimaryClip 抛 SecurityException(罕见) → 返回 false + 日志 ERROR
+实现:
+- 新建 `res/layout/item_suggestion_keyword.xml`(深色背景 + 浅色字)
+- `createSuggestionPopup()` 改用 `R.layout.item_suggestion_keyword` 替代系统默认 `android.R.layout.simple_list_item_1`
+- 系统 default layout 文字色 `#000000`,在 popup 暗背景上完全糊掉,**永远不能**直接复用
 
 ## 4. API/字段约定
 
