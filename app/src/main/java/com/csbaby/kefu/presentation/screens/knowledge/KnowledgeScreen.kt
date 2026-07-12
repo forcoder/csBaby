@@ -2,7 +2,6 @@ package com.csbaby.kefu.presentation.screens.knowledge
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +23,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.material3.Divider
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,7 +51,6 @@ fun KnowledgeScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var editingRule by remember { mutableStateOf<KeywordRule?>(null) }
-    var detailRule by remember { mutableStateOf<KeywordRule?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var showClearDialog by remember { mutableStateOf(false) }
     var ruleToDelete by remember { mutableStateOf<KeywordRule?>(null) }
@@ -236,10 +233,7 @@ fun KnowledgeScreen(
                             onEdit = { editingRule = rule },
                             onDelete = { viewModel.deleteRule(rule.id) },
                             onToggle = { viewModel.toggleRule(rule.id, !rule.enabled) },
-                            onCopyToClipboard = { viewModel.copyRuleToClipboard(rule.id) },
-                            onDetail = {
-                                detailRule = rule
-                            }
+                            onCopyToClipboard = { viewModel.copyRuleToClipboard(rule.id) }
                         )
                     }
                 }
@@ -259,13 +253,6 @@ fun KnowledgeScreen(
                 showAddDialog = false
                 editingRule = null
             }
-        )
-    }
-
-    if (detailRule != null) {
-        RuleDetailDialog(
-            rule = detailRule!!,
-            onDismiss = { detailRule = null }
         )
     }
 
@@ -305,13 +292,10 @@ fun RuleItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onToggle: () -> Unit,
-    onCopyToClipboard: () -> Unit,
-    onDetail: () -> Unit
+    onCopyToClipboard: () -> Unit
 ) {
     androidx.compose.material3.Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onDetail() }
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
@@ -584,108 +568,6 @@ fun RuleEditDialog(
             }
         }
     )
-}
-
-/**
- * 规则详情查看(只读)。
- * 注册表中 §3.3 登记:点击任一规则查看完整字段(关键词 / 类型 / 回复 / 分类 / target / metadata)。
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun RuleDetailDialog(
-    rule: KeywordRule,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = rule.keyword.ifBlank { "(未命名)" },
-                style = MaterialTheme.typography.headlineSmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "匹配类型: ${matchTypeLabel(rule.matchType)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                if (rule.category.isNotBlank()) {
-                    SuggestionChip(
-                        label = { Text(rule.category) },
-                        onClick = {},
-                    )
-                }
-
-                if (rule.replyTemplate.isNotBlank()) {
-                    Text(
-                        text = "回复内容",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = MaterialTheme.shapes.small
-                    ) {
-                        Text(
-                            text = rule.replyTemplate,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(12.dp),
-                        )
-                    }
-                }
-
-                Text(
-                    text = rule.targetSummary(),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-
-                Divider()
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    MetadataChip("启用", if (rule.enabled) "是" else "否")
-                    MetadataChip("优先级", rule.priority?.toString() ?: "0")
-                    MetadataChip("syncVersion", rule.syncVersion?.toString() ?: "0")
-                    MetadataChip("deleted", if (rule.deleted) "是" else "否")
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
-        }
-    )
-}
-
-@Composable
-private fun MetadataChip(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-private fun matchTypeLabel(matchType: MatchType?): String = when (matchType) {
-    MatchType.EXACT -> "完全匹配"
-    MatchType.CONTAINS -> "包含"
-    MatchType.REGEX -> "正则"
-    null -> "未知"
 }
 
 private fun KeywordRule.targetSummary(): String {
