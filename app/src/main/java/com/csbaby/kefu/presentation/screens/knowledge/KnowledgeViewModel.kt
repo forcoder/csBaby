@@ -33,7 +33,8 @@ data class KnowledgeUiState(
 class KnowledgeViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val knowledgeBaseManager: KnowledgeBaseManager,
-    private val syncManager: SyncManager
+    private val syncManager: SyncManager,
+    private val clipboardService: ClipboardService,
 ) : ViewModel() {
 
 
@@ -211,6 +212,22 @@ class KnowledgeViewModel @Inject constructor(
         viewModelScope.launch {
             knowledgeBaseManager.toggleRule(id, enabled)
             triggerAutoSyncForLoggedInUser()
+        }
+    }
+
+    /**
+     * 复制规则回复模板到系统剪贴板,供客服在聊天窗口直接粘贴使用。
+     * 复制格式:只含 replyTemplate(不包含 keyword 或 "回复:" 装饰行)。
+     * 源规则不存在时什么都不做（不 crash，不写入剪贴板）。
+     */
+    fun copyRuleToClipboard(id: Long) {
+        viewModelScope.launch {
+            val source = knowledgeBaseManager.getRuleById(id) ?: return@launch
+            val clipboardText = source.replyTemplate
+            runCatching {
+                clipboardService.putText(label = "csBaby 规则", text = clipboardText)
+            }
+            _uiState.update { it.copy(noticeMessage = "已复制: ${source.keyword}") }
         }
     }
 

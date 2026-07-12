@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  浮窗知识库搜索联想 PopupWindow 列表项 layout。
+  背景必须与 popup 容器 (#1E293B → #0F172A 渐变深色) 区分明显,
+  所以文字色强制为浅色 (#F1F5F9),并配深色 backgroundTint per item
+  让每条 rule word 都能在 popup 暗背景上看得清。
+-->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="40dp"
+    android:paddingHorizontal="14dp"
+    android:paddingVertical="10dp"
+    android:textColor="#F1F5F9"
+    android:textSize="14sp"
+    android:gravity="center_vertical"
+    android:background="#334155" />

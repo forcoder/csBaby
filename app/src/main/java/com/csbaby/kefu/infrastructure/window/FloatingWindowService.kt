@@ -1003,11 +1003,19 @@ class FloatingWindowService : Service() {
     }
 
 
-    private fun copyReplyToClipboard(reply: String) {
-        val clipboardManager = getSystemService(CLIPBOARD_SERVICE) as? ClipboardManager
-            ?: throw NullPointerException("ClipboardManager not available")
-
-        clipboardManager.setPrimaryClip(ClipData.newPlainText("suggested_reply", reply))
+    private fun copyReplyToClipboard(reply: String): Boolean {
+        return runCatching {
+            val clipboardManager = getSystemService(CLIPBOARD_SERVICE) as? ClipboardManager
+            if (clipboardManager == null) {
+                android.util.Log.w(TAG, "ClipboardManager not available")
+                return@runCatching false
+            }
+            clipboardManager.setPrimaryClip(ClipData.newPlainText("suggested_reply", reply))
+            true
+        }.getOrElse { e ->
+            android.util.Log.e(TAG, "复制到剪贴板失败", e)
+            false
+        }
     }
 
     private fun recordSentReply(data: DisplayData, finalReply: String) {
@@ -1606,7 +1614,7 @@ class FloatingWindowService : Service() {
             isHorizontalScrollBarEnabled = false
         }
 
-        suggestionAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, mutableListOf())
+        suggestionAdapter = ArrayAdapter(this, R.layout.item_suggestion_keyword, mutableListOf())
         suggestionListView?.adapter = suggestionAdapter
 
         suggestionListView?.setOnItemClickListener { _, _, position, _ ->
@@ -1933,6 +1941,10 @@ class FloatingWindowService : Service() {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
+            // 整条 click 弹详情 — 与管理后台 RuleItem / RuleDetailDialog 行为一致 (docs §3.3 + §3.11)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { showKnowledgeRuleDetail(rule) }
 
             val headerRow = LinearLayout(this@FloatingWindowService).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -1940,8 +1952,8 @@ class FloatingWindowService : Service() {
             }
 
             val keywordView = TextView(this@FloatingWindowService).apply {
-                text = "关键词: ${rule.keyword}"
-                textSize = 13f
+                text = rule.keyword.ifBlank { "(未命名)" }
+                textSize = 14f
                 setTextColor(Color.WHITE)
                 setTypeface(typeface, Typeface.BOLD)
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -1953,34 +1965,138 @@ class FloatingWindowService : Service() {
                 textColor = "#E2E8F0",
                 weight = 0.3f
             ) {
-                copyReplyToClipboard(rule.replyTemplate)
-                Toast.makeText(this@FloatingWindowService, "已复制回复内容", Toast.LENGTH_SHORT).show()
+                val ok = copyReplyToClipboard(rule.replyTemplate)
+                val msg = if (ok) "已复制回复内容" else "复制失败,请重试"
+                Toast.makeText(this@FloatingWindowService, msg, Toast.LENGTH_SHORT).show()
             }
 
             headerRow.addView(keywordView)
             headerRow.addView(copyButton)
 
-            val replyView = TextView(this@FloatingWindowService).apply {
-                text = rule.replyTemplate
+            // 预览段(≤20 字 + "…"),与管理后台 RuleItem 的 previewReply() 行为一致 (docs §3.9 + §3.12)
+            val previewView = TextView(this@FloatingWindowService).apply {
+                text = previewReply(rule.replyTemplate)
                 textSize = 12.5f
-                setTextColor(Color.parseColor("#CBD5E1"))
-                setLineSpacing(0f, 1.2f)
-                setPadding(0, dp(8), 0, 0)
-                maxLines = 4
+                setTextColor(Color.parseColor("#E2E8F0"))
+                setLineSpacing(0f, 1.25f)
+                setPadding(0, dp(6), 0, 0)
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+            }
+
+            // 摘要 metadata(分类 / 适用房源 / 启用)
+            val summary = buildString {
+                if (rule.category.isNotBlank()) append("分类：${rule.category}  ")
+                append(if (rule.targetNames.isEmpty()) "适用房源：全部" else "适用房源：${rule.targetNames.joinToString("、")}")
+                append("  ${if (rule.enabled) "启用" else "禁用"}")
+            }
+            val summaryView = TextView(this@FloatingWindowService).apply {
+                text = summary
+                textSize = 11f
+                setTextColor(Color.parseColor("#94A3B8"))
+                setPadding(0, dp(4), 0, 0)
+                maxLines = 2
                 ellipsize = TextUtils.TruncateAt.END
             }
 
             addView(headerRow)
-            addView(replyView)
+            addView(previewView)
+            addView(summaryView)
         }
     }
 
-    // 定义知识库规则项的数据类
+    /**
+     * 浮窗知识库规则详情弹窗(传统 View AlertDialog),
+     * 显示:keyword / category / matchType / replyTemplate(全文) / targetSummary / enabled / priority / syncVersion。
+     * 与 KnowledgeScreen.RuleDetailDialog 字段顺序一致 (docs §3.3 + §3.11)。
+     */
+    private fun showKnowledgeRuleDetail(rule: KnowledgeRuleItem) {
+        runCatching {
+            val targetText = if (rule.targetNames.isEmpty()) "全部房源"
+                else rule.targetNames.joinToString("、")
+            val fullReply = rule.replyTemplate.ifBlank { "(空)" }
+
+            val container = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(20), dp(8), dp(20), dp(8))
+            }
+
+            container.addView(detailRow("匹配类型", matchTypeLabel(rule.matchType)))
+            if (rule.category.isNotBlank()) container.addView(detailRow("分类", rule.category))
+            container.addView(detailRow("回复内容", fullReply, body = true))
+            container.addView(detailRow("适用房源", targetText))
+            container.addView(detailRow("启用", if (rule.enabled) "是" else "否"))
+
+            val scroll = android.widget.ScrollView(this).apply {
+                addView(container)
+            }
+
+            val dialog = android.app.AlertDialog.Builder(this)
+                .setTitle(rule.keyword.ifBlank { "(未命名)" })
+                .setView(scroll)
+                .setPositiveButton("关闭", null)
+                .setNeutralButton("复制回复") { _, _ ->
+                    val ok = copyReplyToClipboard(rule.replyTemplate)
+                    val msg = if (ok) "已复制回复内容" else "复制失败,请重试"
+                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                }
+                .create()
+            dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_PANEL)
+            dialog.show()
+        }.onFailure { Log.e(TAG, "弹出知识库规则详情失败", it) }
+    }
+
+    private fun detailRow(label: String, value: String, body: Boolean = false): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(6), 0, dp(6))
+            addView(TextView(this@FloatingWindowService).apply {
+                text = label
+                textSize = 11f
+                setTextColor(Color.parseColor("#64748B"))
+            })
+            addView(TextView(this@FloatingWindowService).apply {
+                text = value
+                textSize = if (body) 14f else 13f
+                setTextColor(Color.parseColor("#0F172A"))
+                if (body) {
+                    setLineSpacing(0f, 1.3f)
+                    setPadding(0, dp(2), 0, dp(6))
+                }
+            })
+        }
+    }
+
+    /**
+     * 浮窗预览截断逻辑 — 与 KnowledgeScreen.previewReply() 保持同一规则 (docs §3.9 + §3.12)。
+     * - 空字符串 → 原文返回
+     * - ≤ 20 字 → 原样
+     * - > 20 字 → 前 20 字 + "…"
+     */
+    private fun previewReply(template: String, limit: Int = 20): String {
+        if (template.isBlank()) return ""
+        return if (template.length <= limit) template else template.take(limit) + "…"
+    }
+
+    private fun matchTypeLabel(name: String?): String = when (name) {
+        "EXACT" -> "完全匹配"
+        "CONTAINS" -> "包含"
+        "REGEX" -> "正则"
+        null, "" -> "未知"
+        else -> name
+    }
+
+    // 定义知识库规则项的数据类(必须与 KnowledgeScreen 渲染对齐,见 docs/product/knowledge-base.md §3.11)
     data class KnowledgeRuleItem(
         val keyword: String,
         val replyTemplate: String,
         val matchType: String,
-        val targetNames: List<String>
+        val targetNames: List<String>,
+        val category: String = "",
+        val enabled: Boolean = true,
+        val priority: Int = 0,
+        val syncVersion: Long = 0L,
+        val deleted: Boolean = false,
     )
 
     private fun verticalSpace(heightDp: Int): View {
