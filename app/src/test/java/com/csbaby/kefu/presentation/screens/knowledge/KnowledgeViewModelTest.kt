@@ -53,8 +53,7 @@ class KnowledgeViewModelTest {
         return KnowledgeViewModel(
             appContext = context,
             knowledgeBaseManager = knowledgeBaseManager,
-            syncManager = syncManager,
-            clipboardService = mockk(relaxed = true),
+            syncManager = syncManager
         )
     }
 

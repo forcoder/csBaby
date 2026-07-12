@@ -2,8 +2,6 @@ package com.csbaby.kefu.di
 
 import com.csbaby.kefu.data.repository.*
 import com.csbaby.kefu.domain.repository.*
-import com.csbaby.kefu.presentation.screens.knowledge.AndroidClipboardService
-import com.csbaby.kefu.presentation.screens.knowledge.ClipboardService
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -13,12 +11,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
-
-    @Binds
-    @Singleton
-    abstract fun bindClipboardService(
-        impl: AndroidClipboardService
-    ): ClipboardService
 
     @Binds
     @Singleton
