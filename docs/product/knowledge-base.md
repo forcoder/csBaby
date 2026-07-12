@@ -232,53 +232,6 @@ UI:
 - `createSuggestionPopup()` 改用 `R.layout.item_suggestion_keyword` 替代系统默认 `android.R.layout.simple_list_item_1`
 - 系统 default layout 文字色 `#000000`,在 popup 暗背景上完全糊掉,**永远不能**直接复用
 
-### 3.11 浮窗与管理后台保持一致
-
-需求(2026-07-12):用户报"知识库规则,浮窗和管理后台功能要保持一致"。
-
-**两条强对齐规则**:
-1. 每条规则下方显示对应的 **≤20 字回复预览**(与管理后台 `previewReply()` 同规则)
-2. 点击规则,弹出详情 dialog 显示完整字段(关键词 / 回复内容 / 适用房源 / 分类 / 是否启用等)
-
-| 字段 | 管理后台 (`KnowledgeScreen.RuleDetailDialog`) | 浮窗 (`FloatingWindowService.showKnowledgeRuleDetail`) |
-|------|------------------------------------------|-------------------------------------------------|
-| 标题 | `rule.keyword` | `rule.keyword` |
-| 匹配类型 | `matchTypeLabel()` | `matchTypeLabel()` |
-| 分类 | Category chip / TextView | detailRow("分类") |
-| 回复内容(全文) | `rule.replyTemplate` (Surface+滚动) | `replyTemplate` |
-| 适用房源 | `rule.targetSummary()` | `targetNames` join or "全部" |
-| 启用 | chip | detailRow |
-| 优先级 | chip | (浮窗不展示,避免过于密集) |
-| syncVersion | chip | (同上) |
-| deleted | chip | (同上) |
-
-预览段(浮窗)和管理后台 `previewReply()` 用同一规则:
-- ≤ 20 字 → 原样
-- > 20 字 → `前 20 字 + "…"` (浮窗) 或 `"..."` (管理后台)
-- 空串 → 不显示
-
-点击交互:
-- 管理后台:整条 Card `clickable { onDetail() }` → Compose `AlertDialog`(§3.3)
-- 浮窗:LinearLayout `isClickable=true` + `setOnClickListener { showKnowledgeRuleDetail(rule) }` → 传统 View `AlertDialog.Builder` 包 `ScrollView`
-- 两边都额外提供"复制回复"按钮,见 §3.8 / §3.7 同样的 `setPrimaryClip` 真写剪贴板逻辑
-
-`KnowledgeRuleItem` 数据类已扩展,见 `FloatingWindowService.kt:1987-1999`:
-```kotlin
-data class KnowledgeRuleItem(
-    val keyword: String,
-    val replyTemplate: String,
-    val matchType: String,
-    val targetNames: List<String>,
-    val category: String = "",
-    val enabled: Boolean = true,
-    val priority: Int = 0,
-    val syncVersion: Long = 0L,
-    val deleted: Boolean = false,
-)
-```
-
-`ReplyOrchestrator.searchKnowledgeRules` 和 `getAllKnowledgeRules` 都补全字段映射。
-
 ## 4. API/字段约定
 
 - 列表字段:`rule.keyword`、`rule.matchType`、`rule.replyTemplate`、`rule.category`、`rule.targetSummary()`
@@ -294,7 +247,6 @@ data class KnowledgeRuleItem(
 | 2026-07-11 | 新增 RuleDetailDialog:点击规则查看详情(只读,含全字段+replayTemplate 完整滚动) | 用户报"规则点击后应该可以查看详情" |
 | 2026-07-11 | 知识库"复制"按钮语义固化 = 写入剪贴板 | 用户纠正了之前误把 `duplicateRule`(克隆到 DB)重新引入的实现 |
 | 2026-07-12 | 浮窗知识库搜索联想列表配色(深色 popup + 浅色文字,自定义 layout) | 用户报"联想列表和背景颜色一样看不清" |
-| 2026-07-12 | 浮窗与管理后台对齐:≤20字预览 + 点击看完整详情 + KnowledgeRuleItem 扩展 category/enabled/priority/syncVersion/deleted | 用户报"浮窗和管理后台功能要保持一致" |
 | 2026-07-12 | 浮窗知识库搜索复制加固:runCatching 异常 + 返回 Boolean + 失败 Toast | 用户报"浮窗知识库搜索的复制也无法正常使用" |
 | 2026-07-11 | 知识库"导入"功能入文档(代码已实现,未文档化) | 用户多次强调后续需求先写文档 |
 | 2026-06-18 | commit 519aa085 首次实现 `duplicateRule`(克隆到 DB),后被 eb6e050f 删除 | 历史 |

@@ -316,12 +316,7 @@ class ReplyOrchestrator @Inject constructor(
                     keyword = rule.keyword,
                     replyTemplate = rule.replyTemplate,
                     matchType = rule.matchType.name,
-                    targetNames = rule.targetNames,
-                    category = rule.category,
-                    enabled = rule.enabled,
-                    priority = rule.priority,
-                    syncVersion = rule.syncVersion,
-                    deleted = rule.deleted,
+                    targetNames = rule.targetNames ?: emptyList()
                 )
             }
         } catch (e: Exception) {
@@ -343,12 +338,7 @@ class ReplyOrchestrator @Inject constructor(
                         keyword = rule.keyword,
                         replyTemplate = rule.replyTemplate,
                         matchType = rule.matchType.name,
-                        targetNames = rule.targetNames,
-                        category = rule.category,
-                        enabled = rule.enabled,
-                        priority = rule.priority,
-                        syncVersion = rule.syncVersion,
-                        deleted = rule.deleted,
+                        targetNames = rule.targetNames
                     )
                 }
         } catch (e: Exception) {
