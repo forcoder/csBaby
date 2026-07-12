@@ -1003,11 +1003,19 @@ class FloatingWindowService : Service() {
     }
 
 
-    private fun copyReplyToClipboard(reply: String) {
-        val clipboardManager = getSystemService(CLIPBOARD_SERVICE) as? ClipboardManager
-            ?: throw NullPointerException("ClipboardManager not available")
-
-        clipboardManager.setPrimaryClip(ClipData.newPlainText("suggested_reply", reply))
+    private fun copyReplyToClipboard(reply: String): Boolean {
+        return runCatching {
+            val clipboardManager = getSystemService(CLIPBOARD_SERVICE) as? ClipboardManager
+            if (clipboardManager == null) {
+                android.util.Log.w(TAG, "ClipboardManager not available")
+                return@runCatching false
+            }
+            clipboardManager.setPrimaryClip(ClipData.newPlainText("suggested_reply", reply))
+            true
+        }.getOrElse { e ->
+            android.util.Log.e(TAG, "复制到剪贴板失败", e)
+            false
+        }
     }
 
     private fun recordSentReply(data: DisplayData, finalReply: String) {
@@ -1953,8 +1961,9 @@ class FloatingWindowService : Service() {
                 textColor = "#E2E8F0",
                 weight = 0.3f
             ) {
-                copyReplyToClipboard(rule.replyTemplate)
-                Toast.makeText(this@FloatingWindowService, "已复制回复内容", Toast.LENGTH_SHORT).show()
+                val ok = copyReplyToClipboard(rule.replyTemplate)
+                val msg = if (ok) "已复制回复内容" else "复制失败,请重试"
+                Toast.makeText(this@FloatingWindowService, msg, Toast.LENGTH_SHORT).show()
             }
 
             headerRow.addView(keywordView)

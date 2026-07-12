@@ -159,6 +159,39 @@ fun search(query: String) {
 | 用户短时间内连续点同一个规则的复制 | 每次都会覆盖剪贴板,不需要防抖 |
 | 复制后未登录 | 不需要触发 sync(剪贴板操作不涉及数据持久化) |
 
+### 3.9 列表回复预览截断 (≤20 字)
+
+需求:列表中每条规则的回复模板,小字体(bodySmall)+ 1 行 + 最多展示 20 个字符(中英文都按 1 字算)+ 超出追加 `...`。点击整条 → 详情看完整。
+
+| 输入长度 | 输出 |
+|----------|------|
+| ≤ 20 字 | 原样 |
+| > 20 字 | `前 20 字 + "..."` |
+| 空串或全空白 | `""`(不显示截断行) |
+| 含换行的多行模板 | `take(20)` 字符截断 + `...` |
+
+实现:
+- `KnowledgeScreen.previewReply(template: String, limit: Int = 20): String`
+- 在 `RuleItem` 的 reply 显示处改用 `previewReply(rule.replyTemplate)`
+- 字体 `MaterialTheme.typography.bodySmall`,颜色 `onSurfaceVariant`(稍弱化,不抢视线)
+- 最多 1 行 + Ellipsis(防被宽屏多行显示)
+
+注意:
+- 字符宽度估算依赖字体:此方案按"字符数"截断,简单可测;中文每字约 ~14dp,英文每字 ~7dp,在主流手机宽度上 20 字大约占屏幕 60-80%,基本单行可容纳
+- 不强求"视觉上恰好一行":Compose `maxLines=1` 做兜底截断
+
+浮窗搜索结果每条规则也带"复制"按钮,**行为必须与 §3.1 / §3.2 一致**:
+
+- 复制内容只含 `rule.replyTemplate`(不拼 keyword / "回复:" 行)
+- 复制失败时,弹 `复制失败,请重试`;成功时弹 `已复制回复内容`
+- 复制失败/成功都要用 `runCatching` + 显式日志包一下,**不能**让 onClick lambda 静默吞了异常 → 走到 Toast 报错
+
+位置:`infrastructure/window/FloatingWindowService.kt:1006-1020` (`copyReplyToClipboard`)
+
+边界:
+- ClipboardManager 服务不可用 → 返回 false + 日志 WARN,不要抛 NPE
+- setPrimaryClip 抛 SecurityException(罕见) → 返回 false + 日志 ERROR
+
 ## 4. API/字段约定
 
 - 列表字段:`rule.keyword`、`rule.matchType`、`rule.replyTemplate`、`rule.category`、`rule.targetSummary()`
@@ -173,6 +206,7 @@ fun search(query: String) {
 | 2026-07-11 | 搜索框行为修复:输入→清空→必须显示全部 (root cause: search() 依赖 stale `allRules` 缓存) | 用户报"先输价格再清空,显示空" |
 | 2026-07-11 | 新增 RuleDetailDialog:点击规则查看详情(只读,含全字段+replayTemplate 完整滚动) | 用户报"规则点击后应该可以查看详情" |
 | 2026-07-11 | 知识库"复制"按钮语义固化 = 写入剪贴板 | 用户纠正了之前误把 `duplicateRule`(克隆到 DB)重新引入的实现 |
+| 2026-07-12 | 浮窗知识库搜索复制加固:runCatching 异常 + 返回 Boolean + 失败 Toast | 用户报"浮窗知识库搜索的复制也无法正常使用" |
 | 2026-07-11 | 知识库"导入"功能入文档(代码已实现,未文档化) | 用户多次强调后续需求先写文档 |
 | 2026-06-18 | commit 519aa085 首次实现 `duplicateRule`(克隆到 DB),后被 eb6e050f 删除 | 历史 |
 | 2026-04-22 | 知识库 CRUD + RDS 迁移完成 | 历史 |
