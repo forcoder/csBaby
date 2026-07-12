@@ -1614,7 +1614,7 @@ class FloatingWindowService : Service() {
             isHorizontalScrollBarEnabled = false
         }
 
-        suggestionAdapter = ArrayAdapter(this, R.layout.item_suggestion_keyword, mutableListOf())
+        suggestionAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, mutableListOf())
         suggestionListView?.adapter = suggestionAdapter
 
         suggestionListView?.setOnItemClickListener { _, _, position, _ ->
