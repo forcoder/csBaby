@@ -344,11 +344,10 @@ fun RuleItem(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = previewReply(rule.replyTemplate),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                text = rule.replyTemplate,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -695,17 +694,6 @@ private fun KeywordRule.targetSummary(): String {
     } else {
         "适用房源：${targetNames.joinToString("、")}"
     }
-}
-
-/**
- * 列表中规则回复模板预览: ≤20 字,超出追加 "..." (用户体感一致,点击详情看完整)。
- * - 空字符串 → 原文照返(无后缀)
- * - 单条字段合并后换行视为 1 字(只算可显字符)
- */
-internal fun previewReply(template: String, limit: Int = 20): String {
-    if (template.isBlank()) return ""
-    return if (template.length <= limit) template
-    else template.take(limit) + "..."
 }
 
 

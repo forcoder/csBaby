@@ -161,31 +161,6 @@ fun search(query: String) {
 
 ### 3.9 列表回复预览截断 (≤20 字)
 
-需求:每条浮窗知识库搜索结果都有"复制"按钮,**复制的不只是给个提示,而是要真正把回复模板写入系统剪贴板**,用户在聊天窗口粘贴时能拿到完整 replyTemplate。
-
-**核心 API**:`ClipboardManager.setPrimaryClip(ClipData.newPlainText(label, text))` 必须被实际调用,仅 Toast 提示不算成功。
-
-| 场景 | 期望行为 |
-|------|----------|
-| 正常路径 | 真的写 ClipData 到系统剪贴板 + Toast "已复制回复内容" |
-| ClipboardManager 服务不可用 | 不抛 NPE,返回 false + Toast "复制失败,请重试" |
-| setPrimaryClip 抛 SecurityException 等 | runCatching 包裹 → 返回 false + 日志 ERROR + Toast 失败 |
-
-实现:
-- `FloatingWindowService.copyReplyToClipboard(reply: String): Boolean`
-  - runCatching 包整个调用
-  - 成功返回 true / 失败返回 false,**不能**让 onClick lambda 静默吞异常
-- onClick 根据返回值给准确 Toast:
-  - `true` → "已复制回复内容"
-  - `false` → "复制失败,请重试"
-- 复制内容只含 `rule.replyTemplate`(与 §3.2 / §3.7 一致:**不**拼 keyword / "回复:" 行)
-- ClipData label = `"suggested_reply"` (与浮窗主建议回复标识一致)
-- 位置:`infrastructure/window/FloatingWindowService.kt:1006-1020`
-
-注意:用户每次报"复制不工作"通常是因为 Toast 显示但实际 setPrimaryClip 没生效 — 这次用 runCatching 显式暴露,失败时给明确反馈。
-
-### 3.9 列表回复预览截断 (≤20 字)
-
 | 输入长度 | 输出 |
 |----------|------|
 | ≤ 20 字 | 原样 |
@@ -233,7 +208,6 @@ fun search(query: String) {
 | 2026-07-11 | 搜索框行为修复:输入→清空→必须显示全部 (root cause: search() 依赖 stale `allRules` 缓存) | 用户报"先输价格再清空,显示空" |
 | 2026-07-11 | 新增 RuleDetailDialog:点击规则查看详情(只读,含全字段+replayTemplate 完整滚动) | 用户报"规则点击后应该可以查看详情" |
 | 2026-07-11 | 知识库"复制"按钮语义固化 = 写入剪贴板 | 用户纠正了之前误把 `duplicateRule`(克隆到 DB)重新引入的实现 |
-| 2026-07-12 | 浮窗知识库搜索复制加固:runCatching 异常 + 返回 Boolean + 失败 Toast | 用户报"浮窗知识库搜索的复制也无法正常使用" |
 | 2026-07-11 | 知识库"导入"功能入文档(代码已实现,未文档化) | 用户多次强调后续需求先写文档 |
 | 2026-06-18 | commit 519aa085 首次实现 `duplicateRule`(克隆到 DB),后被 eb6e050f 删除 | 历史 |
 | 2026-04-22 | 知识库 CRUD + RDS 迁移完成 | 历史 |
