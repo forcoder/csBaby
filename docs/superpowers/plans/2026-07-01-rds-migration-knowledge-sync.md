@@ -12,7 +12,7 @@
 | 组件 | 技术 | 地址 | 数据库 |
 |------|------|------|--------|
 | csbaby-api (Flask API) | Python/Flask | csbaby-api.onrender.com | SQLite (csbaby.db) |
-| csbaby-sync (同步服务) | Python/Flask | sync.agentai0.com | Supabase PostgreSQL |
+| csbaby-sync (同步服务) | Python/Flask | api.agentai0.com (已合并) | Supabase PostgreSQL |
 | csbaby-admin | Python/Flask | csbaby-admin.onrender.com | 代理至 api |
 | Android 客户端 | Kotlin/Jetpack | — | Room (本地) + sync |
 | Chrome 扩展 | JavaScript | github.com/forcoder/myhostex-assistant | 待对接 |
@@ -29,7 +29,7 @@ DB:   postgres
 ### 目标
 
 1. **RDS 迁移**: 自动在 AWS RDS PostgreSQL 上建库建表，将 Supabase 数据全量迁移到 RDS，验证后切换
-2. **知识库规则多端同步**: Chrome 扩展调用 `sync.agentai0.com` 的 API 进行规则 CRUD 操作，变更通过 sync 机制实时同步到所有终端（Android App、其他 Chrome 扩展等）
+2. **知识库规则多端同步**: Chrome 扩展调用 `api.agentai0.com` 的 API 进行规则 CRUD 操作，变更通过 sync 机制实时同步到所有终端（Android App、其他 Chrome 扩展等）
 
 ---
 
@@ -61,7 +61,7 @@ DB:   postgres
 
 ```
 ┌─────────────────┐      ┌───────────────────┐      ┌─────────────────┐
-│  Chrome 扩展     │─────>│  sync.agentai0.com │<─────│  Android App    │
+│  Chrome 扩展     │─────>│  api.agentai0.com │<─────│  Android App    │
 │  (规则 CRUD)    │      │  (Flask Sync Server)│     │  (自动同步轮询)  │
 └─────────────────┘      └───────────────────┘      └─────────────────┘
                                  │
