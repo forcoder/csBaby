@@ -62,6 +62,9 @@
 
 ### 3.3 规则详情查看
 
+> 2026-07-13 用户要求:取消单独的 RuleDetailDialog,列表点击直接进编辑。
+> 本节仅保留历史记录,新行为见 §3.1 表格最后一行。
+
 | 字段 | 展示方式 |
 |------|----------|
 | `rule.keyword` | 大标题 |
@@ -71,10 +74,12 @@
 | `rule.targetSummary()` | 显示目标(Property / Contact / Group / 全部) |
 | `rule.enabled` / `rule.deleted` / `rule.priority` / `rule.syncVersion` | metadata 一行 |
 
-实现:
-- 新增 `RuleDetailDialog(rule, onDismiss)` Composable
-- `RuleItem` 整条加 `Modifier.clickable { onClick() }`
-- 调用点 `onClick = { detailRule = rule }`,顶层 `if (detailRule != null) RuleDetailDialog(detailRule, onDismiss = { detailRule = null })`
+历史实现(已废弃,**禁止回滚**):
+- ~~新增 `RuleDetailDialog(rule, onDismiss)` Composable~~
+- ~~`RuleItem` 整条加 `Modifier.clickable { onClick() }`~~
+- ~~调用点 `onClick = { detailRule = rule }`,顶层 `if (detailRule != null) RuleDetailDialog(detailRule, onDismiss = { detailRule = null })`~~
+
+新行为(v1.5.14):点列表项 → 直接弹 `RuleEditDialog` 预填该条(同右上角铅笔按钮效果)。
 
 ### 3.4 搜索行为
 
@@ -297,5 +302,7 @@ data class KnowledgeRuleItem(
 | 2026-07-12 | 浮窗与管理后台对齐:≤20字预览 + 点击看完整详情 + KnowledgeRuleItem 扩展 category/enabled/priority/syncVersion/deleted | 用户报"浮窗和管理后台功能要保持一致" |
 | 2026-07-12 | 浮窗知识库搜索复制加固:runCatching 异常 + 返回 Boolean + 失败 Toast | 用户报"浮窗知识库搜索的复制也无法正常使用" |
 | 2026-07-11 | 知识库"导入"功能入文档(代码已实现,未文档化) | 用户多次强调后续需求先写文档 |
+| 2026-07-13 | 撤销 RuleDetailDialog:点列表项直接进 RuleEditDialog 编辑(同右上角铅笔按钮效果),不再有只读查看页 | 用户报"点规则直接打开编辑,不用单独搞个查看页面" |
+| 2026-07-13 | 服务端 `_coerce_rows` (csBaby-server-py b19bcc8): 输出 camelCase 字段 + int 0/1 → bool + UUID id hash fallback | 客户端 SyncKeywordRule 注解是 camelCase, snake_case 输出导致 UI 字段全空 |
 | 2026-06-18 | commit 519aa085 首次实现 `duplicateRule`(克隆到 DB),后被 eb6e050f 删除 | 历史 |
 | 2026-04-22 | 知识库 CRUD + RDS 迁移完成 | 历史 |
