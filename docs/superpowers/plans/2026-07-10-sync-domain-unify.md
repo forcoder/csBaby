@@ -1,5 +1,7 @@
 # Sync Refactor Plan: 统一到 api.agentai0.com
 
+> **⚠️ 已完成 (v1.5.1)** — 所有迁移步骤已执行完毕，`sync.agentai0.com` 已下线，所有客户端请求统一走 `api.agentai0.com`。以下为历史计划文档，仅供参考。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把客户端所有调用从 `sync.agentai0.com` 重定向到 `api.agentai0.com`,删除 ECS 上 csbaby-sync 容器,清理客户端 sync.agentai0.com 残留引用
