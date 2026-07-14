@@ -48,6 +48,7 @@ class SyncManager @Inject constructor(
 
     private var syncJob: Job? = null
     private var _lastSyncStats: String = ""
+    private var _lastPushStats: String = ""
 
     /** 上次同步统计信息 */
     fun getLastSyncStats(): String? = _lastSyncStats.takeIf { it.isNotEmpty() }
@@ -339,6 +340,7 @@ class SyncManager @Inject constructor(
                     if (endsWith("，")) deleteCharAt(lastIndex)
                 }
                 _lastSyncStats = stats
+                _lastPushStats = ""  // 全量同步没有 push 阶段
                 _syncState.value = SyncState.Success("同步完成", stats)
                 Timber.d("全量同步完成: rules=$ruleCount, models=$modelCount")
                 Result.success(Unit)
@@ -368,7 +370,10 @@ class SyncManager @Inject constructor(
 
         _syncState.value = SyncState.Syncing("正在同步变更...")
         syncCheckpointDao.updateSyncing(tenantId, true)
+        // 先保存上次推送统计，再清空（防止本次无推送时回退读不到）
+        val previousPushStats = _lastPushStats
         _lastSyncStats = ""
+        _lastPushStats = ""
         return try {
             // 1. 优先推送本地数据到云端
             // 如果从未同步过（since=0），推送所有本地数据；否则只推送变更
@@ -390,7 +395,9 @@ class SyncManager @Inject constructor(
             syncCheckpointDao.upsert(
                 SyncCheckpointEntity(
                     tenantId = tenantId,
-                    lastSyncTime = System.currentTimeMillis(),
+                    // 优先使用服务端时间戳，避免客户端时钟漂移导致 since 比较异常
+                    lastSyncTime = changesResponse.data?.serverTime?.takeIf { it > 0L }
+                        ?: System.currentTimeMillis(),
                     syncToken = changesResponse.data?.nextCursor,
                     isSyncing = false,
                     lastError = null
@@ -407,13 +414,16 @@ class SyncManager @Inject constructor(
             val pullProfileCount = if (changes?.userStyleProfile != null) 1 else 0
             val pullReplyCount = changes?.replyHistory?.size ?: 0
 
+            // 缓存本次推送统计（pushStats 为本次计算，previousPushStats 为上次）
+            _lastPushStats = pushStats
+
             val stats = buildString {
                 if (pushStats.isNotEmpty()) {
                     append("推送：$pushStats；")
                 }
-                // 无推送但有上次同步记录时，沿用上次统计
-                if (pushStats.isEmpty() && _lastSyncStats.isNotEmpty()) {
-                    append("上次：$_lastSyncStats；")
+                // 无推送但有上次推送记录时，沿用上次推送统计
+                if (pushStats.isEmpty() && previousPushStats.isNotEmpty()) {
+                    append("上次推送：$previousPushStats；")
                 }
                 append("拉取：")
                 val details = mutableListOf<String>()
@@ -478,6 +488,9 @@ class SyncManager @Inject constructor(
         }
         val activeApps = apps.filter { !it.deleted }
         val deletedApps = apps.filter { it.deleted }.map { it.packageName }
+        val deletedAppBizKeys = apps.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.packageName).toMap()
+        }
         val activeScenarios = scenarios.filter { !it.deleted }
         val deletedScenarios = scenarios.filter { it.deleted }.map { it.id.toString() }
         val deletedScenarioBizKeys = scenarios.filter { it.deleted }.map {
@@ -485,6 +498,9 @@ class SyncManager @Inject constructor(
         }
         val activeReplies = replies.filter { !it.deleted }
         val deletedReplies = replies.filter { it.deleted }.map { it.id.toString() }
+        val deletedReplyBizKeys = replies.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), originalMessage = it.originalMessage).toMap()
+        }
         val activeBlacklists = blacklists.filter { !it.deleted }
         val deletedBlacklists = blacklists.filter { it.deleted }.map { it.id.toString() }
         val deletedBlacklistBizKeys = blacklists.filter { it.deleted }.map {
@@ -502,7 +518,9 @@ class SyncManager @Inject constructor(
         val deletedBusinessKeys = buildMap {
             if (deletedRuleBizKeys.isNotEmpty()) put("keyword_rules", deletedRuleBizKeys)
             if (deletedModelBizKeys.isNotEmpty()) put("ai_model_configs", deletedModelBizKeys)
+            if (deletedAppBizKeys.isNotEmpty()) put("app_configs", deletedAppBizKeys)
             if (deletedScenarioBizKeys.isNotEmpty()) put("scenarios", deletedScenarioBizKeys)
+            if (deletedReplyBizKeys.isNotEmpty()) put("reply_history", deletedReplyBizKeys)
             if (deletedBlacklistBizKeys.isNotEmpty()) put("message_blacklist", deletedBlacklistBizKeys)
         }
 
@@ -539,6 +557,9 @@ class SyncManager @Inject constructor(
         }
         val activeApps = allApps.filter { !it.deleted }
         val deletedApps = allApps.filter { it.deleted }.map { it.packageName }
+        val deletedAppBizKeys = allApps.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.packageName).toMap()
+        }
         val activeScenarios = allScenarios.filter { !it.deleted }
         val deletedScenarios = allScenarios.filter { it.deleted }.map { it.id.toString() }
         val deletedScenarioBizKeys = allScenarios.filter { it.deleted }.map {
@@ -546,6 +567,9 @@ class SyncManager @Inject constructor(
         }
         val activeReplies = allReplies.filter { !it.deleted }
         val deletedReplies = allReplies.filter { it.deleted }.map { it.id.toString() }
+        val deletedReplyBizKeys = allReplies.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), originalMessage = it.originalMessage).toMap()
+        }
         val activeBlacklists = allBlacklists.filter { !it.deleted }
         val deletedBlacklists = allBlacklists.filter { it.deleted }.map { it.id.toString() }
         val deletedBlacklistBizKeys = allBlacklists.filter { it.deleted }.map {
@@ -563,7 +587,9 @@ class SyncManager @Inject constructor(
         val deletedBusinessKeys = buildMap {
             if (deletedRuleBizKeys.isNotEmpty()) put("keyword_rules", deletedRuleBizKeys)
             if (deletedModelBizKeys.isNotEmpty()) put("ai_model_configs", deletedModelBizKeys)
+            if (deletedAppBizKeys.isNotEmpty()) put("app_configs", deletedAppBizKeys)
             if (deletedScenarioBizKeys.isNotEmpty()) put("scenarios", deletedScenarioBizKeys)
+            if (deletedReplyBizKeys.isNotEmpty()) put("reply_history", deletedReplyBizKeys)
             if (deletedBlacklistBizKeys.isNotEmpty()) put("message_blacklist", deletedBlacklistBizKeys)
         }
 

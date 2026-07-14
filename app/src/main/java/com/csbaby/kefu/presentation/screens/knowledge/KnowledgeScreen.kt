@@ -325,23 +325,22 @@ fun RuleItem(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    val matchTypeLabel = stringResource(when (rule.matchType) {
+                        MatchType.EXACT -> R.string.match_type_exact
+                        MatchType.CONTAINS -> R.string.match_type_contains
+                        MatchType.REGEX -> R.string.match_type_regex
+                    })
+                    val subtitle = if (rule.priority > 0) {
+                        "$matchTypeLabel · ${stringResource(R.string.priority)} ${rule.priority}"
+                    } else {
+                        matchTypeLabel
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = when (rule.matchType) {
-                                MatchType.EXACT -> "精确匹配"
-                                MatchType.CONTAINS -> "包含匹配"
-                                MatchType.REGEX -> "正则匹配"
-                            },
+                            text = subtitle,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (rule.priority > 0) {
-                            Text(
-                                text = " · 优先级 ${rule.priority}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
                     }
                 }
 
