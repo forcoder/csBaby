@@ -677,51 +677,128 @@ class SyncManager @Inject constructor(
 
     private suspend fun applyServerDataToLocal(data: SyncAllData, tenantId: String) {
         // 知识库规则：服务端数据覆盖本地（全量同步场景）
+        // 防御性处理:即使服务端应该过滤 deleted=TRUE,客户端也做一次本地 tombstone 检查
         data.keywordRules.forEach { rule ->
-            keywordRuleDao.insertRule(rule.toEntity(tenantId))
+            if (rule.deleted) {
+                keywordRuleDao.softDelete(rule.id)
+            } else {
+                keywordRuleDao.insertRule(rule.toEntity(tenantId))
+            }
         }
 
         // AI 模型配置
         data.aiModelConfigs.forEach { model ->
-            aiModelConfigDao.insertModel(model.toEntity(tenantId))
+            if (model.deleted) {
+                aiModelConfigDao.deleteById(model.id)
+            } else {
+                aiModelConfigDao.insertModel(model.toEntity(tenantId))
+            }
         }
 
         // 风格画像
         data.userStyleProfile?.let { profile ->
-            userStyleProfileDao.insertProfile(profile.toEntity(tenantId))
+            if (profile.deleted) {
+                userStyleProfileDao.getProfileByUserIdSync(profile.userId)
+                    ?.let { userStyleProfileDao.deleteProfile(it) }
+            } else {
+                userStyleProfileDao.insertProfile(profile.toEntity(tenantId))
+            }
         }
 
         // 应用配置
         data.appConfigs.forEach { app ->
-            appConfigDao.insertApp(app.toEntity(tenantId))
+            if (app.deleted) {
+                appConfigDao.deleteByPackage(app.packageName)
+            } else {
+                appConfigDao.insertApp(app.toEntity(tenantId))
+            }
         }
 
         // 场景
         data.scenarios.forEach { scenario ->
-            scenarioDao.insertScenario(scenario.toEntity(tenantId))
+            if (scenario.deleted) {
+                scenarioDao.deleteById(scenario.id)
+            } else {
+                scenarioDao.insertScenario(scenario.toEntity(tenantId))
+            }
         }
 
         // 回复历史
         data.replyHistory.forEach { reply ->
-            replyHistoryDao.insertReply(reply.toEntity(tenantId))
+            if (reply.deleted) {
+                replyHistoryDao.softDelete(reply.id)
+            } else {
+                replyHistoryDao.insertReply(reply.toEntity(tenantId))
+            }
         }
 
         // 消息黑名单
         data.messageBlacklist.forEach { blacklist ->
-            messageBlacklistDao.insert(blacklist.toEntity(tenantId))
+            if (blacklist.deleted) {
+                messageBlacklistDao.deleteById(blacklist.id)
+            } else {
+                messageBlacklistDao.insert(blacklist.toEntity(tenantId))
+            }
         }
     }
 
     private suspend fun applyChangesToLocal(changes: SyncChanges, tenantId: String) {
-        changes.keywordRules.forEach { keywordRuleDao.insertRule(it.toEntity(tenantId)) }
-        changes.aiModelConfigs.forEach { aiModelConfigDao.insertModel(it.toEntity(tenantId)) }
-        changes.userStyleProfile?.let { userStyleProfileDao.insertProfile(it.toEntity(tenantId)) }
-        changes.appConfigs.forEach { appConfigDao.insertApp(it.toEntity(tenantId)) }
-        changes.scenarios.forEach { scenarioDao.insertScenario(it.toEntity(tenantId)) }
-        changes.replyHistory.forEach { replyHistoryDao.insertReply(it.toEntity(tenantId)) }
-        changes.messageBlacklist.forEach { messageBlacklistDao.insert(it.toEntity(tenantId)) }
+        // 防御性处理：服务端返回 deleted=TRUE 的行视为 tombstone
+        // 不能直接 insertRule (REPLACE 会把本地 deleted=0 的行覆盖成 deleted=1,
+        // 看似 OK,但 syncVersion 被服务端版本覆盖,可能与本地 push 状态冲突)。
+        // 正确做法:deleted=TRUE 的行映射到本地的 softDelete,deleted=FALSE 才 insertRule。
+        changes.keywordRules.forEach { sync ->
+            if (sync.deleted) {
+                keywordRuleDao.softDelete(sync.id)
+            } else {
+                keywordRuleDao.insertRule(sync.toEntity(tenantId))
+            }
+        }
+        changes.aiModelConfigs.forEach { sync ->
+            if (sync.deleted) {
+                aiModelConfigDao.deleteById(sync.id)
+            } else {
+                aiModelConfigDao.insertModel(sync.toEntity(tenantId))
+            }
+        }
+        changes.userStyleProfile?.let { sync ->
+            if (sync.deleted) {
+                userStyleProfileDao.getProfileByUserIdSync(sync.userId)
+                    ?.let { userStyleProfileDao.deleteProfile(it) }
+            } else {
+                userStyleProfileDao.insertProfile(sync.toEntity(tenantId))
+            }
+        }
+        changes.appConfigs.forEach { sync ->
+            if (sync.deleted) {
+                appConfigDao.deleteByPackage(sync.packageName)
+            } else {
+                appConfigDao.insertApp(sync.toEntity(tenantId))
+            }
+        }
+        changes.scenarios.forEach { sync ->
+            if (sync.deleted) {
+                scenarioDao.deleteById(sync.id)
+            } else {
+                scenarioDao.insertScenario(sync.toEntity(tenantId))
+            }
+        }
+        changes.replyHistory.forEach { sync ->
+            if (sync.deleted) {
+                replyHistoryDao.softDelete(sync.id)
+            } else {
+                replyHistoryDao.insertReply(sync.toEntity(tenantId))
+            }
+        }
+        changes.messageBlacklist.forEach { sync ->
+            if (sync.deleted) {
+                messageBlacklistDao.deleteById(sync.id)
+            } else {
+                messageBlacklistDao.insert(sync.toEntity(tenantId))
+            }
+        }
 
-        // 处理删除
+        // 处理 deletedIds (硬删除保证幂等,防止 deleted=1 的 tombstone 行被 leak 到 deleted=0 查询)
         changes.deletedIds.forEach { (entityType, ids) ->
             when (entityType) {
                 "keyword_rules" -> ids.forEach { keywordRuleDao.deleteById(it.toLong()) }
