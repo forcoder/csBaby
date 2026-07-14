@@ -112,8 +112,35 @@ data class PushChangesRequest(
     val replyHistory: List<SyncReplyHistory>,
     val messageBlacklist: List<SyncMessageBlacklist>,
     val deletedIds: Map<String, List<String>>,
+    @SerializedName("deletedBusinessKeys")
+    val deletedBusinessKeys: Map<String, List<Map<String, String>>> = emptyMap(),
     val baseVersion: Long
 )
+
+/**
+ * 已删除规则的业务键载荷——用于服务端按业务键匹配删除。
+ * 不同 entityType 使用不同字段：keyword_rules → keyword+category；ai_model_configs → modelName；
+ * scenarios → name；message_blacklist → value；reply_history → originalMessage。
+ */
+data class DeletedBusinessKey(
+    val id: String = "",
+    val keyword: String = "",
+    val category: String = "",
+    val modelName: String = "",
+    val name: String = "",
+    val value: String = "",
+    val originalMessage: String = ""
+) {
+    fun toMap(): Map<String, String> = mapOf(
+        "id" to id,
+        "keyword" to keyword,
+        "category" to category,
+        "modelName" to modelName,
+        "name" to name,
+        "value" to value,
+        "originalMessage" to originalMessage
+    ).filterValues { it.isNotEmpty() }
+}
 
 data class PushChangesResult(
     val accepted: Boolean,

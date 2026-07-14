@@ -45,6 +45,10 @@ Desktop.ini
 .cache
 .caches/
 
+# Python 字节码缓存
+__pycache__/
+*.pyc
+
 # Gradle缓存
 .gradle/
 gradle-app.setting

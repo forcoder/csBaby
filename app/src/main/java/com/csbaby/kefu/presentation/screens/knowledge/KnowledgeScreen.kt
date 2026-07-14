@@ -325,6 +325,24 @@ fun RuleItem(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = when (rule.matchType) {
+                                MatchType.EXACT -> "精确匹配"
+                                MatchType.CONTAINS -> "包含匹配"
+                                MatchType.REGEX -> "正则匹配"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (rule.priority > 0) {
+                            Text(
+                                text = " · 优先级 ${rule.priority}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
 
                 Switch(

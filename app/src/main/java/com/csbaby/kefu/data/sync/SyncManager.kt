@@ -313,7 +313,15 @@ class SyncManager @Inject constructor(
                 applyServerDataToLocal(data, tenantId)
                 Log.d("SyncManager", "applyServerDataToLocal 完成")
 
-                syncCheckpointDao.updateSyncSuccess(tenantId, data.serverTime, null)
+                syncCheckpointDao.upsert(
+                    SyncCheckpointEntity(
+                        tenantId = tenantId,
+                        lastSyncTime = data.serverTime,
+                        syncToken = null,
+                        isSyncing = false,
+                        lastError = null
+                    )
+                )
                 val ruleCount = data.keywordRules.size
                 val modelCount = data.aiModelConfigs.size
                 val appCount = data.appConfigs.size
@@ -379,10 +387,14 @@ class SyncManager @Inject constructor(
                 applyChangesToLocal(changes, tenantId)
             }
 
-            syncCheckpointDao.updateSyncSuccess(
-                tenantId,
-                System.currentTimeMillis(),
-                changesResponse.data?.nextCursor
+            syncCheckpointDao.upsert(
+                SyncCheckpointEntity(
+                    tenantId = tenantId,
+                    lastSyncTime = System.currentTimeMillis(),
+                    syncToken = changesResponse.data?.nextCursor,
+                    isSyncing = false,
+                    lastError = null
+                )
             )
 
             // 生成统计信息
@@ -399,6 +411,10 @@ class SyncManager @Inject constructor(
                 if (pushStats.isNotEmpty()) {
                     append("推送：$pushStats；")
                 }
+                // 无推送但有上次同步记录时，沿用上次统计
+                if (pushStats.isEmpty() && _lastSyncStats.isNotEmpty()) {
+                    append("上次：$_lastSyncStats；")
+                }
                 append("拉取：")
                 val details = mutableListOf<String>()
                 if (pullRuleCount > 0) details.add("知识库${pullRuleCount}条")
@@ -411,6 +427,7 @@ class SyncManager @Inject constructor(
                 if (details.isEmpty()) details.add("无变更")
                 append(details.joinToString("，"))
             }
+            _lastSyncStats = stats
             _syncState.value = SyncState.Success("同步完成", stats)
             Log.d("SyncManager", "增量同步完成: $stats")
             Result.success(Unit)
@@ -427,35 +444,52 @@ class SyncManager @Inject constructor(
     // ========== 推送本地变更（增量）==========
 
     suspend fun pushLocalChanges(tenantId: String, since: Long): String {
-        // 收集本地有变更的数据（syncVersion == 0 表示新增/修改待同步）
+        // 状态标识：syncVersion == 0L = 未推送（新增/修改/删除），> 0L = 已推送
+        // 已推送的不会重复推送，避免全量推送
         val rules = keywordRuleDao.getRulesByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
         val models = aiModelConfigDao.getModelsByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
         val profile = userStyleProfileDao.getProfileByTenantIdSync(tenantId)
-        val profiles = if (profile != null && (profile.syncVersion >= since || profile.syncVersion == 0L)) listOf(profile) else emptyList()
+        val profiles = if (profile != null && profile.syncVersion == 0L) listOf(profile) else emptyList()
         val apps = appConfigDao.getAppsByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
         val scenarios = scenarioDao.getScenariosByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
         val replies = replyHistoryDao.getRepliesByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
         val blacklists = messageBlacklistDao.getByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
 
         // 分离正常数据和已删除数据
         val activeRules = rules.filter { !it.deleted }
         val deletedRules = rules.filter { it.deleted }.map { it.id.toString() }
+        val deletedRuleBizKeys = rules.filter { it.deleted }.map {
+            DeletedBusinessKey(
+                id = it.id.toString(),
+                keyword = it.keyword,
+                category = it.category
+            ).toMap()
+        }
         val activeModels = models.filter { !it.deleted }
         val deletedModels = models.filter { it.deleted }.map { it.id.toString() }
+        val deletedModelBizKeys = models.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), modelName = it.modelName).toMap()
+        }
         val activeApps = apps.filter { !it.deleted }
         val deletedApps = apps.filter { it.deleted }.map { it.packageName }
         val activeScenarios = scenarios.filter { !it.deleted }
         val deletedScenarios = scenarios.filter { it.deleted }.map { it.id.toString() }
+        val deletedScenarioBizKeys = scenarios.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), name = it.name).toMap()
+        }
         val activeReplies = replies.filter { !it.deleted }
         val deletedReplies = replies.filter { it.deleted }.map { it.id.toString() }
         val activeBlacklists = blacklists.filter { !it.deleted }
         val deletedBlacklists = blacklists.filter { it.deleted }.map { it.id.toString() }
+        val deletedBlacklistBizKeys = blacklists.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), value = it.value).toMap()
+        }
 
         val deletedIds = buildMap {
             if (deletedRules.isNotEmpty()) put("keyword_rules", deletedRules)
@@ -465,13 +499,19 @@ class SyncManager @Inject constructor(
             if (deletedReplies.isNotEmpty()) put("reply_history", deletedReplies)
             if (deletedBlacklists.isNotEmpty()) put("message_blacklist", deletedBlacklists)
         }
+        val deletedBusinessKeys = buildMap {
+            if (deletedRuleBizKeys.isNotEmpty()) put("keyword_rules", deletedRuleBizKeys)
+            if (deletedModelBizKeys.isNotEmpty()) put("ai_model_configs", deletedModelBizKeys)
+            if (deletedScenarioBizKeys.isNotEmpty()) put("scenarios", deletedScenarioBizKeys)
+            if (deletedBlacklistBizKeys.isNotEmpty()) put("message_blacklist", deletedBlacklistBizKeys)
+        }
 
         if (activeRules.isEmpty() && activeModels.isEmpty() && profiles.isEmpty() && activeApps.isEmpty() && activeScenarios.isEmpty() && activeReplies.isEmpty() && activeBlacklists.isEmpty() && deletedIds.isEmpty()) {
             Log.d("SyncManager", "没有本地变更需要推送")
             return ""
         }
 
-        return doPush(tenantId, activeRules, activeModels, profiles, activeApps, activeScenarios, activeReplies, activeBlacklists, deletedIds, since)
+        return doPush(tenantId, activeRules, activeModels, profiles, activeApps, activeScenarios, activeReplies, activeBlacklists, deletedIds, deletedBusinessKeys, since)
     }
 
     // ========== 推送所有本地数据（首次同步）==========
@@ -489,16 +529,28 @@ class SyncManager @Inject constructor(
         // 分离正常数据和已删除数据
         val activeRules = allRules.filter { !it.deleted }
         val deletedRules = allRules.filter { it.deleted }.map { it.id.toString() }
+        val deletedRuleBizKeys = allRules.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), keyword = it.keyword, category = it.category).toMap()
+        }
         val activeModels = allModels.filter { !it.deleted }
         val deletedModels = allModels.filter { it.deleted }.map { it.id.toString() }
+        val deletedModelBizKeys = allModels.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), modelName = it.modelName).toMap()
+        }
         val activeApps = allApps.filter { !it.deleted }
         val deletedApps = allApps.filter { it.deleted }.map { it.packageName }
         val activeScenarios = allScenarios.filter { !it.deleted }
         val deletedScenarios = allScenarios.filter { it.deleted }.map { it.id.toString() }
+        val deletedScenarioBizKeys = allScenarios.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), name = it.name).toMap()
+        }
         val activeReplies = allReplies.filter { !it.deleted }
         val deletedReplies = allReplies.filter { it.deleted }.map { it.id.toString() }
         val activeBlacklists = allBlacklists.filter { !it.deleted }
         val deletedBlacklists = allBlacklists.filter { it.deleted }.map { it.id.toString() }
+        val deletedBlacklistBizKeys = allBlacklists.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), value = it.value).toMap()
+        }
 
         val deletedIds = buildMap {
             if (deletedRules.isNotEmpty()) put("keyword_rules", deletedRules)
@@ -508,13 +560,19 @@ class SyncManager @Inject constructor(
             if (deletedReplies.isNotEmpty()) put("reply_history", deletedReplies)
             if (deletedBlacklists.isNotEmpty()) put("message_blacklist", deletedBlacklists)
         }
+        val deletedBusinessKeys = buildMap {
+            if (deletedRuleBizKeys.isNotEmpty()) put("keyword_rules", deletedRuleBizKeys)
+            if (deletedModelBizKeys.isNotEmpty()) put("ai_model_configs", deletedModelBizKeys)
+            if (deletedScenarioBizKeys.isNotEmpty()) put("scenarios", deletedScenarioBizKeys)
+            if (deletedBlacklistBizKeys.isNotEmpty()) put("message_blacklist", deletedBlacklistBizKeys)
+        }
 
         if (activeRules.isEmpty() && activeModels.isEmpty() && profiles.isEmpty() && activeApps.isEmpty() && activeScenarios.isEmpty() && activeReplies.isEmpty() && activeBlacklists.isEmpty() && deletedIds.isEmpty()) {
             Log.d("SyncManager", "本地无数据可推送")
             return ""
         }
 
-        return doPush(tenantId, activeRules, activeModels, profiles, activeApps, activeScenarios, activeReplies, activeBlacklists, deletedIds, 0L)
+        return doPush(tenantId, activeRules, activeModels, profiles, activeApps, activeScenarios, activeReplies, activeBlacklists, deletedIds, deletedBusinessKeys, 0L)
     }
 
     private suspend fun doPush(
@@ -527,6 +585,7 @@ class SyncManager @Inject constructor(
         replies: List<ReplyHistoryEntity>,
         blacklists: List<MessageBlacklistEntity>,
         deletedIds: Map<String, List<String>>,
+        deletedBusinessKeys: Map<String, List<Map<String, String>>>,
         baseVersion: Long
     ): String {
         val request = PushChangesRequest(
@@ -539,9 +598,10 @@ class SyncManager @Inject constructor(
             replyHistory = replies.map { it.toSyncModel() },
             messageBlacklist = blacklists.map { it.toSyncModel() },
             deletedIds = deletedIds,
+            deletedBusinessKeys = deletedBusinessKeys,
             baseVersion = baseVersion
         )
-        Log.d("SyncManager", "doPush: rules=${rules.size}, models=${models.size}, deletedIds=$deletedIds")
+        Log.d("SyncManager", "doPush: rules=${rules.size}, models=${models.size}, deletedIds=$deletedIds, deletedBusinessKeys=$deletedBusinessKeys")
 
         val response = try {
             syncApiService.pushChanges(request)
