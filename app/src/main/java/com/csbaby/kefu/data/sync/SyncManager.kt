@@ -203,23 +203,16 @@ class SyncManager @Inject constructor(
     /** 用 refreshToken 刷新认证状态 */
     private suspend fun tryRefreshToken(refreshToken: String): SyncAuthState? {
         return try {
-            val request = RefreshTokenRequest(refreshToken)
-            val response = syncClient.refreshApiService.refreshToken(request)
-            Timber.d("Token刷新响应: isSuccess=${response.isSuccess}, msg=${response.message}")
-            if (response.isSuccess && response.data != null) {
-                val data = response.data
-                SyncAuthState.fromLoginResponse(
-                    userId = data.userId,
-                    tenantId = data.tenantId.ifEmpty { data.userId },
-                    token = data.effectiveAccessToken(),
-                    refreshToken = data.refreshToken,
-                    expiresAt = data.expiresAt
-                ).also {
-                    Timber.d("Token刷新成功: token=${it.accessToken.take(20)}...")
-                }
-            } else {
-                Timber.w("Token刷新失败: ${response.message}")
-                null
+            val data = syncClient.refreshApiService.refreshToken(RefreshTokenRequest(refreshToken))
+            Timber.d("Token刷新成功: userId=${data.userId}")
+            SyncAuthState.fromLoginResponse(
+                userId = data.userId,
+                tenantId = data.tenantId.ifEmpty { data.userId },
+                token = data.effectiveAccessToken(),
+                refreshToken = data.refreshToken,
+                expiresAt = data.expiresAt
+            ).also {
+                Timber.d("Token刷新成功: token=${it.accessToken.take(20)}...")
             }
         } catch (e: Exception) {
             Timber.e(e, "Token刷新异常")
@@ -304,51 +297,46 @@ class SyncManager @Inject constructor(
         _syncState.value = SyncState.Syncing("正在同步数据...")
         syncCheckpointDao.updateSyncing(tenantId, true)
         return try {
-            val response = syncApiService.getAllData(tenantId)
-            Log.d("SyncManager", "全量同步 API 响应: isSuccess=${response.isSuccess}, msg=${response.message}, data=${response.data != null}")
-            if (response.isSuccess && response.data != null) {
-                val data = response.data
-                Log.d("SyncManager", "服务端返回: keywordRules=${data.keywordRules.size}, aiModelConfigs=${data.aiModelConfigs.size}")
+            val data = syncApiService.getAllData(tenantId)
+            Log.d("SyncManager", "全量同步 API 响应成功: keywordRules=${data.keywordRules.size}, aiModelConfigs=${data.aiModelConfigs.size}")
 
-                // 将服务端数据写入本地（保留本地已有的 tenant_id 默认值的数据）
-                applyServerDataToLocal(data, tenantId)
-                Log.d("SyncManager", "applyServerDataToLocal 完成")
+            // 全量同步前先清空该租户的本地数据，避免新旧数据叠加
+            clearLocalDataForTenant(tenantId)
 
-                syncCheckpointDao.upsert(
-                    SyncCheckpointEntity(
-                        tenantId = tenantId,
-                        lastSyncTime = data.serverTime,
-                        syncToken = null,
-                        isSyncing = false,
-                        lastError = null
-                    )
+            // 将服务端数据写入本地
+            applyServerDataToLocal(data, tenantId)
+            Log.d("SyncManager", "applyServerDataToLocal 完成")
+
+            syncCheckpointDao.upsert(
+                SyncCheckpointEntity(
+                    tenantId = tenantId,
+                    lastSyncTime = data.serverTime.takeIf { it > 0L } ?: System.currentTimeMillis(),
+                    syncToken = null,
+                    isSyncing = false,
+                    lastError = null
                 )
-                val ruleCount = data.keywordRules.size
-                val modelCount = data.aiModelConfigs.size
-                val appCount = data.appConfigs.size
-                val scenarioCount = data.scenarios.size
-                val blacklistCount = data.messageBlacklist.size
-                val profileCount = if (data.userStyleProfile != null) 1 else 0
-                val stats = buildString {
-                    append("全量同步完成：")
-                    if (ruleCount > 0) append("知识库${ruleCount}条，")
-                    if (blacklistCount > 0) append("黑名单${blacklistCount}条，")
-                    if (modelCount > 0) append("模型${modelCount}条，")
-                    if (appCount > 0) append("监控应用${appCount}条，")
-                    if (scenarioCount > 0) append("场景${scenarioCount}条，")
-                    if (profileCount > 0) append("风格画像${profileCount}条，")
-                    if (endsWith("，")) deleteCharAt(lastIndex)
-                }
-                _lastSyncStats = stats
-                _lastPushStats = ""  // 全量同步没有 push 阶段
-                _syncState.value = SyncState.Success("同步完成", stats)
-                Timber.d("全量同步完成: rules=$ruleCount, models=$modelCount")
-                Result.success(Unit)
-            } else {
-                val msg = response.message.ifEmpty { "同步失败" }
-                _syncState.value = SyncState.Error(msg)
-                Result.failure(Exception(msg))
+            )
+            val ruleCount = data.keywordRules.size
+            val modelCount = data.aiModelConfigs.size
+            val appCount = data.appConfigs.size
+            val scenarioCount = data.scenarios.size
+            val blacklistCount = data.messageBlacklist.size
+            val profileCount = if (data.userStyleProfile != null) 1 else 0
+            val stats = buildString {
+                append("全量同步完成：")
+                if (ruleCount > 0) append("知识库${ruleCount}条，")
+                if (blacklistCount > 0) append("黑名单${blacklistCount}条，")
+                if (modelCount > 0) append("模型${modelCount}条，")
+                if (appCount > 0) append("监控应用${appCount}条，")
+                if (scenarioCount > 0) append("场景${scenarioCount}条，")
+                if (profileCount > 0) append("风格画像${profileCount}条，")
+                if (endsWith("，")) deleteCharAt(lastIndex)
             }
+            _lastSyncStats = stats
+            _lastPushStats = ""  // 全量同步没有 push 阶段
+            _syncState.value = SyncState.Success("同步完成", stats)
+            Timber.d("全量同步完成: rules=$ruleCount, models=$modelCount")
+            Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "全量同步失败")
             syncCheckpointDao.updateLastError(tenantId, e.message)
@@ -359,6 +347,30 @@ class SyncManager @Inject constructor(
         }
     }
 
+    // ========== 仅推送本地变更（不拉取） ==========
+
+    suspend fun pushOnly(tenantId: String): Result<Unit> {
+        _syncState.value = SyncState.Syncing("正在推送本地变更...")
+        return try {
+            val pushStats = pushAllLocalChanges(tenantId)
+            Log.d("SyncManager", "推送结果: pushStats='$pushStats'")
+
+            _lastPushStats = pushStats
+            val stats = if (pushStats.isNotEmpty()) {
+                "推送完成：$pushStats"
+            } else {
+                "没有本地变更需要推送"
+            }
+            _syncState.value = SyncState.Success("推送完成", stats)
+            Timber.d("仅推送完成: $stats")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Timber.e(e, "推送失败")
+            _syncState.value = SyncState.Error(e.message ?: "推送失败")
+            Result.failure(e)
+        }
+    }
+
     // ========== 增量同步 ==========
 
     suspend fun incrementalSync(tenantId: String): Result<Unit> {
@@ -366,7 +378,7 @@ class SyncManager @Inject constructor(
         val since = checkpoint?.lastSyncTime ?: 0L
         val localRuleCount = keywordRuleDao.getRulesByTenantSync(tenantId).size
         val defaultRuleCount = keywordRuleDao.getRulesByTenantSync(DEFAULT_TENANT_ID).size
-        Log.d("SyncManager", "incrementalSync: localRuleCount=$localRuleCount, defaultRuleCount=$defaultRuleCount, since=$since, tenantId=$tenantId")
+        Log.d("SyncManager", "incrementalSync: localRuleCount=$localRuleCount, defaultRuleCount=$defaultRuleCount, since=$since, tenantId=$tenantId, checkpointExists=${checkpoint != null}")
 
         _syncState.value = SyncState.Syncing("正在同步变更...")
         syncCheckpointDao.updateSyncing(tenantId, true)
@@ -386,33 +398,29 @@ class SyncManager @Inject constructor(
             Log.d("SyncManager", "推送结果: pushStats='$pushStats'")
 
             // 2. 拉取云端变更到本地
-            val changesResponse = syncApiService.getChanges(tenantId, since)
-            if (changesResponse.isSuccess && changesResponse.data != null) {
-                val changes = changesResponse.data
-                applyChangesToLocal(changes, tenantId)
-            }
+            val changes = syncApiService.getChanges(tenantId, since)
+            applyChangesToLocal(changes, tenantId)
 
             syncCheckpointDao.upsert(
                 SyncCheckpointEntity(
                     tenantId = tenantId,
                     // 优先使用服务端时间戳，避免客户端时钟漂移导致 since 比较异常
-                    lastSyncTime = changesResponse.data?.serverTime?.takeIf { it > 0L }
+                    lastSyncTime = changes.serverTime.takeIf { it > 0L }
                         ?: System.currentTimeMillis(),
-                    syncToken = changesResponse.data?.nextCursor,
+                    syncToken = changes.nextCursor,
                     isSyncing = false,
                     lastError = null
                 )
             )
 
             // 生成统计信息
-            val changes = changesResponse.data
-            val pullRuleCount = changes?.keywordRules?.size ?: 0
-            val pullModelCount = changes?.aiModelConfigs?.size ?: 0
-            val pullAppCount = changes?.appConfigs?.size ?: 0
-            val pullScenarioCount = changes?.scenarios?.size ?: 0
-            val pullBlacklistCount = changes?.messageBlacklist?.size ?: 0
-            val pullProfileCount = if (changes?.userStyleProfile != null) 1 else 0
-            val pullReplyCount = changes?.replyHistory?.size ?: 0
+            val pullRuleCount = changes.keywordRules.size
+            val pullModelCount = changes.aiModelConfigs.size
+            val pullAppCount = changes.appConfigs.size
+            val pullScenarioCount = changes.scenarios.size
+            val pullBlacklistCount = changes.messageBlacklist.size
+            val pullProfileCount = if (changes.userStyleProfile != null) 1 else 0
+            val pullReplyCount = changes.replyHistory.size
 
             // 缓存本次推送统计（pushStats 为本次计算，previousPushStats 为上次）
             _lastPushStats = pushStats
@@ -470,6 +478,8 @@ class SyncManager @Inject constructor(
             .filter { it.syncVersion == 0L }
         val blacklists = messageBlacklistDao.getByTenantSync(tenantId)
             .filter { it.syncVersion == 0L }
+
+        Log.d("SyncManager", "pushLocalChanges: syncVersion=0L => rules=${rules.size}, models=${models.size}, apps=${apps.size}, scenarios=${scenarios.size}, replies=${replies.size}, blacklists=${blacklists.size}")
 
         // 分离正常数据和已删除数据
         val activeRules = rules.filter { !it.deleted }
@@ -629,50 +639,60 @@ class SyncManager @Inject constructor(
         )
         Log.d("SyncManager", "doPush: rules=${rules.size}, models=${models.size}, deletedIds=$deletedIds, deletedBusinessKeys=$deletedBusinessKeys")
 
-        val response = try {
+        val result = try {
             syncApiService.pushChanges(request)
         } catch (e: Exception) {
             Timber.e(e, "推送失败: ${e.message}")
             throw e
         }
-        if (response.isSuccess && response.data != null) {
-            val result = response.data
-            if (!result.accepted && result.conflicts.isNotEmpty()) {
-                handleConflicts(tenantId, result.conflicts)
-            }
-            // 更新本地 syncVersion
-            val newVersion = result.newServerVersion
-            rules.forEach { keywordRuleDao.updateSyncVersion(it.id, newVersion) }
-            models.forEach { aiModelConfigDao.updateSyncVersion(it.id, newVersion) }
-            profiles.forEach { userStyleProfileDao.updateSyncVersion(it.userId, newVersion) }
-            apps.forEach { appConfigDao.updateSyncVersion(it.packageName, newVersion) }
-            scenarios.forEach { scenarioDao.updateSyncVersion(it.id, newVersion) }
-            replies.forEach { replyHistoryDao.updateSyncVersion(it.id, newVersion) }
-            blacklists.forEach { messageBlacklistDao.updateSyncVersion(it.id, newVersion) }
-            // 返回同步统计
-            val stats = result.stats
-            return if (stats != null) {
-                "新增 ${stats.inserted} 条，更新 ${stats.updated} 条，删除 ${stats.deleted} 条"
-            } else {
-                buildString {
-                    val details = mutableListOf<String>()
-                    if (rules.isNotEmpty()) details.add("知识库${rules.size}条")
-                    if (blacklists.isNotEmpty()) details.add("黑名单${blacklists.size}条")
-                    if (models.isNotEmpty()) details.add("模型${models.size}条")
-                    if (apps.isNotEmpty()) details.add("监控应用${apps.size}条")
-                    if (scenarios.isNotEmpty()) details.add("场景${scenarios.size}条")
-                    if (replies.isNotEmpty()) details.add("回复历史${replies.size}条")
-                    if (profiles.isNotEmpty()) details.add("风格画像${profiles.size}条")
-                    if (deletedIds.isNotEmpty()) {
-                        val totalDeleted = deletedIds.values.sumOf { it.size }
-                        if (totalDeleted > 0) details.add("删除${totalDeleted}条")
-                    }
-                    if (details.isNotEmpty()) details.joinToString("，") else ""
+        // conflicts 可能为 null（Gson 反序列化绕过了 Kotlin 默认值）
+        if (!result.accepted && result.conflicts?.isNotEmpty() == true) {
+            handleConflicts(tenantId, result.conflicts)
+        }
+        // 更新本地 syncVersion
+        val newVersion = result.newServerVersion
+        rules.forEach { keywordRuleDao.updateSyncVersion(it.id, newVersion) }
+        models.forEach { aiModelConfigDao.updateSyncVersion(it.id, newVersion) }
+        profiles.forEach { userStyleProfileDao.updateSyncVersion(it.userId, newVersion) }
+        apps.forEach { appConfigDao.updateSyncVersion(it.packageName, newVersion) }
+        scenarios.forEach { scenarioDao.updateSyncVersion(it.id, newVersion) }
+        replies.forEach { replyHistoryDao.updateSyncVersion(it.id, newVersion) }
+        blacklists.forEach { messageBlacklistDao.updateSyncVersion(it.id, newVersion) }
+        // 返回同步统计
+        val stats = result.stats
+        return if (stats != null) {
+            "新增 ${stats.inserted} 条，更新 ${stats.updated} 条，删除 ${stats.deleted} 条"
+        } else {
+            buildString {
+                val details = mutableListOf<String>()
+                if (rules.isNotEmpty()) details.add("知识库${rules.size}条")
+                if (blacklists.isNotEmpty()) details.add("黑名单${blacklists.size}条")
+                if (models.isNotEmpty()) details.add("模型${models.size}条")
+                if (apps.isNotEmpty()) details.add("监控应用${apps.size}条")
+                if (scenarios.isNotEmpty()) details.add("场景${scenarios.size}条")
+                if (replies.isNotEmpty()) details.add("回复历史${replies.size}条")
+                if (profiles.isNotEmpty()) details.add("风格画像${profiles.size}条")
+                if (deletedIds.isNotEmpty()) {
+                    val totalDeleted = deletedIds.values.sumOf { it.size }
+                    if (totalDeleted > 0) details.add("删除${totalDeleted}条")
                 }
+                if (details.isNotEmpty()) details.joinToString("，") else ""
             }
         }
-        return ""
     }
+    // ========== 全量同步前清理本地数据 ==========
+
+    private suspend fun clearLocalDataForTenant(tenantId: String) {
+        keywordRuleDao.deleteRulesByTenant(tenantId)
+        aiModelConfigDao.deleteModelsByTenant(tenantId)
+        userStyleProfileDao.deleteProfilesByTenant(tenantId)
+        appConfigDao.deleteAppsByTenant(tenantId)
+        scenarioDao.deleteScenariosByTenant(tenantId)
+        replyHistoryDao.deleteRepliesByTenant(tenantId)
+        messageBlacklistDao.deleteByTenant(tenantId)
+        Timber.d("已清空租户 $tenantId 的本地数据")
+    }
+
     // ========== 应用服务端数据到本地 ==========
 
     private suspend fun applyServerDataToLocal(data: SyncAllData, tenantId: String) {
@@ -907,7 +927,13 @@ class SyncManager @Inject constructor(
      * Debounce 2 秒避免高频写入打爆 API。
      */
     fun triggerSync() {
-        val tenantId = _authState.value?.tenantId ?: return
+        val tenantId = _authState.value?.tenantId
+        Log.d("SyncManager", "triggerSync() called, authState=${_authState.value != null}, tenantId=$tenantId")
+        if (tenantId == null) return
+        triggerSync(tenantId)
+    }
+
+    fun triggerSync(tenantId: String) {
         syncTriggerJob?.cancel()
         syncTriggerJob = syncScope.launch {
             kotlinx.coroutines.delay(2000) // 2 秒 debounce

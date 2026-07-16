@@ -46,4 +46,7 @@ interface UserStyleProfileDao {
 
     @Query("UPDATE user_style_profiles SET syncVersion = :version WHERE userId = :userId")
     suspend fun updateSyncVersion(userId: String, version: Long)
+
+    @Query("DELETE FROM user_style_profiles WHERE tenantId = :tenantId")
+    suspend fun deleteProfilesByTenant(tenantId: String)
 }

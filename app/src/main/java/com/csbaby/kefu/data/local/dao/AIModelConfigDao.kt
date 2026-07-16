@@ -52,4 +52,7 @@ interface AIModelConfigDao {
 
     @Query("UPDATE ai_model_configs SET syncVersion = :version WHERE id = :id")
     suspend fun updateSyncVersion(id: Long, version: Long)
+
+    @Query("DELETE FROM ai_model_configs WHERE tenantId = :tenantId")
+    suspend fun deleteModelsByTenant(tenantId: String)
 }

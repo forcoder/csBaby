@@ -43,6 +43,7 @@ fun SyncSettingsCard(
     onLogin: (email: String, password: String) -> Unit,
     onRegister: (email: String, password: String, displayName: String) -> Unit,
     onSync: () -> Unit,
+    onPush: () -> Unit = {},
     onLogout: () -> Unit,
     // 备份相关回调
     onUploadBackup: () -> Unit = {},
@@ -196,20 +197,33 @@ fun SyncSettingsCard(
                     Button(
                         onClick = onSync,
                         modifier = Modifier.weight(1f),
-                        enabled = syncState !is SyncState.Syncing
+                        enabled = syncState !is SyncState.Syncing,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        Icon(Icons.Default.Sync, contentDescription = null)
+                        Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("立即同步")
+                        Text("同步", style = MaterialTheme.typography.bodySmall)
+                    }
+
+                    OutlinedButton(
+                        onClick = onPush,
+                        modifier = Modifier.weight(1f),
+                        enabled = syncState !is SyncState.Syncing,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("推送", style = MaterialTheme.typography.bodySmall)
                     }
 
                     OutlinedButton(
                         onClick = onLogout,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        Icon(Icons.Default.Logout, contentDescription = null)
+                        Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("登出")
+                        Text("登出", style = MaterialTheme.typography.bodySmall)
                     }
                 }
 

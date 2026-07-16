@@ -56,7 +56,9 @@
       "Bash(xargs grep -l \"弹窗\\\\|dialog\\\\|Dialog\")",
       "Bash(gh secret *)",
       "Bash(ls -la *.apk)",
-      "Bash(ls -la app/build/outputs/apk/debug/*.apk)"
+      "Bash(ls -la app/build/outputs/apk/debug/*.apk)",
+      "Bash(where ocr *)",
+      "Bash(ocr review *)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -3,11 +3,8 @@ package com.csbaby.kefu.data.sync
 import android.util.Log
 import com.csbaby.kefu.BuildConfig
 import com.csbaby.kefu.data.model.SyncAuthState
-import com.csbaby.kefu.data.remote.ApiResponse
-import com.csbaby.kefu.data.remote.AuthApiService
-import com.csbaby.kefu.data.remote.AuthResult
-import com.csbaby.kefu.data.remote.RefreshTokenRequest
-import com.csbaby.kefu.data.remote.SyncApiService
+import com.csbaby.kefu.data.remote.*
+import com.google.gson.GsonBuilder
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -32,6 +29,11 @@ class AuthenticatedSyncClient(
     private val refreshRetrofit: Retrofit
 
     init {
+        // 自定义 Gson：兼容服务端格式差异（Boolean 0/1、数字字符串等）
+        val gson = GsonBuilder()
+            .registerTypeAdapterFactory(LenientTypeAdapterFactory())
+            .create()
+
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.BASIC
         }
@@ -47,7 +49,7 @@ class AuthenticatedSyncClient(
         refreshRetrofit = Retrofit.Builder()
             .baseUrl(BuildConfig.API_BASE_URL)
             .client(refreshClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
 
         refreshApiService = refreshRetrofit.create(SyncApiService::class.java)
@@ -56,7 +58,7 @@ class AuthenticatedSyncClient(
         val authRetrofit = Retrofit.Builder()
             .baseUrl(BuildConfig.API_BASE_URL)
             .client(refreshClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
         authApiService = authRetrofit.create(AuthApiService::class.java)
 
@@ -132,7 +134,7 @@ class AuthenticatedSyncClient(
         val retrofit = Retrofit.Builder()
             .baseUrl(BuildConfig.API_BASE_URL)
             .client(client)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
 
         apiService = retrofit.create(SyncApiService::class.java)
@@ -146,22 +148,16 @@ class AuthenticatedSyncClient(
         Log.d("AuthenticatedSyncClient", "refreshTokenBlocking() 开始刷新")
         return runBlocking {
             try {
-                val response = refreshApiService.refreshToken(RefreshTokenRequest(refreshToken))
-                Log.d("AuthenticatedSyncClient", "refreshToken 响应: isSuccess=${response.isSuccess}, msg=${response.message}")
-                if (response.isSuccess && response.data != null) {
-                    val data = response.data
-                    SyncAuthState.fromLoginResponse(
-                        userId = data.userId,
-                        tenantId = data.tenantId.ifEmpty { data.userId },
-                        token = data.effectiveAccessToken(),
-                        refreshToken = data.refreshToken,
-                        expiresAt = data.expiresAt
-                    ).also {
-                        Log.d("AuthenticatedSyncClient", "刷新成功: token=${it.accessToken.take(20)}...")
-                    }
-                } else {
-                    Log.w("AuthenticatedSyncClient", "刷新失败: ${response.message}")
-                    null
+                val data = refreshApiService.refreshToken(RefreshTokenRequest(refreshToken))
+                Log.d("AuthenticatedSyncClient", "refreshToken 成功: userId=${data.userId}")
+                SyncAuthState.fromLoginResponse(
+                    userId = data.userId,
+                    tenantId = data.tenantId.ifEmpty { data.userId },
+                    token = data.effectiveAccessToken(),
+                    refreshToken = data.refreshToken,
+                    expiresAt = data.expiresAt
+                ).also {
+                    Log.d("AuthenticatedSyncClient", "刷新成功: token=${it.accessToken.take(20)}...")
                 }
             } catch (e: Exception) {
                 Log.e("AuthenticatedSyncClient", "刷新异常", e)

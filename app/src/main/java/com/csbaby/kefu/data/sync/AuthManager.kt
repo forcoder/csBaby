@@ -5,14 +5,11 @@ import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.csbaby.kefu.data.model.SyncAuthState
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -60,17 +57,11 @@ class AuthManager @Inject constructor(
 
     /** 同步获取认证状态（阻塞直到加载完成，用于 OkHttp 拦截器） */
     fun getAuthStateSync(): SyncAuthState? {
-        return _currentAuth.value ?: run {
-            // 如果内存缓存为空，尝试同步加载
-            // 注意：这只在首次调用时可能发生
-            var result: SyncAuthState? = null
-            authScope.launch {
-                result = loadFromDataStore()
-                _currentAuth.value = result
-            }
-            // 由于协程是异步的，这里只能返回当前缓存值
-            // 首次调用时可能为 null，后续调用会正确
-            result
+        return _currentAuth.value ?: runBlocking(Dispatchers.IO) {
+            // 内存缓存为空时，同步从 DataStore 加载（OkHttp 拦截器线程安全）
+            val auth = loadFromDataStore()
+            _currentAuth.value = auth
+            auth
         }
     }
 
