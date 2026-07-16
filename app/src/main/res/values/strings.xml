@@ -25,6 +25,10 @@
     <string name="reply_template">回复模板</string>
     <string name="category">分类</string>
     <string name="priority">优先级</string>
+    <string name="match_type_exact">精确匹配</string>
+    <string name="match_type_contains">包含匹配</string>
+    <string name="match_type_regex">正则匹配</string>
+    <string name="priority_with_value">· 优先级 %1$d</string>
 
     <!-- Model Config -->
     <string name="model_config">模型配置</string>

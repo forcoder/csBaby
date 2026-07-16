@@ -48,6 +48,7 @@ class SyncManager @Inject constructor(
 
     private var syncJob: Job? = null
     private var _lastSyncStats: String = ""
+    private var _lastPushStats: String = ""
 
     /** 上次同步统计信息 */
     fun getLastSyncStats(): String? = _lastSyncStats.takeIf { it.isNotEmpty() }
@@ -202,23 +203,16 @@ class SyncManager @Inject constructor(
     /** 用 refreshToken 刷新认证状态 */
     private suspend fun tryRefreshToken(refreshToken: String): SyncAuthState? {
         return try {
-            val request = RefreshTokenRequest(refreshToken)
-            val response = syncClient.refreshApiService.refreshToken(request)
-            Timber.d("Token刷新响应: isSuccess=${response.isSuccess}, msg=${response.message}")
-            if (response.isSuccess && response.data != null) {
-                val data = response.data
-                SyncAuthState.fromLoginResponse(
-                    userId = data.userId,
-                    tenantId = data.tenantId.ifEmpty { data.userId },
-                    token = data.effectiveAccessToken(),
-                    refreshToken = data.refreshToken,
-                    expiresAt = data.expiresAt
-                ).also {
-                    Timber.d("Token刷新成功: token=${it.accessToken.take(20)}...")
-                }
-            } else {
-                Timber.w("Token刷新失败: ${response.message}")
-                null
+            val data = syncClient.refreshApiService.refreshToken(RefreshTokenRequest(refreshToken))
+            Timber.d("Token刷新成功: userId=${data.userId}")
+            SyncAuthState.fromLoginResponse(
+                userId = data.userId,
+                tenantId = data.tenantId.ifEmpty { data.userId },
+                token = data.effectiveAccessToken(),
+                refreshToken = data.refreshToken,
+                expiresAt = data.expiresAt
+            ).also {
+                Timber.d("Token刷新成功: token=${it.accessToken.take(20)}...")
             }
         } catch (e: Exception) {
             Timber.e(e, "Token刷新异常")
@@ -303,42 +297,46 @@ class SyncManager @Inject constructor(
         _syncState.value = SyncState.Syncing("正在同步数据...")
         syncCheckpointDao.updateSyncing(tenantId, true)
         return try {
-            val response = syncApiService.getAllData(tenantId)
-            Log.d("SyncManager", "全量同步 API 响应: isSuccess=${response.isSuccess}, msg=${response.message}, data=${response.data != null}")
-            if (response.isSuccess && response.data != null) {
-                val data = response.data
-                Log.d("SyncManager", "服务端返回: keywordRules=${data.keywordRules.size}, aiModelConfigs=${data.aiModelConfigs.size}")
+            val data = syncApiService.getAllData(tenantId)
+            Log.d("SyncManager", "全量同步 API 响应成功: keywordRules=${data.keywordRules.size}, aiModelConfigs=${data.aiModelConfigs.size}")
 
-                // 将服务端数据写入本地（保留本地已有的 tenant_id 默认值的数据）
-                applyServerDataToLocal(data, tenantId)
-                Log.d("SyncManager", "applyServerDataToLocal 完成")
+            // 全量同步前先清空该租户的本地数据，避免新旧数据叠加
+            clearLocalDataForTenant(tenantId)
 
-                syncCheckpointDao.updateSyncSuccess(tenantId, data.serverTime, null)
-                val ruleCount = data.keywordRules.size
-                val modelCount = data.aiModelConfigs.size
-                val appCount = data.appConfigs.size
-                val scenarioCount = data.scenarios.size
-                val blacklistCount = data.messageBlacklist.size
-                val profileCount = if (data.userStyleProfile != null) 1 else 0
-                val stats = buildString {
-                    append("全量同步完成：")
-                    if (ruleCount > 0) append("知识库${ruleCount}条，")
-                    if (blacklistCount > 0) append("黑名单${blacklistCount}条，")
-                    if (modelCount > 0) append("模型${modelCount}条，")
-                    if (appCount > 0) append("监控应用${appCount}条，")
-                    if (scenarioCount > 0) append("场景${scenarioCount}条，")
-                    if (profileCount > 0) append("风格画像${profileCount}条，")
-                    if (endsWith("，")) deleteCharAt(lastIndex)
-                }
-                _lastSyncStats = stats
-                _syncState.value = SyncState.Success("同步完成", stats)
-                Timber.d("全量同步完成: rules=$ruleCount, models=$modelCount")
-                Result.success(Unit)
-            } else {
-                val msg = response.message.ifEmpty { "同步失败" }
-                _syncState.value = SyncState.Error(msg)
-                Result.failure(Exception(msg))
+            // 将服务端数据写入本地
+            applyServerDataToLocal(data, tenantId)
+            Log.d("SyncManager", "applyServerDataToLocal 完成")
+
+            syncCheckpointDao.upsert(
+                SyncCheckpointEntity(
+                    tenantId = tenantId,
+                    lastSyncTime = data.serverTime.takeIf { it > 0L } ?: System.currentTimeMillis(),
+                    syncToken = null,
+                    isSyncing = false,
+                    lastError = null
+                )
+            )
+            val ruleCount = data.keywordRules.size
+            val modelCount = data.aiModelConfigs.size
+            val appCount = data.appConfigs.size
+            val scenarioCount = data.scenarios.size
+            val blacklistCount = data.messageBlacklist.size
+            val profileCount = if (data.userStyleProfile != null) 1 else 0
+            val stats = buildString {
+                append("全量同步完成：")
+                if (ruleCount > 0) append("知识库${ruleCount}条，")
+                if (blacklistCount > 0) append("黑名单${blacklistCount}条，")
+                if (modelCount > 0) append("模型${modelCount}条，")
+                if (appCount > 0) append("监控应用${appCount}条，")
+                if (scenarioCount > 0) append("场景${scenarioCount}条，")
+                if (profileCount > 0) append("风格画像${profileCount}条，")
+                if (endsWith("，")) deleteCharAt(lastIndex)
             }
+            _lastSyncStats = stats
+            _lastPushStats = ""  // 全量同步没有 push 阶段
+            _syncState.value = SyncState.Success("同步完成", stats)
+            Timber.d("全量同步完成: rules=$ruleCount, models=$modelCount")
+            Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "全量同步失败")
             syncCheckpointDao.updateLastError(tenantId, e.message)
@@ -349,6 +347,30 @@ class SyncManager @Inject constructor(
         }
     }
 
+    // ========== 仅推送本地变更（不拉取） ==========
+
+    suspend fun pushOnly(tenantId: String): Result<Unit> {
+        _syncState.value = SyncState.Syncing("正在推送本地变更...")
+        return try {
+            val pushStats = pushAllLocalChanges(tenantId)
+            Log.d("SyncManager", "推送结果: pushStats='$pushStats'")
+
+            _lastPushStats = pushStats
+            val stats = if (pushStats.isNotEmpty()) {
+                "推送完成：$pushStats"
+            } else {
+                "没有本地变更需要推送"
+            }
+            _syncState.value = SyncState.Success("推送完成", stats)
+            Timber.d("仅推送完成: $stats")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Timber.e(e, "推送失败")
+            _syncState.value = SyncState.Error(e.message ?: "推送失败")
+            Result.failure(e)
+        }
+    }
+
     // ========== 增量同步 ==========
 
     suspend fun incrementalSync(tenantId: String): Result<Unit> {
@@ -356,11 +378,14 @@ class SyncManager @Inject constructor(
         val since = checkpoint?.lastSyncTime ?: 0L
         val localRuleCount = keywordRuleDao.getRulesByTenantSync(tenantId).size
         val defaultRuleCount = keywordRuleDao.getRulesByTenantSync(DEFAULT_TENANT_ID).size
-        Log.d("SyncManager", "incrementalSync: localRuleCount=$localRuleCount, defaultRuleCount=$defaultRuleCount, since=$since, tenantId=$tenantId")
+        Log.d("SyncManager", "incrementalSync: localRuleCount=$localRuleCount, defaultRuleCount=$defaultRuleCount, since=$since, tenantId=$tenantId, checkpointExists=${checkpoint != null}")
 
         _syncState.value = SyncState.Syncing("正在同步变更...")
         syncCheckpointDao.updateSyncing(tenantId, true)
+        // 先保存上次推送统计，再清空（防止本次无推送时回退读不到）
+        val previousPushStats = _lastPushStats
         _lastSyncStats = ""
+        _lastPushStats = ""
         return try {
             // 1. 优先推送本地数据到云端
             // 如果从未同步过（since=0），推送所有本地数据；否则只推送变更
@@ -373,31 +398,40 @@ class SyncManager @Inject constructor(
             Log.d("SyncManager", "推送结果: pushStats='$pushStats'")
 
             // 2. 拉取云端变更到本地
-            val changesResponse = syncApiService.getChanges(tenantId, since)
-            if (changesResponse.isSuccess && changesResponse.data != null) {
-                val changes = changesResponse.data
-                applyChangesToLocal(changes, tenantId)
-            }
+            val changes = syncApiService.getChanges(tenantId, since)
+            applyChangesToLocal(changes, tenantId)
 
-            syncCheckpointDao.updateSyncSuccess(
-                tenantId,
-                System.currentTimeMillis(),
-                changesResponse.data?.nextCursor
+            syncCheckpointDao.upsert(
+                SyncCheckpointEntity(
+                    tenantId = tenantId,
+                    // 优先使用服务端时间戳，避免客户端时钟漂移导致 since 比较异常
+                    lastSyncTime = changes.serverTime.takeIf { it > 0L }
+                        ?: System.currentTimeMillis(),
+                    syncToken = changes.nextCursor,
+                    isSyncing = false,
+                    lastError = null
+                )
             )
 
             // 生成统计信息
-            val changes = changesResponse.data
-            val pullRuleCount = changes?.keywordRules?.size ?: 0
-            val pullModelCount = changes?.aiModelConfigs?.size ?: 0
-            val pullAppCount = changes?.appConfigs?.size ?: 0
-            val pullScenarioCount = changes?.scenarios?.size ?: 0
-            val pullBlacklistCount = changes?.messageBlacklist?.size ?: 0
-            val pullProfileCount = if (changes?.userStyleProfile != null) 1 else 0
-            val pullReplyCount = changes?.replyHistory?.size ?: 0
+            val pullRuleCount = changes.keywordRules.size
+            val pullModelCount = changes.aiModelConfigs.size
+            val pullAppCount = changes.appConfigs.size
+            val pullScenarioCount = changes.scenarios.size
+            val pullBlacklistCount = changes.messageBlacklist.size
+            val pullProfileCount = if (changes.userStyleProfile != null) 1 else 0
+            val pullReplyCount = changes.replyHistory.size
+
+            // 缓存本次推送统计（pushStats 为本次计算，previousPushStats 为上次）
+            _lastPushStats = pushStats
 
             val stats = buildString {
                 if (pushStats.isNotEmpty()) {
                     append("推送：$pushStats；")
+                }
+                // 无推送但有上次推送记录时，沿用上次推送统计
+                if (pushStats.isEmpty() && previousPushStats.isNotEmpty()) {
+                    append("上次推送：$previousPushStats；")
                 }
                 append("拉取：")
                 val details = mutableListOf<String>()
@@ -411,6 +445,7 @@ class SyncManager @Inject constructor(
                 if (details.isEmpty()) details.add("无变更")
                 append(details.joinToString("，"))
             }
+            _lastSyncStats = stats
             _syncState.value = SyncState.Success("同步完成", stats)
             Log.d("SyncManager", "增量同步完成: $stats")
             Result.success(Unit)
@@ -427,35 +462,60 @@ class SyncManager @Inject constructor(
     // ========== 推送本地变更（增量）==========
 
     suspend fun pushLocalChanges(tenantId: String, since: Long): String {
-        // 收集本地有变更的数据（syncVersion == 0 表示新增/修改待同步）
+        // 状态标识：syncVersion == 0L = 未推送（新增/修改/删除），> 0L = 已推送
+        // 已推送的不会重复推送，避免全量推送
         val rules = keywordRuleDao.getRulesByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
         val models = aiModelConfigDao.getModelsByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
         val profile = userStyleProfileDao.getProfileByTenantIdSync(tenantId)
-        val profiles = if (profile != null && (profile.syncVersion >= since || profile.syncVersion == 0L)) listOf(profile) else emptyList()
+        val profiles = if (profile != null && profile.syncVersion == 0L) listOf(profile) else emptyList()
         val apps = appConfigDao.getAppsByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
         val scenarios = scenarioDao.getScenariosByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
         val replies = replyHistoryDao.getRepliesByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
         val blacklists = messageBlacklistDao.getByTenantSync(tenantId)
-            .filter { it.syncVersion >= since || it.syncVersion == 0L }
+            .filter { it.syncVersion == 0L }
+
+        Log.d("SyncManager", "pushLocalChanges: syncVersion=0L => rules=${rules.size}, models=${models.size}, apps=${apps.size}, scenarios=${scenarios.size}, replies=${replies.size}, blacklists=${blacklists.size}")
 
         // 分离正常数据和已删除数据
         val activeRules = rules.filter { !it.deleted }
         val deletedRules = rules.filter { it.deleted }.map { it.id.toString() }
+        val deletedRuleBizKeys = rules.filter { it.deleted }.map {
+            DeletedBusinessKey(
+                id = it.id.toString(),
+                keyword = it.keyword,
+                category = it.category
+            ).toMap()
+        }
         val activeModels = models.filter { !it.deleted }
         val deletedModels = models.filter { it.deleted }.map { it.id.toString() }
+        val deletedModelBizKeys = models.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), modelName = it.modelName).toMap()
+        }
         val activeApps = apps.filter { !it.deleted }
         val deletedApps = apps.filter { it.deleted }.map { it.packageName }
+        val deletedAppBizKeys = apps.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.packageName).toMap()
+        }
         val activeScenarios = scenarios.filter { !it.deleted }
         val deletedScenarios = scenarios.filter { it.deleted }.map { it.id.toString() }
+        val deletedScenarioBizKeys = scenarios.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), name = it.name).toMap()
+        }
         val activeReplies = replies.filter { !it.deleted }
         val deletedReplies = replies.filter { it.deleted }.map { it.id.toString() }
+        val deletedReplyBizKeys = replies.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), originalMessage = it.originalMessage).toMap()
+        }
         val activeBlacklists = blacklists.filter { !it.deleted }
         val deletedBlacklists = blacklists.filter { it.deleted }.map { it.id.toString() }
+        val deletedBlacklistBizKeys = blacklists.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), value = it.value).toMap()
+        }
 
         val deletedIds = buildMap {
             if (deletedRules.isNotEmpty()) put("keyword_rules", deletedRules)
@@ -465,13 +525,21 @@ class SyncManager @Inject constructor(
             if (deletedReplies.isNotEmpty()) put("reply_history", deletedReplies)
             if (deletedBlacklists.isNotEmpty()) put("message_blacklist", deletedBlacklists)
         }
+        val deletedBusinessKeys = buildMap {
+            if (deletedRuleBizKeys.isNotEmpty()) put("keyword_rules", deletedRuleBizKeys)
+            if (deletedModelBizKeys.isNotEmpty()) put("ai_model_configs", deletedModelBizKeys)
+            if (deletedAppBizKeys.isNotEmpty()) put("app_configs", deletedAppBizKeys)
+            if (deletedScenarioBizKeys.isNotEmpty()) put("scenarios", deletedScenarioBizKeys)
+            if (deletedReplyBizKeys.isNotEmpty()) put("reply_history", deletedReplyBizKeys)
+            if (deletedBlacklistBizKeys.isNotEmpty()) put("message_blacklist", deletedBlacklistBizKeys)
+        }
 
         if (activeRules.isEmpty() && activeModels.isEmpty() && profiles.isEmpty() && activeApps.isEmpty() && activeScenarios.isEmpty() && activeReplies.isEmpty() && activeBlacklists.isEmpty() && deletedIds.isEmpty()) {
             Log.d("SyncManager", "没有本地变更需要推送")
             return ""
         }
 
-        return doPush(tenantId, activeRules, activeModels, profiles, activeApps, activeScenarios, activeReplies, activeBlacklists, deletedIds, since)
+        return doPush(tenantId, activeRules, activeModels, profiles, activeApps, activeScenarios, activeReplies, activeBlacklists, deletedIds, deletedBusinessKeys, since)
     }
 
     // ========== 推送所有本地数据（首次同步）==========
@@ -489,16 +557,34 @@ class SyncManager @Inject constructor(
         // 分离正常数据和已删除数据
         val activeRules = allRules.filter { !it.deleted }
         val deletedRules = allRules.filter { it.deleted }.map { it.id.toString() }
+        val deletedRuleBizKeys = allRules.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), keyword = it.keyword, category = it.category).toMap()
+        }
         val activeModels = allModels.filter { !it.deleted }
         val deletedModels = allModels.filter { it.deleted }.map { it.id.toString() }
+        val deletedModelBizKeys = allModels.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), modelName = it.modelName).toMap()
+        }
         val activeApps = allApps.filter { !it.deleted }
         val deletedApps = allApps.filter { it.deleted }.map { it.packageName }
+        val deletedAppBizKeys = allApps.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.packageName).toMap()
+        }
         val activeScenarios = allScenarios.filter { !it.deleted }
         val deletedScenarios = allScenarios.filter { it.deleted }.map { it.id.toString() }
+        val deletedScenarioBizKeys = allScenarios.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), name = it.name).toMap()
+        }
         val activeReplies = allReplies.filter { !it.deleted }
         val deletedReplies = allReplies.filter { it.deleted }.map { it.id.toString() }
+        val deletedReplyBizKeys = allReplies.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), originalMessage = it.originalMessage).toMap()
+        }
         val activeBlacklists = allBlacklists.filter { !it.deleted }
         val deletedBlacklists = allBlacklists.filter { it.deleted }.map { it.id.toString() }
+        val deletedBlacklistBizKeys = allBlacklists.filter { it.deleted }.map {
+            DeletedBusinessKey(id = it.id.toString(), value = it.value).toMap()
+        }
 
         val deletedIds = buildMap {
             if (deletedRules.isNotEmpty()) put("keyword_rules", deletedRules)
@@ -508,13 +594,21 @@ class SyncManager @Inject constructor(
             if (deletedReplies.isNotEmpty()) put("reply_history", deletedReplies)
             if (deletedBlacklists.isNotEmpty()) put("message_blacklist", deletedBlacklists)
         }
+        val deletedBusinessKeys = buildMap {
+            if (deletedRuleBizKeys.isNotEmpty()) put("keyword_rules", deletedRuleBizKeys)
+            if (deletedModelBizKeys.isNotEmpty()) put("ai_model_configs", deletedModelBizKeys)
+            if (deletedAppBizKeys.isNotEmpty()) put("app_configs", deletedAppBizKeys)
+            if (deletedScenarioBizKeys.isNotEmpty()) put("scenarios", deletedScenarioBizKeys)
+            if (deletedReplyBizKeys.isNotEmpty()) put("reply_history", deletedReplyBizKeys)
+            if (deletedBlacklistBizKeys.isNotEmpty()) put("message_blacklist", deletedBlacklistBizKeys)
+        }
 
         if (activeRules.isEmpty() && activeModels.isEmpty() && profiles.isEmpty() && activeApps.isEmpty() && activeScenarios.isEmpty() && activeReplies.isEmpty() && activeBlacklists.isEmpty() && deletedIds.isEmpty()) {
             Log.d("SyncManager", "本地无数据可推送")
             return ""
         }
 
-        return doPush(tenantId, activeRules, activeModels, profiles, activeApps, activeScenarios, activeReplies, activeBlacklists, deletedIds, 0L)
+        return doPush(tenantId, activeRules, activeModels, profiles, activeApps, activeScenarios, activeReplies, activeBlacklists, deletedIds, deletedBusinessKeys, 0L)
     }
 
     private suspend fun doPush(
@@ -527,6 +621,7 @@ class SyncManager @Inject constructor(
         replies: List<ReplyHistoryEntity>,
         blacklists: List<MessageBlacklistEntity>,
         deletedIds: Map<String, List<String>>,
+        deletedBusinessKeys: Map<String, List<Map<String, String>>>,
         baseVersion: Long
     ): String {
         val request = PushChangesRequest(
@@ -539,103 +634,191 @@ class SyncManager @Inject constructor(
             replyHistory = replies.map { it.toSyncModel() },
             messageBlacklist = blacklists.map { it.toSyncModel() },
             deletedIds = deletedIds,
+            deletedBusinessKeys = deletedBusinessKeys,
             baseVersion = baseVersion
         )
-        Log.d("SyncManager", "doPush: rules=${rules.size}, models=${models.size}, deletedIds=$deletedIds")
+        Log.d("SyncManager", "doPush: rules=${rules.size}, models=${models.size}, deletedIds=$deletedIds, deletedBusinessKeys=$deletedBusinessKeys")
 
-        val response = try {
+        val result = try {
             syncApiService.pushChanges(request)
         } catch (e: Exception) {
             Timber.e(e, "推送失败: ${e.message}")
             throw e
         }
-        if (response.isSuccess && response.data != null) {
-            val result = response.data
-            if (!result.accepted && result.conflicts.isNotEmpty()) {
-                handleConflicts(tenantId, result.conflicts)
-            }
-            // 更新本地 syncVersion
-            val newVersion = result.newServerVersion
-            rules.forEach { keywordRuleDao.updateSyncVersion(it.id, newVersion) }
-            models.forEach { aiModelConfigDao.updateSyncVersion(it.id, newVersion) }
-            profiles.forEach { userStyleProfileDao.updateSyncVersion(it.userId, newVersion) }
-            apps.forEach { appConfigDao.updateSyncVersion(it.packageName, newVersion) }
-            scenarios.forEach { scenarioDao.updateSyncVersion(it.id, newVersion) }
-            replies.forEach { replyHistoryDao.updateSyncVersion(it.id, newVersion) }
-            blacklists.forEach { messageBlacklistDao.updateSyncVersion(it.id, newVersion) }
-            // 返回同步统计
-            val stats = result.stats
-            return if (stats != null) {
-                "新增 ${stats.inserted} 条，更新 ${stats.updated} 条，删除 ${stats.deleted} 条"
-            } else {
-                buildString {
-                    val details = mutableListOf<String>()
-                    if (rules.isNotEmpty()) details.add("知识库${rules.size}条")
-                    if (blacklists.isNotEmpty()) details.add("黑名单${blacklists.size}条")
-                    if (models.isNotEmpty()) details.add("模型${models.size}条")
-                    if (apps.isNotEmpty()) details.add("监控应用${apps.size}条")
-                    if (scenarios.isNotEmpty()) details.add("场景${scenarios.size}条")
-                    if (replies.isNotEmpty()) details.add("回复历史${replies.size}条")
-                    if (profiles.isNotEmpty()) details.add("风格画像${profiles.size}条")
-                    if (deletedIds.isNotEmpty()) {
-                        val totalDeleted = deletedIds.values.sumOf { it.size }
-                        if (totalDeleted > 0) details.add("删除${totalDeleted}条")
-                    }
-                    if (details.isNotEmpty()) details.joinToString("，") else ""
+        // conflicts 可能为 null（Gson 反序列化绕过了 Kotlin 默认值）
+        if (!result.accepted && result.conflicts?.isNotEmpty() == true) {
+            handleConflicts(tenantId, result.conflicts)
+        }
+        // 更新本地 syncVersion
+        val newVersion = result.newServerVersion
+        rules.forEach { keywordRuleDao.updateSyncVersion(it.id, newVersion) }
+        models.forEach { aiModelConfigDao.updateSyncVersion(it.id, newVersion) }
+        profiles.forEach { userStyleProfileDao.updateSyncVersion(it.userId, newVersion) }
+        apps.forEach { appConfigDao.updateSyncVersion(it.packageName, newVersion) }
+        scenarios.forEach { scenarioDao.updateSyncVersion(it.id, newVersion) }
+        replies.forEach { replyHistoryDao.updateSyncVersion(it.id, newVersion) }
+        blacklists.forEach { messageBlacklistDao.updateSyncVersion(it.id, newVersion) }
+        // 返回同步统计
+        val stats = result.stats
+        return if (stats != null) {
+            "新增 ${stats.inserted} 条，更新 ${stats.updated} 条，删除 ${stats.deleted} 条"
+        } else {
+            buildString {
+                val details = mutableListOf<String>()
+                if (rules.isNotEmpty()) details.add("知识库${rules.size}条")
+                if (blacklists.isNotEmpty()) details.add("黑名单${blacklists.size}条")
+                if (models.isNotEmpty()) details.add("模型${models.size}条")
+                if (apps.isNotEmpty()) details.add("监控应用${apps.size}条")
+                if (scenarios.isNotEmpty()) details.add("场景${scenarios.size}条")
+                if (replies.isNotEmpty()) details.add("回复历史${replies.size}条")
+                if (profiles.isNotEmpty()) details.add("风格画像${profiles.size}条")
+                if (deletedIds.isNotEmpty()) {
+                    val totalDeleted = deletedIds.values.sumOf { it.size }
+                    if (totalDeleted > 0) details.add("删除${totalDeleted}条")
                 }
+                if (details.isNotEmpty()) details.joinToString("，") else ""
             }
         }
-        return ""
     }
+    // ========== 全量同步前清理本地数据 ==========
+
+    private suspend fun clearLocalDataForTenant(tenantId: String) {
+        keywordRuleDao.deleteRulesByTenant(tenantId)
+        aiModelConfigDao.deleteModelsByTenant(tenantId)
+        userStyleProfileDao.deleteProfilesByTenant(tenantId)
+        appConfigDao.deleteAppsByTenant(tenantId)
+        scenarioDao.deleteScenariosByTenant(tenantId)
+        replyHistoryDao.deleteRepliesByTenant(tenantId)
+        messageBlacklistDao.deleteByTenant(tenantId)
+        Timber.d("已清空租户 $tenantId 的本地数据")
+    }
+
     // ========== 应用服务端数据到本地 ==========
 
     private suspend fun applyServerDataToLocal(data: SyncAllData, tenantId: String) {
         // 知识库规则：服务端数据覆盖本地（全量同步场景）
+        // 防御性处理:即使服务端应该过滤 deleted=TRUE,客户端也做一次本地 tombstone 检查
         data.keywordRules.forEach { rule ->
-            keywordRuleDao.insertRule(rule.toEntity(tenantId))
+            if (rule.deleted) {
+                keywordRuleDao.softDelete(rule.id)
+            } else {
+                keywordRuleDao.insertRule(rule.toEntity(tenantId))
+            }
         }
 
         // AI 模型配置
         data.aiModelConfigs.forEach { model ->
-            aiModelConfigDao.insertModel(model.toEntity(tenantId))
+            if (model.deleted) {
+                aiModelConfigDao.deleteById(model.id)
+            } else {
+                aiModelConfigDao.insertModel(model.toEntity(tenantId))
+            }
         }
 
         // 风格画像
         data.userStyleProfile?.let { profile ->
-            userStyleProfileDao.insertProfile(profile.toEntity(tenantId))
+            if (profile.deleted) {
+                userStyleProfileDao.getProfileByUserIdSync(profile.userId)
+                    ?.let { userStyleProfileDao.deleteProfile(it) }
+            } else {
+                userStyleProfileDao.insertProfile(profile.toEntity(tenantId))
+            }
         }
 
         // 应用配置
         data.appConfigs.forEach { app ->
-            appConfigDao.insertApp(app.toEntity(tenantId))
+            if (app.deleted) {
+                appConfigDao.deleteByPackage(app.packageName)
+            } else {
+                appConfigDao.insertApp(app.toEntity(tenantId))
+            }
         }
 
         // 场景
         data.scenarios.forEach { scenario ->
-            scenarioDao.insertScenario(scenario.toEntity(tenantId))
+            if (scenario.deleted) {
+                scenarioDao.deleteById(scenario.id)
+            } else {
+                scenarioDao.insertScenario(scenario.toEntity(tenantId))
+            }
         }
 
         // 回复历史
         data.replyHistory.forEach { reply ->
-            replyHistoryDao.insertReply(reply.toEntity(tenantId))
+            if (reply.deleted) {
+                replyHistoryDao.softDelete(reply.id)
+            } else {
+                replyHistoryDao.insertReply(reply.toEntity(tenantId))
+            }
         }
 
         // 消息黑名单
         data.messageBlacklist.forEach { blacklist ->
-            messageBlacklistDao.insert(blacklist.toEntity(tenantId))
+            if (blacklist.deleted) {
+                messageBlacklistDao.deleteById(blacklist.id)
+            } else {
+                messageBlacklistDao.insert(blacklist.toEntity(tenantId))
+            }
         }
     }
 
     private suspend fun applyChangesToLocal(changes: SyncChanges, tenantId: String) {
-        changes.keywordRules.forEach { keywordRuleDao.insertRule(it.toEntity(tenantId)) }
-        changes.aiModelConfigs.forEach { aiModelConfigDao.insertModel(it.toEntity(tenantId)) }
-        changes.userStyleProfile?.let { userStyleProfileDao.insertProfile(it.toEntity(tenantId)) }
-        changes.appConfigs.forEach { appConfigDao.insertApp(it.toEntity(tenantId)) }
-        changes.scenarios.forEach { scenarioDao.insertScenario(it.toEntity(tenantId)) }
-        changes.replyHistory.forEach { replyHistoryDao.insertReply(it.toEntity(tenantId)) }
-        changes.messageBlacklist.forEach { messageBlacklistDao.insert(it.toEntity(tenantId)) }
+        // 防御性处理：服务端返回 deleted=TRUE 的行视为 tombstone
+        // 不能直接 insertRule (REPLACE 会把本地 deleted=0 的行覆盖成 deleted=1,
+        // 看似 OK,但 syncVersion 被服务端版本覆盖,可能与本地 push 状态冲突)。
+        // 正确做法:deleted=TRUE 的行映射到本地的 softDelete,deleted=FALSE 才 insertRule。
+        changes.keywordRules.forEach { sync ->
+            if (sync.deleted) {
+                keywordRuleDao.softDelete(sync.id)
+            } else {
+                keywordRuleDao.insertRule(sync.toEntity(tenantId))
+            }
+        }
+        changes.aiModelConfigs.forEach { sync ->
+            if (sync.deleted) {
+                aiModelConfigDao.deleteById(sync.id)
+            } else {
+                aiModelConfigDao.insertModel(sync.toEntity(tenantId))
+            }
+        }
+        changes.userStyleProfile?.let { sync ->
+            if (sync.deleted) {
+                userStyleProfileDao.getProfileByUserIdSync(sync.userId)
+                    ?.let { userStyleProfileDao.deleteProfile(it) }
+            } else {
+                userStyleProfileDao.insertProfile(sync.toEntity(tenantId))
+            }
+        }
+        changes.appConfigs.forEach { sync ->
+            if (sync.deleted) {
+                appConfigDao.deleteByPackage(sync.packageName)
+            } else {
+                appConfigDao.insertApp(sync.toEntity(tenantId))
+            }
+        }
+        changes.scenarios.forEach { sync ->
+            if (sync.deleted) {
+                scenarioDao.deleteById(sync.id)
+            } else {
+                scenarioDao.insertScenario(sync.toEntity(tenantId))
+            }
+        }
+        changes.replyHistory.forEach { sync ->
+            if (sync.deleted) {
+                replyHistoryDao.softDelete(sync.id)
+            } else {
+                replyHistoryDao.insertReply(sync.toEntity(tenantId))
+            }
+        }
+        changes.messageBlacklist.forEach { sync ->
+            if (sync.deleted) {
+                messageBlacklistDao.deleteById(sync.id)
+            } else {
+                messageBlacklistDao.insert(sync.toEntity(tenantId))
+            }
+        }
 
-        // 处理删除
+        // 处理 deletedIds (硬删除保证幂等,防止 deleted=1 的 tombstone 行被 leak 到 deleted=0 查询)
         changes.deletedIds.forEach { (entityType, ids) ->
             when (entityType) {
                 "keyword_rules" -> ids.forEach { keywordRuleDao.deleteById(it.toLong()) }
@@ -744,7 +927,13 @@ class SyncManager @Inject constructor(
      * Debounce 2 秒避免高频写入打爆 API。
      */
     fun triggerSync() {
-        val tenantId = _authState.value?.tenantId ?: return
+        val tenantId = _authState.value?.tenantId
+        Log.d("SyncManager", "triggerSync() called, authState=${_authState.value != null}, tenantId=$tenantId")
+        if (tenantId == null) return
+        triggerSync(tenantId)
+    }
+
+    fun triggerSync(tenantId: String) {
         syncTriggerJob?.cancel()
         syncTriggerJob = syncScope.launch {
             kotlinx.coroutines.delay(2000) // 2 秒 debounce

@@ -108,13 +108,12 @@ class KeywordRuleRepositoryImpl @Inject constructor(
         if (affectedRows == 0) {
             throw Exception("删除失败：未找到匹配的规则")
         }
-        syncManager.triggerSync()
+        syncManager.triggerSync(rule.tenantId)
     }
 
     override suspend fun deleteAllRules() {
         scenarioDao.deleteAllRelations()
         keywordRuleDao.deleteAllRules()
-        syncManager.triggerSync()
     }
 
     override suspend fun getRuleCount(): Int = keywordRuleDao.getRuleCount()

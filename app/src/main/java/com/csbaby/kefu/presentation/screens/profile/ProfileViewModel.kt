@@ -367,6 +367,17 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    fun pushNow() {
+        viewModelScope.launch {
+            val tenantId = authManager.currentTenantId()
+            if (tenantId == null) {
+                _uiState.update { it.copy(syncState = SyncState.Error("请先登录后再推送")) }
+                return@launch
+            }
+            syncManager.pushOnly(tenantId)
+        }
+    }
+
     fun logout() { syncManager.logout() }
 
     // 数据备份与恢复

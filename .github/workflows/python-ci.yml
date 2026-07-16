@@ -83,8 +83,10 @@ jobs:
         run: python -m pytest tests/test_knowledge.py tests/test_knowledge_regression.py -v --tb=short
 
       - name: 运行现有同步测试（无 DB 部分）
+        env:
+          JWT_SECRET: test-secret-for-ci
         run: |
-          python -m pytest tests/test_health.py -v --tb=short || true
+          python -m pytest tests/test_sync.py tests/test_sync_backup_regression.py -v --tb=short
           echo "✅ 同步服务测试完成"
 
       - name: 上传测试报告

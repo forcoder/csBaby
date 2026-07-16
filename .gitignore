@@ -45,6 +45,10 @@ Desktop.ini
 .cache
 .caches/
 
+# Python 字节码缓存
+__pycache__/
+*.pyc
+
 # Gradle缓存
 .gradle/
 gradle-app.setting
@@ -83,3 +87,11 @@ server/data.db-shm
 
 # 临时文件
 *.tmp.*
+
+# AtomCode local-scope configs (machine-specific)
+.atomcode/
+
+# 临时开发/调试脚本
+patch_*.py
+final_check.py
+test_push.py

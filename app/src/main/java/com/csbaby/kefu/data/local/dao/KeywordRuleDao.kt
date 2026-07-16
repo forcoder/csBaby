@@ -39,6 +39,9 @@ interface KeywordRuleDao {
     @Query("DELETE FROM keyword_rules")
     suspend fun deleteAllRules()
 
+    @Query("DELETE FROM keyword_rules WHERE tenantId = :tenantId")
+    suspend fun deleteRulesByTenant(tenantId: String)
+
     @Query("SELECT COUNT(*) FROM keyword_rules WHERE deleted = 0")
     suspend fun getRuleCount(): Int
 
@@ -67,4 +70,7 @@ interface KeywordRuleDao {
 
     @Query("UPDATE keyword_rules SET deleted = 1, syncVersion = 0 WHERE id = :id")
     suspend fun softDelete(id: Long): Int
+
+    @Query("UPDATE keyword_rules SET deleted = 1, syncVersion = 0 WHERE tenantId = :tenantId")
+    suspend fun softDeleteAllByTenant(tenantId: String): Int
 }

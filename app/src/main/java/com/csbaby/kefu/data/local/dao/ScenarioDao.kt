@@ -54,5 +54,8 @@ interface ScenarioDao {
 
     @Query("DELETE FROM scenarios WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM scenarios WHERE tenantId = :tenantId")
+    suspend fun deleteScenariosByTenant(tenantId: String)
 }
 

@@ -224,6 +224,7 @@ fun ProfileScreen(
                     onLogin = { email, password -> viewModel.login(email, password) },
                     onRegister = { email, password, name -> viewModel.register(email, password, name) },
                     onSync = { viewModel.syncNow() },
+                    onPush = { viewModel.pushNow() },
                     onLogout = { viewModel.logout() },
                     onUploadBackup = { viewModel.uploadBackup() },
                     onFetchBackupList = { viewModel.fetchBackupList() },

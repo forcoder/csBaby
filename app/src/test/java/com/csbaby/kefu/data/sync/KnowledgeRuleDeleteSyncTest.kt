@@ -40,7 +40,7 @@ class KnowledgeRuleDeleteSyncTest {
         )
 
         // 设置同步管理器行为
-        coEvery { syncManager.triggerSync() } returns Unit
+        coEvery { syncManager.triggerSync(any()) } returns Unit
     }
 
     @Test
@@ -70,7 +70,7 @@ class KnowledgeRuleDeleteSyncTest {
         coVerify { keywordRuleDao.softDelete(ruleId) }
 
         // 验证同步被触发
-        coVerify { syncManager.triggerSync() }
+        coVerify { syncManager.triggerSync(any()) }
     }
 
     @Test

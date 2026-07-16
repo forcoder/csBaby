@@ -53,4 +53,7 @@ interface MessageBlacklistDao {
 
     @Query("UPDATE message_blacklist SET syncVersion = :version WHERE id = :id")
     suspend fun updateSyncVersion(id: Long, version: Long)
+
+    @Query("DELETE FROM message_blacklist WHERE tenantId = :tenantId")
+    suspend fun deleteByTenant(tenantId: String)
 }

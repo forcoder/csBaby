@@ -46,4 +46,7 @@ interface AppConfigDao {
 
     @Query("UPDATE app_configs SET syncVersion = :version WHERE packageName = :packageName")
     suspend fun updateSyncVersion(packageName: String, version: Long)
+
+    @Query("DELETE FROM app_configs WHERE tenantId = :tenantId")
+    suspend fun deleteAppsByTenant(tenantId: String)
 }

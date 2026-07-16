@@ -51,7 +51,7 @@ def test_sync_resolve_endpoint_requires_auth():
 def test_sync_all_returns_correct_structure():
     """测试 /sync/all 返回正确的数据结构"""
     from app import app
-    from app import generate_tokens
+    from utils.auth import generate_tokens
 
     access_token, _ = generate_tokens('test-user', 'test-tenant')
     with app.test_client() as client:
@@ -71,7 +71,7 @@ def test_sync_all_returns_correct_structure():
 def test_sync_changes_returns_correct_structure():
     """测试 /sync/changes 返回正确的数据结构"""
     from app import app
-    from app import generate_tokens
+    from utils.auth import generate_tokens
 
     access_token, _ = generate_tokens('test-user', 'test-tenant')
     with app.test_client() as client:
@@ -89,7 +89,7 @@ def test_sync_changes_returns_correct_structure():
 def test_sync_changes_with_pagination():
     """测试 /sync/changes 分页参数"""
     from app import app
-    from app import generate_tokens
+    from utils.auth import generate_tokens
 
     access_token, _ = generate_tokens('test-user', 'test-tenant')
     with app.test_client() as client:
@@ -104,7 +104,7 @@ def test_sync_changes_with_pagination():
 def test_backup_upload_accepts_camelcase_fields():
     """测试备份上传接受客户端的 camelCase 字段名"""
     from app import app
-    from app import generate_tokens
+    from utils.auth import generate_tokens
 
     access_token, _ = generate_tokens('test-user', 'test-tenant')
 
@@ -128,7 +128,7 @@ def test_backup_upload_accepts_camelcase_fields():
 def test_backup_list_response_format():
     """测试备份列表响应格式"""
     from app import app
-    from app import generate_tokens
+    from utils.auth import generate_tokens
 
     access_token, _ = generate_tokens('test-user', 'test-tenant')
     with app.test_client() as client:
@@ -220,7 +220,7 @@ def test_sync_service_returns_camelcase_fields():
 def test_sync_push_handles_client_data():
     """测试同步推送能处理客户端数据"""
     from app import app
-    from app import generate_tokens
+    from utils.auth import generate_tokens
 
     access_token, _ = generate_tokens('test-user', 'test-tenant')
 
@@ -259,7 +259,7 @@ def test_sync_push_handles_client_data():
 def test_sync_with_invalid_since_param():
     """测试同步端点处理无效的since参数"""
     from app import app
-    from app import generate_tokens
+    from utils.auth import generate_tokens
 
     access_token, _ = generate_tokens('test-user', 'test-tenant')
     with app.test_client() as client:
@@ -273,7 +273,7 @@ def test_sync_with_invalid_since_param():
 def test_backup_upload_with_empty_data():
     """测试备份上传空数据"""
     from app import app
-    from app import generate_tokens
+    from utils.auth import generate_tokens
 
     access_token, _ = generate_tokens('test-user', 'test-tenant')
     with app.test_client() as client:
@@ -287,7 +287,7 @@ def test_backup_upload_with_empty_data():
 def test_backup_download_nonexistent():
     """测试下载不存在的备份"""
     from app import app
-    from app import generate_tokens
+    from utils.auth import generate_tokens
 
     access_token, _ = generate_tokens('test-user', 'test-tenant')
     with app.test_client() as client:
@@ -300,7 +300,7 @@ def test_backup_download_nonexistent():
 def test_sync_changes_without_since_param():
     """测试增量同步没有since参数时的默认行为"""
     from app import app
-    from app import generate_tokens
+    from utils.auth import generate_tokens
 
     access_token, _ = generate_tokens('test-user', 'test-tenant')
     with app.test_client() as client:
