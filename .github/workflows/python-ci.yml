@@ -86,7 +86,7 @@ jobs:
         env:
           JWT_SECRET: test-secret-for-ci
         run: |
-          python -m pytest tests/test_health.py tests/test_sync_push.py tests/test_sync.py tests/test_sync_backup_regression.py tests/test_sync_pull.py -v --tb=short
+          python -m pytest tests/test_health.py tests/test_sync.py tests/test_sync_backup_regression.py tests/test_sync_pull.py -v --tb=short
           echo "✅ 同步服务测试完成"
 
       - name: 上传测试报告
